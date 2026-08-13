@@ -50,13 +50,13 @@
     styles: initialStyles,
   };
 
-  let model = restoreModel();
-  let selectedFile = "Button.stories.tsx";
-
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const titleCase = (value) => value.charAt(0).toUpperCase() + value.slice(1);
   const clone = (value) => JSON.parse(JSON.stringify(value));
+
+  let model = restoreModel();
+  let selectedFile = "Button.stories.tsx";
 
   function restoreModel() {
     try {
@@ -147,7 +147,7 @@
     $("#position-field").hidden = !hasIcon;
     $("#position-note").hidden = hasIcon;
 
-    setActive("[data-variant]", "variant", model.variant);
+    setActive("#variant-controls [data-variant]", "variant", model.variant);
     setActive("[data-state]", "state", model.pseudoState);
     setActive("[data-fixture]", "fixture", model.fixture);
     setActive("[data-position]", "position", model.iconPosition);
