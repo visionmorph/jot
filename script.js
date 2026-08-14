@@ -15,12 +15,8 @@ function toggleBranch() {
 
   const isExpanded = branchNode.getAttribute("aria-expanded") === "true";
   const willExpand = !isExpanded;
-  const chevron = branchNode.querySelector(".chevron");
-
   branchNode.setAttribute("aria-expanded", String(willExpand));
   childNode.hidden = !willExpand;
-  chevron?.classList.toggle("chevron--down", willExpand);
-  chevron?.classList.toggle("chevron--left", !willExpand);
 }
 
 treeNodes.forEach((node) => {
