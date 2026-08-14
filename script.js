@@ -1,5 +1,6 @@
 const treeNodes = Array.from(document.querySelectorAll("[data-tree-node]"));
 const branchNode = document.querySelector("[data-branch-node]");
+const branchToggle = document.querySelector("[data-branch-toggle]");
 const childNode = document.querySelector("[data-child-node]");
 
 function selectTreeNode(selectedNode) {
@@ -11,19 +12,22 @@ function selectTreeNode(selectedNode) {
 }
 
 function toggleBranch() {
-  if (!branchNode || !childNode) return;
+  if (!branchNode || !branchToggle || !childNode) return;
 
   const isExpanded = branchNode.getAttribute("aria-expanded") === "true";
   const willExpand = !isExpanded;
+  const chevron = branchToggle.querySelector(".chevron");
+
   branchNode.setAttribute("aria-expanded", String(willExpand));
+  branchToggle.setAttribute("aria-expanded", String(willExpand));
+  branchToggle.setAttribute("aria-label", willExpand ? "Collapse Frame" : "Expand Frame");
   childNode.hidden = !willExpand;
+  chevron?.classList.toggle("chevron--down", willExpand);
+  chevron?.classList.toggle("chevron--right", !willExpand);
 }
 
 treeNodes.forEach((node) => {
-  const activateNode = () => {
-    selectTreeNode(node);
-    if (node === branchNode) toggleBranch();
-  };
+  const activateNode = () => selectTreeNode(node);
 
   node.addEventListener("click", activateNode);
   node.addEventListener("keydown", (event) => {
@@ -32,6 +36,11 @@ treeNodes.forEach((node) => {
       activateNode();
     }
   });
+});
+
+branchToggle?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleBranch();
 });
 
 const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
