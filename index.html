@@ -43,8 +43,16 @@
               data-tree-node
               data-branch-node
             >
-              <span class="branch-icon-group" aria-hidden="true">
-                <span class="icon-cell"><span class="chevron chevron--down"></span></span>
+              <span class="branch-icon-group">
+                <button
+                  class="icon-cell branch-toggle"
+                  type="button"
+                  aria-label="Collapse Frame"
+                  aria-expanded="true"
+                  data-branch-toggle
+                >
+                  <span class="chevron chevron--down" aria-hidden="true"></span>
+                </button>
                 <span class="icon-cell"><span class="square-icon square-icon--small"></span></span>
               </span>
               <span class="tree-node-label">Frame</span>
