@@ -9,6 +9,7 @@
     />
     <title>Component Authoring Tool</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" defer></script>
   </head>
   <body>
     <main class="authoring-shell">
@@ -38,6 +39,9 @@
               role="treeitem"
               aria-expanded="true"
               aria-selected="false"
+              tabindex="0"
+              data-tree-node
+              data-branch-node
             >
               <span class="branch-icon-group" aria-hidden="true">
                 <span class="icon-cell"><span class="chevron chevron--down"></span></span>
@@ -46,7 +50,14 @@
               <span class="tree-node-label">Frame</span>
             </div>
 
-            <div class="tree-node tree-node--level-2" role="treeitem" aria-selected="false">
+            <div
+              class="tree-node tree-node--level-2"
+              role="treeitem"
+              aria-selected="false"
+              tabindex="0"
+              data-tree-node
+              data-child-node
+            >
               <span class="text-layer-icon" aria-hidden="true">T</span>
               <span class="tree-node-label">Button</span>
             </div>
@@ -54,15 +65,15 @@
         </section>
       </aside>
 
-      <section class="canvas" aria-label="Canvas">
+      <section class="canvas" id="canvas" aria-label="Canvas">
         <div class="toolbar" role="toolbar" aria-label="Canvas tools">
-          <button class="tool-button is-toggled" type="button" aria-label="Select" aria-pressed="true">
+          <button class="tool-button is-toggled" type="button" aria-label="Select" aria-pressed="true" data-tool="select">
             <span class="cursor-icon" aria-hidden="true"></span>
           </button>
-          <button class="tool-button" type="button" aria-label="Frame" aria-pressed="false">
+          <button class="tool-button" type="button" aria-label="Frame" aria-pressed="false" data-tool="frame">
             <span class="square-icon square-icon--large" aria-hidden="true"></span>
           </button>
-          <button class="tool-button" type="button" aria-label="Text" aria-pressed="false">
+          <button class="tool-button" type="button" aria-label="Text" aria-pressed="false" data-tool="text">
             <span class="toolbar-text-icon" aria-hidden="true">T</span>
           </button>
         </div>
@@ -75,10 +86,10 @@
           </div>
           <input
             class="canvas-color-picker"
+            id="canvas-color-picker"
             type="color"
             value="#121619"
             aria-label="Canvas background color"
-            disabled
           />
         </section>
       </aside>
