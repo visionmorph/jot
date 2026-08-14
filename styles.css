@@ -192,6 +192,19 @@ input {
   color: var(--icon-secondary);
 }
 
+.branch-toggle {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.branch-toggle:focus-visible {
+  outline: 1px solid var(--icon-on-color);
+  outline-offset: -1px;
+}
+
 .text-layer-icon {
   font-size: 14px;
   font-weight: 400;
@@ -215,6 +228,10 @@ input {
 
 .chevron--down {
   transform: translateY(-1px) rotate(45deg);
+}
+
+.chevron--right {
+  transform: translateX(-1px) rotate(-45deg);
 }
 
 .square-icon {
@@ -303,7 +320,12 @@ input {
 }
 
 .page-panel {
-  height: auto;
+  padding-right: 16px;
+  padding-left: 16px;
+}
+
+.page-panel .panel-heading-wrap {
+  padding-left: 0;
 }
 
 .color-picker-field {
