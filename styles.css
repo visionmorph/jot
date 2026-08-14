@@ -70,6 +70,7 @@ input {
   display: flex;
   flex-direction: column;
   width: 100%;
+  height: 50%;
   padding: 16px 8px;
   gap: 12px;
 }
@@ -130,16 +131,21 @@ input {
   display: flex;
   align-items: center;
   min-height: 24px;
+  width: 100%;
   padding-top: 4px;
   padding-right: 8px;
   padding-bottom: 4px;
   gap: 8px;
   border-radius: 2px;
+  border: 0;
+  background: transparent;
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 400;
   line-height: 16px;
   letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
 }
 
 .tree-node--level-1 {
@@ -201,6 +207,10 @@ input {
   transform: translateY(-1px) rotate(45deg);
 }
 
+.chevron--left {
+  transform: translateX(1px) rotate(135deg);
+}
+
 .square-icon {
   display: block;
   border: 1.5px solid currentColor;
@@ -251,6 +261,7 @@ input {
   border-radius: 2px;
   background: transparent;
   color: var(--icon-secondary);
+  cursor: pointer;
 }
 
 .tool-button:not(.is-toggled):hover {
@@ -298,7 +309,7 @@ input {
   border-radius: 0;
   background: var(--field-01);
   color: var(--text-primary);
-  cursor: default;
+  cursor: pointer;
   opacity: 1;
 }
 
