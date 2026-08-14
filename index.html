@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A static design prototype for a user interface component authoring tool."
+    />
+    <title>Component Authoring Tool</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="authoring-shell">
+      <aside class="left-sidebar" aria-label="Component and layer navigation">
+        <section class="sidebar-panel components-panel" aria-labelledby="components-heading">
+          <div class="panel-heading-wrap">
+            <h1 class="panel-heading" id="components-heading">Components</h1>
+          </div>
+
+          <div class="contained-list" role="list">
+            <div class="contained-list-item is-selected" role="listitem" aria-current="true">
+              Button
+            </div>
+          </div>
+        </section>
+
+        <div class="sidebar-divider" aria-hidden="true"></div>
+
+        <section class="sidebar-panel layers-panel" aria-labelledby="layers-heading">
+          <div class="panel-heading-wrap">
+            <h2 class="panel-heading" id="layers-heading">Layers</h2>
+          </div>
+
+          <div class="tree-view" role="tree" aria-label="Layers">
+            <div
+              class="tree-node tree-node--level-1"
+              role="treeitem"
+              aria-expanded="true"
+              aria-selected="false"
+            >
+              <span class="branch-icon-group" aria-hidden="true">
+                <span class="icon-cell"><span class="chevron chevron--down"></span></span>
+                <span class="icon-cell"><span class="square-icon square-icon--small"></span></span>
+              </span>
+              <span class="tree-node-label">Frame</span>
+            </div>
+
+            <div class="tree-node tree-node--level-2" role="treeitem" aria-selected="false">
+              <span class="text-layer-icon" aria-hidden="true">T</span>
+              <span class="tree-node-label">Button</span>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="canvas" aria-label="Canvas">
+        <div class="toolbar" role="toolbar" aria-label="Canvas tools">
+          <button class="tool-button is-toggled" type="button" aria-label="Select" aria-pressed="true">
+            <span class="cursor-icon" aria-hidden="true"></span>
+          </button>
+          <button class="tool-button" type="button" aria-label="Frame" aria-pressed="false">
+            <span class="square-icon square-icon--large" aria-hidden="true"></span>
+          </button>
+          <button class="tool-button" type="button" aria-label="Text" aria-pressed="false">
+            <span class="toolbar-text-icon" aria-hidden="true">T</span>
+          </button>
+        </div>
+      </section>
+
+      <aside class="right-sidebar" aria-label="Inspector">
+        <section class="sidebar-panel page-panel" aria-labelledby="page-heading">
+          <div class="panel-heading-wrap">
+            <h2 class="panel-heading" id="page-heading">Page</h2>
+          </div>
+          <input
+            class="canvas-color-picker"
+            type="color"
+            value="#121619"
+            aria-label="Canvas background color"
+            disabled
+          />
+        </section>
+      </aside>
+    </main>
+  </body>
+</html>
