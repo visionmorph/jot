@@ -327,6 +327,14 @@ input {
   flex: 0 0 auto;
 }
 
+.canvas-text.is-selected {
+  outline: 1px solid #992CFF;
+}
+
+.canvas-text:hover {
+  outline: 2px solid #992CFF;
+}
+
 .toolbar {
   position: absolute;
   bottom: 16px;
