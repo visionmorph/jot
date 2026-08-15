@@ -18,6 +18,9 @@ const sidebarDivider = document.querySelector(".sidebar-divider");
 const framePaddingInputs = Array.from(document.querySelectorAll("[data-frame-padding]"));
 const frameRadiusInput = document.querySelector("#frame-radius");
 const frameColorPicker = document.querySelector("#frame-color-picker");
+const frameDirectionSelect = document.querySelector("#frame-direction");
+const frameGapInput = document.querySelector("#frame-gap");
+const frameGapPickerButton = document.querySelector("[data-gap-picker-button]");
 
 const DEFAULT_FONT_FAMILY = "Inter";
 const DEFAULT_FONT_WEIGHT = 400;
@@ -259,6 +262,13 @@ function syncInspectorToSelectedFrame() {
   const record = getSelectedFrameRecord();
   if (!record) return;
   const { element } = record;
+
+  if (frameDirectionSelect instanceof HTMLSelectElement) {
+    frameDirectionSelect.value = element.dataset.direction || "horizontal";
+  }
+  if (frameGapInput instanceof HTMLInputElement) {
+    frameGapInput.value = `${element.dataset.gap || "10"}px`;
+  }
 
   framePaddingInputs.forEach((input) => {
     if (!(input instanceof HTMLInputElement)) return;
@@ -517,7 +527,6 @@ function startEditingText(textElement) {
   const selection = window.getSelection();
   const range = document.createRange();
   range.selectNodeContents(textElement);
-  range.collapse(false);
   selection?.removeAllRanges();
   selection?.addRange(range);
 }
@@ -622,6 +631,8 @@ function createCanvasFrame(x, y) {
   frame.dataset.paddingBottom = "10";
   frame.dataset.radius = "0";
   frame.dataset.frameColor = "";
+  frame.dataset.direction = "horizontal";
+  frame.dataset.gap = "10";
   frame.style.left = `${x}px`;
   frame.style.top = `${y}px`;
 
@@ -727,10 +738,7 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (
-    !selectedCanvasFrame ||
-    (event.key !== "Delete" && event.key !== "Backspace")
-  ) return;
+  if (event.key !== "Delete" && event.key !== "Backspace") return;
 
   const target = event.target;
   if (
@@ -738,6 +746,14 @@ document.addEventListener("keydown", (event) => {
     target instanceof HTMLTextAreaElement ||
     (target instanceof HTMLElement && target.isContentEditable)
   ) return;
+
+  if (selectedCanvasText) {
+    event.preventDefault();
+    removeCanvasText(selectedCanvasText);
+    return;
+  }
+
+  if (!selectedCanvasFrame) return;
 
   event.preventDefault();
   const selectedRecord = frameRecords.find((record) => record.element === selectedCanvasFrame);
@@ -911,6 +927,51 @@ frameColorPicker?.addEventListener("input", () => {
   record.element.dataset.frameColor = frameColorPicker.value;
   record.element.style.backgroundColor = frameColorPicker.value;
   frameColorPicker.classList.remove("is-transparent");
+});
+
+frameDirectionSelect?.addEventListener("change", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameDirectionSelect instanceof HTMLSelectElement)) return;
+  const direction = frameDirectionSelect.value === "vertical" ? "vertical" : "horizontal";
+  record.element.dataset.direction = direction;
+  record.element.style.flexDirection = direction === "vertical" ? "column" : "row";
+});
+
+function applyFrameGapValue(normalize = true) {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameGapInput instanceof HTMLInputElement)) return false;
+  const match = frameGapInput.value.trim().match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
+  if (!match) return false;
+  const gap = Math.max(0, Number(match[1]));
+  if (normalize) frameGapInput.value = `${gap}px`;
+  record.element.dataset.gap = String(gap);
+  record.element.style.gap = `${gap}px`;
+  return true;
+}
+
+frameGapInput?.addEventListener("focus", () => {
+  if (frameGapInput instanceof HTMLInputElement) frameGapInput.select();
+});
+frameGapInput?.addEventListener("input", () => applyFrameGapValue(false));
+frameGapInput?.addEventListener("blur", () => {
+  if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
+});
+frameGapInput?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
+});
+
+frameGapPickerButton?.addEventListener("click", () => {
+  if (!(frameGapInput instanceof HTMLInputElement)) return;
+  frameGapInput.focus();
+  if (typeof frameGapInput.showPicker === "function") {
+    try {
+      frameGapInput.showPicker();
+    } catch {
+      // Focus still leaves the editable value available when the browser cannot open the picker.
+    }
+  }
 });
 
 loadGoogleFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
