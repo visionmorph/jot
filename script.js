@@ -2,6 +2,7 @@ const canvas = document.querySelector("#canvas");
 const toolbar = document.querySelector(".toolbar");
 const treeView = document.querySelector("[data-tree-view]");
 const pageInspector = document.querySelector("[data-page-inspector]");
+const frameInspector = document.querySelector("[data-frame-inspector]");
 const textInspector = document.querySelector("[data-text-inspector]");
 const colorPicker = document.querySelector("#canvas-color-picker");
 const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
@@ -11,6 +12,12 @@ const sizeSelect = document.querySelector("#text-size");
 const lineHeightInput = document.querySelector("#text-line-height");
 const letterSpacingInput = document.querySelector("#text-letter-spacing");
 const textColorPicker = document.querySelector("#text-color-picker");
+const leftSidebar = document.querySelector(".left-sidebar");
+const componentsPanel = document.querySelector(".components-panel");
+const sidebarDivider = document.querySelector(".sidebar-divider");
+const framePaddingInputs = Array.from(document.querySelectorAll("[data-frame-padding]"));
+const frameRadiusInput = document.querySelector("#frame-radius");
+const frameColorPicker = document.querySelector("#frame-color-picker");
 
 const DEFAULT_FONT_FAMILY = "Inter";
 const DEFAULT_FONT_WEIGHT = 400;
@@ -47,6 +54,44 @@ let frameRecords = [];
 let textRecords = [];
 let suppressNextTextCreation = false;
 const expandedFrameIds = new Set();
+
+function resizeLeftSidebarPanels(clientY) {
+  if (
+    !(leftSidebar instanceof HTMLElement) ||
+    !(componentsPanel instanceof HTMLElement) ||
+    !(sidebarDivider instanceof HTMLElement)
+  ) return;
+
+  const bounds = leftSidebar.getBoundingClientRect();
+  const nextHeight = Math.min(bounds.height, Math.max(0, clientY - bounds.top));
+  const percentage = bounds.height > 0 ? Math.round((nextHeight / bounds.height) * 100) : 50;
+  componentsPanel.style.height = `${nextHeight}px`;
+  sidebarDivider.setAttribute("aria-valuenow", String(percentage));
+}
+
+sidebarDivider?.addEventListener("pointerdown", (event) => {
+  if (!(sidebarDivider instanceof HTMLElement) || event.button !== 0) return;
+  event.preventDefault();
+  sidebarDivider.setPointerCapture(event.pointerId);
+  resizeLeftSidebarPanels(event.clientY);
+});
+
+sidebarDivider?.addEventListener("pointermove", (event) => {
+  if (!(sidebarDivider instanceof HTMLElement) || !sidebarDivider.hasPointerCapture(event.pointerId)) return;
+  resizeLeftSidebarPanels(event.clientY);
+});
+
+sidebarDivider?.addEventListener("pointerup", (event) => {
+  if (!(sidebarDivider instanceof HTMLElement) || !sidebarDivider.hasPointerCapture(event.pointerId)) return;
+  resizeLeftSidebarPanels(event.clientY);
+  sidebarDivider.releasePointerCapture(event.pointerId);
+});
+
+sidebarDivider?.addEventListener("pointercancel", (event) => {
+  if (sidebarDivider instanceof HTMLElement && sidebarDivider.hasPointerCapture(event.pointerId)) {
+    sidebarDivider.releasePointerCapture(event.pointerId);
+  }
+});
 
 function selectTool(toolName) {
   activeTool = toolName;
@@ -115,6 +160,12 @@ function selectCanvasText(textElement) {
 function getSelectedTextRecord() {
   return selectedCanvasText
     ? textRecords.find((record) => record.element === selectedCanvasText)
+    : undefined;
+}
+
+function getSelectedFrameRecord() {
+  return selectedCanvasFrame
+    ? frameRecords.find((record) => record.element === selectedCanvasFrame)
     : undefined;
 }
 
@@ -204,6 +255,28 @@ function syncInspectorToSelectedText() {
   if (textColorPicker instanceof HTMLInputElement) textColorPicker.value = element.dataset.textColor || "#ffffff";
 }
 
+function syncInspectorToSelectedFrame() {
+  const record = getSelectedFrameRecord();
+  if (!record) return;
+  const { element } = record;
+
+  framePaddingInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const side = input.dataset.framePadding;
+    if (!side) return;
+    input.value = element.dataset[`padding${side[0].toUpperCase()}${side.slice(1)}`] || "10";
+  });
+
+  if (frameRadiusInput instanceof HTMLInputElement) {
+    frameRadiusInput.value = element.dataset.radius || "0";
+  }
+  if (frameColorPicker instanceof HTMLInputElement) {
+    const color = element.dataset.frameColor || "";
+    frameColorPicker.value = color || "#000000";
+    frameColorPicker.classList.toggle("is-transparent", color.length === 0);
+  }
+}
+
 function clearLayerSelection() {
   if (!selectedCanvasFrame && !selectedCanvasText) return;
   clearElementSelection();
@@ -246,9 +319,12 @@ function createSquareIcon() {
 
 function updateInspector() {
   const isTextSelected = selectedCanvasText !== null;
-  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected;
+  const isFrameSelected = selectedCanvasFrame !== null;
+  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected || isFrameSelected;
+  if (frameInspector instanceof HTMLElement) frameInspector.hidden = !isFrameSelected;
   if (textInspector instanceof HTMLElement) textInspector.hidden = !isTextSelected;
   if (isTextSelected) syncInspectorToSelectedText();
+  if (isFrameSelected) syncInspectorToSelectedFrame();
 }
 
 function setLayerDragData(event, layerType, layerId) {
@@ -540,6 +616,12 @@ function createCanvasFrame(x, y) {
   frame.dataset.frameId = String(frameId);
   frame.setAttribute("aria-label", `Frame ${frameId}`);
   frame.setAttribute("aria-selected", "false");
+  frame.dataset.paddingLeft = "10";
+  frame.dataset.paddingTop = "10";
+  frame.dataset.paddingRight = "10";
+  frame.dataset.paddingBottom = "10";
+  frame.dataset.radius = "0";
+  frame.dataset.frameColor = "";
   frame.style.left = `${x}px`;
   frame.style.top = `${y}px`;
 
@@ -624,6 +706,24 @@ document.addEventListener("keydown", (event) => {
       ? document.activeElement
       : null;
     activeText?.blur();
+    return;
+  }
+
+  const shortcutTarget = event.target;
+  const isTyping =
+    shortcutTarget instanceof HTMLInputElement ||
+    shortcutTarget instanceof HTMLTextAreaElement ||
+    shortcutTarget instanceof HTMLSelectElement ||
+    (shortcutTarget instanceof HTMLElement && shortcutTarget.isContentEditable);
+  const toolShortcut = {
+    v: "select",
+    t: "text",
+    f: "frame",
+  }[event.key.toLowerCase()];
+
+  if (!isTyping && toolShortcut && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    event.preventDefault();
+    selectTool(toolShortcut);
     return;
   }
 
@@ -718,7 +818,14 @@ lineHeightInput?.addEventListener("blur", () => {
   if (!applyLineHeightValue()) syncInspectorToSelectedText();
 });
 lineHeightInput?.addEventListener("keydown", (event) => {
-  if (!(lineHeightInput instanceof HTMLInputElement) || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  if (!(lineHeightInput instanceof HTMLInputElement)) return;
+  if (event.key === "Enter" && /^a$/i.test(lineHeightInput.value.trim())) {
+    event.preventDefault();
+    lineHeightInput.value = "Auto";
+    applyLineHeightValue();
+    return;
+  }
+  if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
   const record = getSelectedTextRecord();
   if (!record) return;
   event.preventDefault();
@@ -768,6 +875,42 @@ textColorPicker?.addEventListener("input", () => {
   if (!record || !(textColorPicker instanceof HTMLInputElement)) return;
   record.element.dataset.textColor = textColorPicker.value;
   record.element.style.color = textColorPicker.value;
+});
+
+framePaddingInputs.forEach((input) => {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("input", () => {
+    const record = getSelectedFrameRecord();
+    const side = input.dataset.framePadding;
+    const value = Number(input.value);
+    if (!record || !side || !Number.isFinite(value) || value < 0) return;
+    const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+    record.element.dataset[propertyName] = String(value);
+    record.element.style[propertyName] = `${value}px`;
+  });
+  input.addEventListener("blur", syncInspectorToSelectedFrame);
+});
+
+frameRadiusInput?.addEventListener("focus", () => {
+  if (frameRadiusInput instanceof HTMLInputElement) frameRadiusInput.select();
+});
+frameRadiusInput?.addEventListener("input", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameRadiusInput instanceof HTMLInputElement)) return;
+  const value = Number(frameRadiusInput.value);
+  if (!Number.isFinite(value) || value < 0) return;
+  record.element.dataset.radius = String(value);
+  record.element.style.borderRadius = `${value}px`;
+});
+frameRadiusInput?.addEventListener("blur", syncInspectorToSelectedFrame);
+
+frameColorPicker?.addEventListener("input", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameColorPicker instanceof HTMLInputElement)) return;
+  record.element.dataset.frameColor = frameColorPicker.value;
+  record.element.style.backgroundColor = frameColorPicker.value;
+  frameColorPicker.classList.remove("is-transparent");
 });
 
 loadGoogleFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
