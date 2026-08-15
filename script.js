@@ -7,12 +7,14 @@ const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
 let activeTool = "select";
 let selectedCanvasFrame = null;
 let nextFrameId = 1;
+let nextTextId = 1;
 let frameRecords = [];
 const expandedFrameIds = new Set();
 
 function selectTool(toolName) {
   activeTool = toolName;
   canvas?.classList.toggle("is-frame-tool-active", activeTool === "frame");
+  canvas?.classList.toggle("is-text-tool-active", activeTool === "text");
 
   toolButtons.forEach((toolButton) => {
     const isSelected = toolButton.getAttribute("data-tool") === activeTool;
@@ -160,6 +162,71 @@ function nestFrame(draggedFrameId, parentFrameId) {
   renderTree();
 }
 
+function startEditingText(textElement) {
+  textElement.contentEditable = "true";
+  textElement.focus();
+
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(textElement);
+  range.collapse(false);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function createCanvasText(parentRecord, x, y) {
+  if (!(canvas instanceof HTMLElement)) return;
+
+  const textId = nextTextId;
+  nextTextId += 1;
+
+  const text = document.createElement("div");
+  text.className = "canvas-text";
+  text.dataset.textId = String(textId);
+  text.contentEditable = "false";
+  text.spellcheck = false;
+
+  if (parentRecord) {
+    parentRecord.element.append(text);
+  } else {
+    text.style.left = `${x}px`;
+    text.style.top = `${y}px`;
+    canvas.insertBefore(text, toolbar);
+  }
+
+  text.addEventListener("click", (event) => {
+    if (activeTool === "text" || text.isContentEditable) {
+      event.stopPropagation();
+      startEditingText(text);
+    }
+  });
+
+  text.addEventListener("dblclick", (event) => {
+    if (activeTool === "select") {
+      event.stopPropagation();
+      startEditingText(text);
+    }
+  });
+
+  text.addEventListener("blur", () => {
+    text.contentEditable = "false";
+  });
+
+  text.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      text.blur();
+    }
+  });
+
+  text.addEventListener("dragstart", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  startEditingText(text);
+}
+
 function createCanvasFrame(x, y) {
   if (!(canvas instanceof HTMLElement)) return;
 
@@ -179,6 +246,18 @@ function createCanvasFrame(x, y) {
 
   frame.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (event.target !== frame) return;
+
+    if (activeTool === "text") {
+      const frameBounds = frame.getBoundingClientRect();
+      createCanvasText(
+        record,
+        event.clientX - frameBounds.left,
+        event.clientY - frameBounds.top,
+      );
+      return;
+    }
+
     selectCanvasFrame(frame);
   });
 
@@ -233,10 +312,18 @@ canvas?.addEventListener("click", (event) => {
   if (!(canvas instanceof HTMLElement) || event.target !== canvas) return;
 
   clearCanvasFrameSelection();
-  if (activeTool !== "frame") return;
 
   const canvasBounds = canvas.getBoundingClientRect();
-  createCanvasFrame(event.clientX - canvasBounds.left, event.clientY - canvasBounds.top);
+  const x = event.clientX - canvasBounds.left;
+  const y = event.clientY - canvasBounds.top;
+
+  if (activeTool === "text") {
+    createCanvasText(null, x, y);
+    return;
+  }
+
+  if (activeTool !== "frame") return;
+  createCanvasFrame(x, y);
   selectTool("select");
 });
 
