@@ -20,6 +20,10 @@ const frameRadiusInput = document.querySelector("#frame-radius");
 const frameColorPicker = document.querySelector("#frame-color-picker");
 const frameDirectionSelect = document.querySelector("#frame-direction");
 const frameGapInput = document.querySelector("#frame-gap");
+const frameGapCombobox = document.querySelector("[data-gap-combobox]");
+const frameGapToggle = document.querySelector("[data-gap-toggle]");
+const frameGapMenu = document.querySelector("[data-gap-menu]");
+const frameGapAutoOption = document.querySelector("[data-gap-option='auto']");
 const frameHtmlTagInput = document.querySelector("#frame-html-tag");
 const exportComponentsButton = document.querySelector("[data-export-components]");
 
@@ -271,8 +275,10 @@ function syncInspectorToSelectedFrame() {
   if (frameDirectionSelect instanceof HTMLSelectElement) {
     frameDirectionSelect.value = element.dataset.direction || "horizontal";
   }
-  if (frameGapInput instanceof HTMLSelectElement) {
-    frameGapInput.value = element.dataset.gap || "10";
+  if (frameGapInput instanceof HTMLInputElement) {
+    frameGapInput.value = element.dataset.gapMode === "auto"
+      ? "Auto"
+      : `${element.dataset.gap || "10"}px`;
   }
 
   framePaddingInputs.forEach((input) => {
@@ -601,8 +607,16 @@ function createCanvasText(parentRecord, x, y) {
       return;
     }
 
+    const wasNewText = record.isNew;
     record.isNew = false;
     text.contentEditable = "false";
+    if (wasNewText) {
+      selectTool("select");
+      suppressNextTextCreation = true;
+      setTimeout(() => {
+        suppressNextTextCreation = false;
+      }, 0);
+    }
   });
   text.addEventListener("dragstart", (event) => {
     event.preventDefault();
@@ -641,6 +655,7 @@ function createCanvasFrame(x, y) {
   frame.dataset.frameColor = "";
   frame.dataset.direction = "horizontal";
   frame.dataset.gap = "10";
+  frame.dataset.gapMode = "fixed";
   frame.dataset.htmlTag = "div";
   frame.style.left = `${x}px`;
   frame.style.top = `${y}px`;
@@ -946,12 +961,85 @@ frameDirectionSelect?.addEventListener("change", () => {
   record.element.style.flexDirection = direction === "vertical" ? "column" : "row";
 });
 
-frameGapInput?.addEventListener("change", () => {
+function setFrameGapMenuOpen(isOpen) {
+  if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;
+  frameGapMenu.hidden = !isOpen;
+  frameGapInput.setAttribute("aria-expanded", String(isOpen));
+  frameGapToggle?.setAttribute("aria-expanded", String(isOpen));
+}
+
+function applyFrameGapValue(normalize = true) {
   const record = getSelectedFrameRecord();
-  if (!record || !(frameGapInput instanceof HTMLSelectElement)) return;
-  const gap = Math.max(0, Number(frameGapInput.value));
+  if (!record || !(frameGapInput instanceof HTMLInputElement)) return false;
+  const value = frameGapInput.value.trim();
+
+  if (/^auto$/i.test(value)) {
+    record.element.dataset.gapMode = "auto";
+    record.element.style.gap = "0px";
+    record.element.style.justifyContent = "space-between";
+    if (normalize) frameGapInput.value = "Auto";
+    return true;
+  }
+
+  const match = value.match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
+  if (!match) return false;
+  const gap = Math.max(0, Number(match[1]));
+  record.element.dataset.gapMode = "fixed";
   record.element.dataset.gap = String(gap);
   record.element.style.gap = `${gap}px`;
+  record.element.style.justifyContent = "flex-start";
+  if (normalize) frameGapInput.value = `${gap}px`;
+  return true;
+}
+
+frameGapInput?.addEventListener("focus", () => {
+  if (frameGapInput instanceof HTMLInputElement) frameGapInput.select();
+});
+
+frameGapInput?.addEventListener("input", () => applyFrameGapValue(false));
+
+frameGapInput?.addEventListener("blur", (event) => {
+  if (frameGapCombobox instanceof HTMLElement && event.relatedTarget instanceof Node && frameGapCombobox.contains(event.relatedTarget)) return;
+  if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
+  setFrameGapMenuOpen(false);
+});
+
+frameGapInput?.addEventListener("keydown", (event) => {
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    setFrameGapMenuOpen(true);
+    return;
+  }
+  if (event.key === "Escape") {
+    setFrameGapMenuOpen(false);
+    syncInspectorToSelectedFrame();
+    return;
+  }
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
+  setFrameGapMenuOpen(false);
+});
+
+frameGapToggle?.addEventListener("click", () => {
+  if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;
+  const willOpen = frameGapMenu.hidden;
+  setFrameGapMenuOpen(willOpen);
+  frameGapInput.focus();
+});
+
+frameGapAutoOption?.addEventListener("pointerdown", (event) => event.preventDefault());
+frameGapAutoOption?.addEventListener("click", () => {
+  if (!(frameGapInput instanceof HTMLInputElement)) return;
+  frameGapInput.value = "Auto";
+  applyFrameGapValue();
+  setFrameGapMenuOpen(false);
+  frameGapInput.focus();
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!(frameGapCombobox instanceof HTMLElement) || !(event.target instanceof Node)) return;
+  if (!frameGapCombobox.contains(event.target)) setFrameGapMenuOpen(false);
 });
 
 frameHtmlTagInput?.addEventListener("change", () => {
@@ -980,6 +1068,7 @@ function formatReactStyle(style) {
 function getExportFrameStyle(record) {
   const element = record.element;
   const isRoot = record.parentId === null;
+  const isAutoGap = element.dataset.gapMode === "auto";
   return {
     position: isRoot ? "absolute" : "relative",
     left: isRoot ? element.style.left || "0px" : undefined,
@@ -994,7 +1083,8 @@ function getExportFrameStyle(record) {
     paddingTop: `${element.dataset.paddingTop || "10"}px`,
     paddingRight: `${element.dataset.paddingRight || "10"}px`,
     paddingBottom: `${element.dataset.paddingBottom || "10"}px`,
-    gap: `${element.dataset.gap || "10"}px`,
+    gap: isAutoGap ? "0px" : `${element.dataset.gap || "10"}px`,
+    justifyContent: isAutoGap ? "space-between" : "flex-start",
     border: "0",
     borderRadius: `${element.dataset.radius || "0"}px`,
     outline: "none",
@@ -1098,5 +1188,6 @@ function exportAllComponents() {
 exportComponentsButton?.addEventListener("click", exportAllComponents);
 
 loadGoogleFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
+loadGoogleFont(DEFAULT_FONT_FAMILY, 600);
 loadFontCatalog();
 renderTree();
