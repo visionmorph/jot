@@ -43,20 +43,45 @@ branchToggle?.addEventListener("click", (event) => {
   toggleBranch();
 });
 
+const canvas = document.querySelector("#canvas");
+const toolbar = document.querySelector(".toolbar");
 const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
+let activeTool = "select";
+
+function selectTool(toolName) {
+  activeTool = toolName;
+  canvas?.classList.toggle("is-frame-tool-active", activeTool === "frame");
+
+  toolButtons.forEach((toolButton) => {
+    const isSelected = toolButton.getAttribute("data-tool") === activeTool;
+    toolButton.classList.toggle("is-toggled", isSelected);
+    toolButton.setAttribute("aria-pressed", String(isSelected));
+  });
+}
 
 toolButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    toolButtons.forEach((toolButton) => {
-      const isSelected = toolButton === button;
-      toolButton.classList.toggle("is-toggled", isSelected);
-      toolButton.setAttribute("aria-pressed", String(isSelected));
-    });
+    selectTool(button.getAttribute("data-tool") || "select");
   });
 });
 
-const canvas = document.querySelector("#canvas");
 const colorPicker = document.querySelector("#canvas-color-picker");
+
+canvas?.addEventListener("click", (event) => {
+  if (!(canvas instanceof HTMLElement) || event.target !== canvas || activeTool !== "frame") return;
+
+  const canvasBounds = canvas.getBoundingClientRect();
+  const frame = document.createElement("div");
+  const frameNumber = canvas.querySelectorAll(".canvas-frame").length + 1;
+
+  frame.className = "canvas-frame";
+  frame.setAttribute("aria-label", `Frame ${frameNumber}`);
+  frame.style.left = `${event.clientX - canvasBounds.left}px`;
+  frame.style.top = `${event.clientY - canvasBounds.top}px`;
+  canvas.insertBefore(frame, toolbar);
+
+  selectTool("select");
+});
 
 colorPicker?.addEventListener("input", () => {
   if (canvas && colorPicker instanceof HTMLInputElement) {
