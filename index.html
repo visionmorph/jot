@@ -98,13 +98,10 @@
           <div class="inspector-field">
             <label class="inspector-label" for="frame-gap">Gap</label>
             <div class="inspector-select-wrap">
-              <input class="inspector-control inspector-combobox" id="frame-gap" type="text" inputmode="decimal" list="frame-gap-options" value="10px" />
-              <button class="inspector-picker-button" type="button" aria-label="Open gap options" data-gap-picker-button>
-                <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
-              </button>
-              <datalist id="frame-gap-options">
-                <option value="10px"></option>
-              </datalist>
+              <select class="inspector-control inspector-select" id="frame-gap">
+                <option value="10" selected>10px</option>
+              </select>
+              <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
             </div>
           </div>
 
@@ -143,14 +140,11 @@
           <div class="inspector-field">
             <label class="inspector-label" for="frame-html-tag">HTML tag</label>
             <div class="inspector-select-wrap">
-              <input class="inspector-control inspector-combobox" id="frame-html-tag" type="text" list="frame-html-tag-options" value="div" />
-              <button class="inspector-picker-button" type="button" aria-label="Open HTML tag options" data-html-tag-picker-button>
-                <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
-              </button>
-              <datalist id="frame-html-tag-options">
-                <option value="div"></option>
-                <option value="button"></option>
-              </datalist>
+              <select class="inspector-control inspector-select" id="frame-html-tag">
+                <option value="div" selected>div</option>
+                <option value="button">button</option>
+              </select>
+              <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
             </div>
           </div>
         </section>
