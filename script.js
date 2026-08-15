@@ -47,6 +47,7 @@ const canvas = document.querySelector("#canvas");
 const toolbar = document.querySelector(".toolbar");
 const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
 let activeTool = "select";
+let selectedCanvasFrame = null;
 
 function selectTool(toolName) {
   activeTool = toolName;
@@ -68,7 +69,23 @@ toolButtons.forEach((button) => {
 const colorPicker = document.querySelector("#canvas-color-picker");
 
 canvas?.addEventListener("click", (event) => {
-  if (!(canvas instanceof HTMLElement) || event.target !== canvas || activeTool !== "frame") return;
+  if (!(canvas instanceof HTMLElement)) return;
+
+  const clickedFrame = event.target instanceof Element
+    ? event.target.closest(".canvas-frame")
+    : null;
+
+  if (clickedFrame instanceof HTMLElement && canvas.contains(clickedFrame)) {
+    canvas.querySelectorAll(".canvas-frame").forEach((frame) => {
+      const isSelected = frame === clickedFrame;
+      frame.classList.toggle("is-selected", isSelected);
+      frame.setAttribute("aria-selected", String(isSelected));
+    });
+    selectedCanvasFrame = clickedFrame;
+    return;
+  }
+
+  if (event.target !== canvas || activeTool !== "frame") return;
 
   const canvasBounds = canvas.getBoundingClientRect();
   const frame = document.createElement("div");
@@ -76,11 +93,30 @@ canvas?.addEventListener("click", (event) => {
 
   frame.className = "canvas-frame";
   frame.setAttribute("aria-label", `Frame ${frameNumber}`);
+  frame.setAttribute("aria-selected", "false");
   frame.style.left = `${event.clientX - canvasBounds.left}px`;
   frame.style.top = `${event.clientY - canvasBounds.top}px`;
   canvas.insertBefore(frame, toolbar);
 
   selectTool("select");
+});
+
+document.addEventListener("keydown", (event) => {
+  if (
+    !selectedCanvasFrame ||
+    (event.key !== "Delete" && event.key !== "Backspace")
+  ) return;
+
+  const target = event.target;
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  ) return;
+
+  event.preventDefault();
+  selectedCanvasFrame.remove();
+  selectedCanvasFrame = null;
 });
 
 colorPicker?.addEventListener("input", () => {
