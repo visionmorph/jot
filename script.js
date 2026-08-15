@@ -21,6 +21,8 @@ const frameColorPicker = document.querySelector("#frame-color-picker");
 const frameDirectionSelect = document.querySelector("#frame-direction");
 const frameGapInput = document.querySelector("#frame-gap");
 const frameGapPickerButton = document.querySelector("[data-gap-picker-button]");
+const frameHtmlTagInput = document.querySelector("#frame-html-tag");
+const frameHtmlTagPickerButton = document.querySelector("[data-html-tag-picker-button]");
 const exportComponentsButton = document.querySelector("[data-export-components]");
 
 const DEFAULT_FONT_FAMILY = "Inter";
@@ -58,6 +60,10 @@ let frameRecords = [];
 let textRecords = [];
 let suppressNextTextCreation = false;
 const expandedFrameIds = new Set();
+
+function normalizeFrameHtmlTag(value) {
+  return value.trim().toLowerCase() === "button" ? "button" : "div";
+}
 
 function resizeLeftSidebarPanels(clientY) {
   if (
@@ -285,6 +291,9 @@ function syncInspectorToSelectedFrame() {
     const color = element.dataset.frameColor || "";
     frameColorPicker.value = color || "#000000";
     frameColorPicker.classList.toggle("is-transparent", color.length === 0);
+  }
+  if (frameHtmlTagInput instanceof HTMLInputElement) {
+    frameHtmlTagInput.value = normalizeFrameHtmlTag(element.dataset.htmlTag || "div");
   }
 }
 
@@ -634,6 +643,7 @@ function createCanvasFrame(x, y) {
   frame.dataset.frameColor = "";
   frame.dataset.direction = "horizontal";
   frame.dataset.gap = "10";
+  frame.dataset.htmlTag = "div";
   frame.style.left = `${x}px`;
   frame.style.top = `${y}px`;
 
@@ -975,6 +985,40 @@ frameGapPickerButton?.addEventListener("click", () => {
   }
 });
 
+function applyFrameHtmlTagValue() {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameHtmlTagInput instanceof HTMLInputElement)) return false;
+  const value = frameHtmlTagInput.value.trim().toLowerCase();
+  if (value !== "div" && value !== "button") return false;
+  record.element.dataset.htmlTag = value;
+  return true;
+}
+
+frameHtmlTagInput?.addEventListener("focus", () => {
+  if (frameHtmlTagInput instanceof HTMLInputElement) frameHtmlTagInput.select();
+});
+frameHtmlTagInput?.addEventListener("input", applyFrameHtmlTagValue);
+frameHtmlTagInput?.addEventListener("blur", () => {
+  if (!applyFrameHtmlTagValue()) syncInspectorToSelectedFrame();
+});
+frameHtmlTagInput?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  if (!applyFrameHtmlTagValue()) syncInspectorToSelectedFrame();
+});
+
+frameHtmlTagPickerButton?.addEventListener("click", () => {
+  if (!(frameHtmlTagInput instanceof HTMLInputElement)) return;
+  frameHtmlTagInput.focus();
+  if (typeof frameHtmlTagInput.showPicker === "function") {
+    try {
+      frameHtmlTagInput.showPicker();
+    } catch {
+      // Focus still leaves the editable value available when the browser cannot open the picker.
+    }
+  }
+});
+
 function toReactComponentName(value) {
   const name = value
     .trim()
@@ -1047,9 +1091,11 @@ function renderExportLayer(layer, depth) {
 
   const children = getLayerChildren(layer.record.id);
   const style = formatReactStyle(getExportFrameStyle(layer.record));
-  if (children.length === 0) return `${indent}<div style={${style}} />`;
+  const htmlTag = normalizeFrameHtmlTag(layer.record.element.dataset.htmlTag || "div");
+  const attributes = htmlTag === "button" ? ' type="button"' : "";
+  if (children.length === 0) return `${indent}<${htmlTag}${attributes} style={${style}} />`;
   const childMarkup = children.map((child) => renderExportLayer(child, depth + 1)).join("\n");
-  return `${indent}<div style={${style}}>\n${childMarkup}\n${indent}</div>`;
+  return `${indent}<${htmlTag}${attributes} style={${style}}>\n${childMarkup}\n${indent}</${htmlTag}>`;
 }
 
 function getExportFontLinks() {
