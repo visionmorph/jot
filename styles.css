@@ -277,8 +277,12 @@ input {
   background: transparent;
 }
 
+.canvas-frame.is-selected {
+  outline: 1px solid #992CFF;
+}
+
 .canvas-frame:hover {
-  outline: 0.1px solid #992CFF;
+  outline: 2px solid #992CFF;
 }
 
 .toolbar {
