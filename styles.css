@@ -534,6 +534,20 @@ input {
   line-height: 16px;
 }
 
+.prefixed-number-control input[type="number"],
+#frame-radius {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.prefixed-number-control input[type="number"]::-webkit-inner-spin-button,
+.prefixed-number-control input[type="number"]::-webkit-outer-spin-button,
+#frame-radius::-webkit-inner-spin-button,
+#frame-radius::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
 .prefixed-number-control:focus-within {
   outline: 1px solid var(--icon-on-color);
   outline-offset: -1px;
@@ -572,24 +586,6 @@ input {
 .inspector-select {
   padding-right: 32px;
   appearance: none;
-}
-
-.inspector-combobox {
-  padding-right: 32px;
-}
-
-.inspector-picker-button {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 32px;
-  height: 24px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--icon-secondary);
-  cursor: pointer;
 }
 
 .inspector-select-chevron {
