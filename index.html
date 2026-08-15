@@ -97,11 +97,24 @@
 
           <div class="inspector-field">
             <label class="inspector-label" for="frame-gap">Gap</label>
-            <div class="inspector-select-wrap">
-              <select class="inspector-control inspector-select" id="frame-gap">
-                <option value="10" selected>10px</option>
-              </select>
-              <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+            <div class="inspector-combobox-wrap" data-gap-combobox>
+              <input
+                class="inspector-control inspector-combobox-input"
+                id="frame-gap"
+                type="text"
+                inputmode="decimal"
+                value="10px"
+                role="combobox"
+                aria-autocomplete="none"
+                aria-expanded="false"
+                aria-controls="frame-gap-menu"
+              />
+              <button class="inspector-combobox-toggle" type="button" aria-label="Open gap options" aria-expanded="false" data-gap-toggle>
+                <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+              </button>
+              <div class="inspector-combobox-menu" id="frame-gap-menu" role="listbox" data-gap-menu hidden>
+                <button class="inspector-combobox-option" type="button" role="option" data-gap-option="auto">Auto</button>
+              </div>
             </div>
           </div>
 
