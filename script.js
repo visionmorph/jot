@@ -1,53 +1,14 @@
-const treeNodes = Array.from(document.querySelectorAll("[data-tree-node]"));
-const branchNode = document.querySelector("[data-branch-node]");
-const branchToggle = document.querySelector("[data-branch-toggle]");
-const childNode = document.querySelector("[data-child-node]");
-
-function selectTreeNode(selectedNode) {
-  treeNodes.forEach((node) => {
-    const isSelected = node === selectedNode;
-    node.classList.toggle("is-selected", isSelected);
-    node.setAttribute("aria-selected", String(isSelected));
-  });
-}
-
-function toggleBranch() {
-  if (!branchNode || !branchToggle || !childNode) return;
-
-  const isExpanded = branchNode.getAttribute("aria-expanded") === "true";
-  const willExpand = !isExpanded;
-  const chevron = branchToggle.querySelector(".chevron");
-
-  branchNode.setAttribute("aria-expanded", String(willExpand));
-  branchToggle.setAttribute("aria-expanded", String(willExpand));
-  branchToggle.setAttribute("aria-label", willExpand ? "Collapse Frame" : "Expand Frame");
-  childNode.hidden = !willExpand;
-  chevron?.classList.toggle("chevron--down", willExpand);
-  chevron?.classList.toggle("chevron--right", !willExpand);
-}
-
-treeNodes.forEach((node) => {
-  const activateNode = () => selectTreeNode(node);
-
-  node.addEventListener("click", activateNode);
-  node.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      activateNode();
-    }
-  });
-});
-
-branchToggle?.addEventListener("click", (event) => {
-  event.stopPropagation();
-  toggleBranch();
-});
-
 const canvas = document.querySelector("#canvas");
 const toolbar = document.querySelector(".toolbar");
+const treeView = document.querySelector("[data-tree-view]");
+const colorPicker = document.querySelector("#canvas-color-picker");
 const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
+
 let activeTool = "select";
 let selectedCanvasFrame = null;
+let nextFrameId = 1;
+let frameRecords = [];
+const expandedFrameIds = new Set();
 
 function selectTool(toolName) {
   activeTool = toolName;
@@ -60,52 +21,222 @@ function selectTool(toolName) {
   });
 }
 
+function getFrameRecord(frameId) {
+  return frameRecords.find((record) => record.id === frameId);
+}
+
+function getChildRecords(parentId) {
+  return frameRecords.filter((record) => record.parentId === parentId);
+}
+
+function selectCanvasFrame(frameElement) {
+  frameRecords.forEach((record) => {
+    const isSelected = record.element === frameElement;
+    record.element.classList.toggle("is-selected", isSelected);
+    record.element.setAttribute("aria-selected", String(isSelected));
+  });
+
+  selectedCanvasFrame = frameElement;
+  renderTree();
+}
+
+function clearCanvasFrameSelection() {
+  if (!selectedCanvasFrame) return;
+
+  selectedCanvasFrame.classList.remove("is-selected");
+  selectedCanvasFrame.setAttribute("aria-selected", "false");
+  selectedCanvasFrame = null;
+  renderTree();
+}
+
+function createIconCell(content) {
+  const cell = document.createElement("span");
+  cell.className = "icon-cell";
+  if (content) cell.append(content);
+  return cell;
+}
+
+function createSquareIcon() {
+  const square = document.createElement("span");
+  square.className = "square-icon square-icon--small";
+  square.setAttribute("aria-hidden", "true");
+  return square;
+}
+
+function renderTreeNode(record, depth) {
+  const childRecords = getChildRecords(record.id);
+  const isBranch = childRecords.length > 0;
+  const isExpanded = expandedFrameIds.has(record.id);
+  const item = document.createElement("div");
+  const node = document.createElement("div");
+  const iconGroup = document.createElement("span");
+  const label = document.createElement("span");
+
+  item.className = "dynamic-tree-item";
+  node.className = "tree-node tree-node--dynamic";
+  node.setAttribute("role", "treeitem");
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("aria-level", String(depth));
+  node.setAttribute("aria-selected", String(record.element === selectedCanvasFrame));
+  node.style.setProperty("--tree-indent", `${8 + (depth - 1) * 40}px`);
+  if (record.element === selectedCanvasFrame) node.classList.add("is-selected");
+  if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
+
+  node.addEventListener("click", () => selectCanvasFrame(record.element));
+  node.addEventListener("keydown", (event) => {
+    if (event.target === node && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      selectCanvasFrame(record.element);
+    }
+  });
+
+  iconGroup.className = "branch-icon-group";
+
+  if (isBranch) {
+    const branchToggle = document.createElement("button");
+    const chevron = document.createElement("span");
+
+    branchToggle.className = "icon-cell branch-toggle";
+    branchToggle.type = "button";
+    branchToggle.setAttribute("aria-label", `${isExpanded ? "Collapse" : "Expand"} Frame ${record.id}`);
+    branchToggle.setAttribute("aria-expanded", String(isExpanded));
+    chevron.className = `chevron ${isExpanded ? "chevron--down" : "chevron--right"}`;
+    chevron.setAttribute("aria-hidden", "true");
+    branchToggle.append(chevron);
+    branchToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (expandedFrameIds.has(record.id)) expandedFrameIds.delete(record.id);
+      else expandedFrameIds.add(record.id);
+      renderTree();
+    });
+    iconGroup.append(branchToggle);
+  } else {
+    iconGroup.append(createIconCell());
+  }
+
+  iconGroup.append(createIconCell(createSquareIcon()));
+  label.className = "tree-node-label";
+  label.textContent = `Frame ${record.id}`;
+  node.append(iconGroup, label);
+  item.append(node);
+
+  if (isBranch && isExpanded) {
+    childRecords.forEach((childRecord) => item.append(renderTreeNode(childRecord, depth + 1)));
+  }
+
+  return item;
+}
+
+function renderTree() {
+  if (!treeView) return;
+  const rootNodes = getChildRecords(null).map((record) => renderTreeNode(record, 1));
+  treeView.replaceChildren(...rootNodes);
+}
+
+function canNestFrame(draggedFrameId, parentFrameId) {
+  if (draggedFrameId === parentFrameId) return false;
+
+  let ancestor = getFrameRecord(parentFrameId);
+  while (ancestor) {
+    if (ancestor.id === draggedFrameId) return false;
+    ancestor = ancestor.parentId === null ? undefined : getFrameRecord(ancestor.parentId);
+  }
+
+  return true;
+}
+
+function nestFrame(draggedFrameId, parentFrameId) {
+  if (!canNestFrame(draggedFrameId, parentFrameId)) return;
+
+  const draggedRecord = getFrameRecord(draggedFrameId);
+  const parentRecord = getFrameRecord(parentFrameId);
+  if (!draggedRecord || !parentRecord) return;
+
+  draggedRecord.parentId = parentFrameId;
+  draggedRecord.element.style.left = "";
+  draggedRecord.element.style.top = "";
+  parentRecord.element.append(draggedRecord.element);
+  expandedFrameIds.add(parentFrameId);
+  renderTree();
+}
+
+function createCanvasFrame(x, y) {
+  if (!(canvas instanceof HTMLElement)) return;
+
+  const frameId = nextFrameId;
+  nextFrameId += 1;
+
+  const frame = document.createElement("div");
+  const record = { id: frameId, parentId: null, element: frame };
+
+  frame.className = "canvas-frame";
+  frame.draggable = true;
+  frame.dataset.frameId = String(frameId);
+  frame.setAttribute("aria-label", `Frame ${frameId}`);
+  frame.setAttribute("aria-selected", "false");
+  frame.style.left = `${x}px`;
+  frame.style.top = `${y}px`;
+
+  frame.addEventListener("click", (event) => {
+    event.stopPropagation();
+    selectCanvasFrame(frame);
+  });
+
+  frame.addEventListener("dragstart", (event) => {
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(frameId));
+  });
+
+  frame.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+  });
+
+  frame.addEventListener("drop", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const draggedFrameId = Number(event.dataTransfer.getData("text/plain"));
+    if (Number.isInteger(draggedFrameId)) nestFrame(draggedFrameId, frameId);
+  });
+
+  frameRecords.push(record);
+  canvas.insertBefore(frame, toolbar);
+  renderTree();
+}
+
+function collectFrameAndDescendantIds(frameId) {
+  const ids = new Set([frameId]);
+  let foundChild = true;
+
+  while (foundChild) {
+    foundChild = false;
+    frameRecords.forEach((record) => {
+      if (record.parentId !== null && ids.has(record.parentId) && !ids.has(record.id)) {
+        ids.add(record.id);
+        foundChild = true;
+      }
+    });
+  }
+
+  return ids;
+}
+
 toolButtons.forEach((button) => {
   button.addEventListener("click", () => {
     selectTool(button.getAttribute("data-tool") || "select");
   });
 });
 
-const colorPicker = document.querySelector("#canvas-color-picker");
-
 canvas?.addEventListener("click", (event) => {
-  if (!(canvas instanceof HTMLElement)) return;
+  if (!(canvas instanceof HTMLElement) || event.target !== canvas) return;
 
-  const clickedFrame = event.target instanceof Element
-    ? event.target.closest(".canvas-frame")
-    : null;
-
-  if (clickedFrame instanceof HTMLElement && canvas.contains(clickedFrame)) {
-    canvas.querySelectorAll(".canvas-frame").forEach((frame) => {
-      const isSelected = frame === clickedFrame;
-      frame.classList.toggle("is-selected", isSelected);
-      frame.setAttribute("aria-selected", String(isSelected));
-    });
-    selectedCanvasFrame = clickedFrame;
-    return;
-  }
-
-  if (event.target !== canvas) return;
-
-  if (selectedCanvasFrame) {
-    selectedCanvasFrame.classList.remove("is-selected");
-    selectedCanvasFrame.setAttribute("aria-selected", "false");
-    selectedCanvasFrame = null;
-  }
-
+  clearCanvasFrameSelection();
   if (activeTool !== "frame") return;
 
   const canvasBounds = canvas.getBoundingClientRect();
-  const frame = document.createElement("div");
-  const frameNumber = canvas.querySelectorAll(".canvas-frame").length + 1;
-
-  frame.className = "canvas-frame";
-  frame.setAttribute("aria-label", `Frame ${frameNumber}`);
-  frame.setAttribute("aria-selected", "false");
-  frame.style.left = `${event.clientX - canvasBounds.left}px`;
-  frame.style.top = `${event.clientY - canvasBounds.top}px`;
-  canvas.insertBefore(frame, toolbar);
-
+  createCanvasFrame(event.clientX - canvasBounds.left, event.clientY - canvasBounds.top);
   selectTool("select");
 });
 
@@ -123,8 +254,15 @@ document.addEventListener("keydown", (event) => {
   ) return;
 
   event.preventDefault();
+  const selectedRecord = frameRecords.find((record) => record.element === selectedCanvasFrame);
+  if (!selectedRecord) return;
+
+  const idsToDelete = collectFrameAndDescendantIds(selectedRecord.id);
   selectedCanvasFrame.remove();
+  frameRecords = frameRecords.filter((record) => !idsToDelete.has(record.id));
+  idsToDelete.forEach((frameId) => expandedFrameIds.delete(frameId));
   selectedCanvasFrame = null;
+  renderTree();
 });
 
 colorPicker?.addEventListener("input", () => {
@@ -132,3 +270,5 @@ colorPicker?.addEventListener("input", () => {
     canvas.style.backgroundColor = colorPicker.value;
   }
 });
+
+renderTree();
