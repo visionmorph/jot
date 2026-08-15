@@ -82,6 +82,30 @@
 
           <div class="inspector-divider" aria-hidden="true"></div>
 
+          <div class="inspector-field">
+            <label class="inspector-label" for="frame-direction">Direction</label>
+            <div class="inspector-select-wrap">
+              <select class="inspector-control inspector-select" id="frame-direction">
+                <option value="horizontal" selected>Horizontal</option>
+                <option value="vertical">Vertical</option>
+              </select>
+              <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+            </div>
+          </div>
+
+          <div class="inspector-field">
+            <label class="inspector-label" for="frame-gap">Gap</label>
+            <div class="inspector-select-wrap">
+              <input class="inspector-control inspector-combobox" id="frame-gap" type="text" inputmode="decimal" list="frame-gap-options" value="10px" />
+              <button class="inspector-picker-button" type="button" aria-label="Open gap options" data-gap-picker-button>
+                <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+              </button>
+              <datalist id="frame-gap-options">
+                <option value="10px"></option>
+              </datalist>
+            </div>
+          </div>
+
           <div class="inspector-field frame-padding-field">
             <span class="inspector-label" id="frame-padding-label">Padding</span>
             <div class="frame-padding-grid" role="group" aria-labelledby="frame-padding-label">
