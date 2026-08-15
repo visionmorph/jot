@@ -567,6 +567,12 @@ input {
   height: 24px;
 }
 
+.inspector-combobox-wrap {
+  position: relative;
+  width: 119.5px;
+  height: 24px;
+}
+
 .inspector-control {
   width: 119.5px;
   height: 24px;
@@ -586,6 +592,58 @@ input {
 .inspector-select {
   padding-right: 32px;
   appearance: none;
+}
+
+.inspector-combobox-input {
+  padding-right: 32px;
+}
+
+.inspector-combobox-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--icon-secondary);
+  cursor: pointer;
+}
+
+.inspector-combobox-menu {
+  position: absolute;
+  top: 28px;
+  left: 0;
+  z-index: 10;
+  width: 119.5px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-subtle-00);
+  border-radius: 2px;
+  background: var(--layer-01);
+}
+
+.inspector-combobox-option {
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  padding: 4px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inspector-combobox-option:hover,
+.inspector-combobox-option:focus-visible {
+  background: var(--layer-hover-01);
+  outline: 0;
 }
 
 .inspector-select-chevron {
