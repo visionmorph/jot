@@ -20,9 +20,7 @@ const frameRadiusInput = document.querySelector("#frame-radius");
 const frameColorPicker = document.querySelector("#frame-color-picker");
 const frameDirectionSelect = document.querySelector("#frame-direction");
 const frameGapInput = document.querySelector("#frame-gap");
-const frameGapPickerButton = document.querySelector("[data-gap-picker-button]");
 const frameHtmlTagInput = document.querySelector("#frame-html-tag");
-const frameHtmlTagPickerButton = document.querySelector("[data-html-tag-picker-button]");
 const exportComponentsButton = document.querySelector("[data-export-components]");
 
 const DEFAULT_FONT_FAMILY = "Inter";
@@ -273,8 +271,8 @@ function syncInspectorToSelectedFrame() {
   if (frameDirectionSelect instanceof HTMLSelectElement) {
     frameDirectionSelect.value = element.dataset.direction || "horizontal";
   }
-  if (frameGapInput instanceof HTMLInputElement) {
-    frameGapInput.value = `${element.dataset.gap || "10"}px`;
+  if (frameGapInput instanceof HTMLSelectElement) {
+    frameGapInput.value = element.dataset.gap || "10";
   }
 
   framePaddingInputs.forEach((input) => {
@@ -292,7 +290,7 @@ function syncInspectorToSelectedFrame() {
     frameColorPicker.value = color || "#000000";
     frameColorPicker.classList.toggle("is-transparent", color.length === 0);
   }
-  if (frameHtmlTagInput instanceof HTMLInputElement) {
+  if (frameHtmlTagInput instanceof HTMLSelectElement) {
     frameHtmlTagInput.value = normalizeFrameHtmlTag(element.dataset.htmlTag || "div");
   }
 }
@@ -948,75 +946,18 @@ frameDirectionSelect?.addEventListener("change", () => {
   record.element.style.flexDirection = direction === "vertical" ? "column" : "row";
 });
 
-function applyFrameGapValue(normalize = true) {
+frameGapInput?.addEventListener("change", () => {
   const record = getSelectedFrameRecord();
-  if (!record || !(frameGapInput instanceof HTMLInputElement)) return false;
-  const match = frameGapInput.value.trim().match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
-  if (!match) return false;
-  const gap = Math.max(0, Number(match[1]));
-  if (normalize) frameGapInput.value = `${gap}px`;
+  if (!record || !(frameGapInput instanceof HTMLSelectElement)) return;
+  const gap = Math.max(0, Number(frameGapInput.value));
   record.element.dataset.gap = String(gap);
   record.element.style.gap = `${gap}px`;
-  return true;
-}
-
-frameGapInput?.addEventListener("focus", () => {
-  if (frameGapInput instanceof HTMLInputElement) frameGapInput.select();
-});
-frameGapInput?.addEventListener("input", () => applyFrameGapValue(false));
-frameGapInput?.addEventListener("blur", () => {
-  if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
-});
-frameGapInput?.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") return;
-  event.preventDefault();
-  if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
 });
 
-frameGapPickerButton?.addEventListener("click", () => {
-  if (!(frameGapInput instanceof HTMLInputElement)) return;
-  frameGapInput.focus();
-  if (typeof frameGapInput.showPicker === "function") {
-    try {
-      frameGapInput.showPicker();
-    } catch {
-      // Focus still leaves the editable value available when the browser cannot open the picker.
-    }
-  }
-});
-
-function applyFrameHtmlTagValue() {
+frameHtmlTagInput?.addEventListener("change", () => {
   const record = getSelectedFrameRecord();
-  if (!record || !(frameHtmlTagInput instanceof HTMLInputElement)) return false;
-  const value = frameHtmlTagInput.value.trim().toLowerCase();
-  if (value !== "div" && value !== "button") return false;
-  record.element.dataset.htmlTag = value;
-  return true;
-}
-
-frameHtmlTagInput?.addEventListener("focus", () => {
-  if (frameHtmlTagInput instanceof HTMLInputElement) frameHtmlTagInput.select();
-});
-frameHtmlTagInput?.addEventListener("input", applyFrameHtmlTagValue);
-frameHtmlTagInput?.addEventListener("blur", () => {
-  if (!applyFrameHtmlTagValue()) syncInspectorToSelectedFrame();
-});
-frameHtmlTagInput?.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") return;
-  event.preventDefault();
-  if (!applyFrameHtmlTagValue()) syncInspectorToSelectedFrame();
-});
-
-frameHtmlTagPickerButton?.addEventListener("click", () => {
-  if (!(frameHtmlTagInput instanceof HTMLInputElement)) return;
-  frameHtmlTagInput.focus();
-  if (typeof frameHtmlTagInput.showPicker === "function") {
-    try {
-      frameHtmlTagInput.showPicker();
-    } catch {
-      // Focus still leaves the editable value available when the browser cannot open the picker.
-    }
-  }
+  if (!record || !(frameHtmlTagInput instanceof HTMLSelectElement)) return;
+  record.element.dataset.htmlTag = normalizeFrameHtmlTag(frameHtmlTagInput.value);
 });
 
 function toReactComponentName(value) {
