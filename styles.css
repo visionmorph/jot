@@ -313,8 +313,12 @@ input {
   line-height: 16px;
   letter-spacing: 0;
   white-space: pre-wrap;
-  cursor: text;
+  cursor: default;
   outline: none;
+}
+
+.canvas-text[contenteditable="true"] {
+  cursor: text;
 }
 
 .canvas > .canvas-text {
