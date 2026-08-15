@@ -444,8 +444,20 @@ canvas?.addEventListener("click", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     selectTool("select");
-    if (document.activeElement instanceof HTMLElement && document.activeElement.classList.contains("canvas-text")) {
-      document.activeElement.blur();
+    const activeText = document.activeElement instanceof HTMLElement && document.activeElement.classList.contains("canvas-text")
+      ? document.activeElement
+      : null;
+
+    if (activeText && (activeText.textContent ?? "").length === 0) {
+      const activeTextRecord = textRecords.find((record) => record.element === activeText);
+      activeText.remove();
+      if (activeTextRecord) {
+        textRecords = textRecords.filter((record) => record.id !== activeTextRecord.id);
+      }
+      if (selectedCanvasText === activeText) selectedCanvasText = null;
+      renderTree();
+    } else {
+      activeText?.blur();
     }
     return;
   }
