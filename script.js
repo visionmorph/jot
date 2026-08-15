@@ -85,7 +85,15 @@ canvas?.addEventListener("click", (event) => {
     return;
   }
 
-  if (event.target !== canvas || activeTool !== "frame") return;
+  if (event.target !== canvas) return;
+
+  if (selectedCanvasFrame) {
+    selectedCanvasFrame.classList.remove("is-selected");
+    selectedCanvasFrame.setAttribute("aria-selected", "false");
+    selectedCanvasFrame = null;
+  }
+
+  if (activeTool !== "frame") return;
 
   const canvasBounds = canvas.getBoundingClientRect();
   const frame = document.createElement("div");
