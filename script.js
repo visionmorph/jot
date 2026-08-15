@@ -12,6 +12,7 @@ let nextTextId = 1;
 let nextLayerOrder = 1;
 let frameRecords = [];
 let textRecords = [];
+let suppressNextTextCreation = false;
 const expandedFrameIds = new Set();
 
 function selectTool(toolName) {
@@ -83,6 +84,24 @@ function clearLayerSelection() {
   clearElementSelection();
   selectedCanvasFrame = null;
   selectedCanvasText = null;
+  renderTree();
+}
+
+function removeCanvasText(textElement, suppressCreationForCurrentClick = false) {
+  const textRecord = textRecords.find((record) => record.element === textElement);
+  textElement.remove();
+  if (textRecord) {
+    textRecords = textRecords.filter((record) => record.id !== textRecord.id);
+  }
+  if (selectedCanvasText === textElement) selectedCanvasText = null;
+
+  if (suppressCreationForCurrentClick) {
+    suppressNextTextCreation = true;
+    setTimeout(() => {
+      suppressNextTextCreation = false;
+    }, 0);
+  }
+
   renderTree();
 }
 
@@ -297,6 +316,10 @@ function startEditingText(textElement) {
 
 function createCanvasText(parentRecord, x, y) {
   if (!(canvas instanceof HTMLElement)) return;
+  if (suppressNextTextCreation) {
+    suppressNextTextCreation = false;
+    return;
+  }
 
   const textId = nextTextId;
   nextTextId += 1;
@@ -306,6 +329,7 @@ function createCanvasText(parentRecord, x, y) {
     parentFrameId: parentRecord?.id ?? null,
     element: text,
     order: nextLayerOrder,
+    isNew: true,
   };
   nextLayerOrder += 1;
 
@@ -333,6 +357,12 @@ function createCanvasText(parentRecord, x, y) {
     startEditingText(text);
   });
   text.addEventListener("blur", () => {
+    if (record.isNew && (text.textContent ?? "").length === 0) {
+      removeCanvasText(text, true);
+      return;
+    }
+
+    record.isNew = false;
     text.contentEditable = "false";
   });
   text.addEventListener("dragstart", (event) => {
@@ -447,18 +477,7 @@ document.addEventListener("keydown", (event) => {
     const activeText = document.activeElement instanceof HTMLElement && document.activeElement.classList.contains("canvas-text")
       ? document.activeElement
       : null;
-
-    if (activeText && (activeText.textContent ?? "").length === 0) {
-      const activeTextRecord = textRecords.find((record) => record.element === activeText);
-      activeText.remove();
-      if (activeTextRecord) {
-        textRecords = textRecords.filter((record) => record.id !== activeTextRecord.id);
-      }
-      if (selectedCanvasText === activeText) selectedCanvasText = null;
-      renderTree();
-    } else {
-      activeText?.blur();
-    }
+    activeText?.blur();
     return;
   }
 
