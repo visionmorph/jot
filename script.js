@@ -5,6 +5,37 @@ const pageInspector = document.querySelector("[data-page-inspector]");
 const textInspector = document.querySelector("[data-text-inspector]");
 const colorPicker = document.querySelector("#canvas-color-picker");
 const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
+const fontSelect = document.querySelector("#text-font");
+const weightSelect = document.querySelector("#text-weight");
+const sizeSelect = document.querySelector("#text-size");
+const lineHeightInput = document.querySelector("#text-line-height");
+const letterSpacingInput = document.querySelector("#text-letter-spacing");
+const textColorPicker = document.querySelector("#text-color-picker");
+
+const DEFAULT_FONT_FAMILY = "Inter";
+const DEFAULT_FONT_WEIGHT = 400;
+const WEIGHT_LABELS = {
+  100: "Thin",
+  200: "Extra Light",
+  300: "Light",
+  400: "Regular",
+  500: "Medium",
+  600: "Semi Bold",
+  700: "Bold",
+  800: "Extra Bold",
+  900: "Black",
+};
+const FALLBACK_FONT_CATALOG = [
+  { family: "Inter", category: "Sans Serif", weights: [100, 200, 300, 400, 500, 600, 700, 800, 900] },
+  { family: "Roboto", category: "Sans Serif", weights: [100, 300, 400, 500, 700, 900] },
+  { family: "Open Sans", category: "Sans Serif", weights: [300, 400, 500, 600, 700, 800] },
+  { family: "Lato", category: "Sans Serif", weights: [100, 300, 400, 700, 900] },
+  { family: "Montserrat", category: "Sans Serif", weights: [100, 200, 300, 400, 500, 600, 700, 800, 900] },
+  { family: "Merriweather", category: "Serif", weights: [300, 400, 700, 900] },
+];
+
+let fontCatalog = FALLBACK_FONT_CATALOG;
+const loadedGoogleFonts = new Set();
 
 let activeTool = "select";
 let selectedCanvasFrame = null;
@@ -81,6 +112,98 @@ function selectCanvasText(textElement) {
   renderTree();
 }
 
+function getSelectedTextRecord() {
+  return selectedCanvasText
+    ? textRecords.find((record) => record.element === selectedCanvasText)
+    : undefined;
+}
+
+function getFontRecord(family) {
+  return fontCatalog.find((font) => font.family === family)
+    ?? FALLBACK_FONT_CATALOG.find((font) => font.family === family);
+}
+
+function getFontFallback(category) {
+  if (/serif/i.test(category) && !/sans/i.test(category)) return "serif";
+  if (/mono/i.test(category)) return "monospace";
+  if (/handwriting/i.test(category)) return "cursive";
+  return "sans-serif";
+}
+
+function loadGoogleFont(family, weight) {
+  const key = `${family}:${weight}`;
+  if (loadedGoogleFonts.has(key)) return;
+
+  const link = document.createElement("link");
+  const encodedFamily = encodeURIComponent(family).replace(/%20/g, "+");
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@${weight}&display=swap`;
+  link.dataset.googleFont = key;
+  document.head.append(link);
+  loadedGoogleFonts.add(key);
+}
+
+function populateWeightOptions(family, selectedWeight = DEFAULT_FONT_WEIGHT) {
+  if (!(weightSelect instanceof HTMLSelectElement)) return;
+  const font = getFontRecord(family);
+  const weights = font?.weights?.length ? font.weights : [DEFAULT_FONT_WEIGHT];
+  const resolvedWeight = weights.includes(Number(selectedWeight))
+    ? Number(selectedWeight)
+    : weights.includes(DEFAULT_FONT_WEIGHT)
+      ? DEFAULT_FONT_WEIGHT
+      : weights[0];
+
+  weightSelect.replaceChildren(...weights.map((weight) => {
+    const option = document.createElement("option");
+    option.value = String(weight);
+    option.textContent = WEIGHT_LABELS[weight] ?? String(weight);
+    option.selected = weight === resolvedWeight;
+    return option;
+  }));
+}
+
+function populateFontOptions() {
+  if (!(fontSelect instanceof HTMLSelectElement)) return;
+  const currentFamily = fontSelect.value || DEFAULT_FONT_FAMILY;
+  fontSelect.replaceChildren(...fontCatalog.map((font) => {
+    const option = document.createElement("option");
+    option.value = font.family;
+    option.textContent = font.family;
+    option.selected = font.family === currentFamily;
+    return option;
+  }));
+}
+
+async function loadFontCatalog() {
+  try {
+    const response = await fetch("google-fonts.json");
+    if (!response.ok) throw new Error("Unable to load the font catalog.");
+    const catalog = await response.json();
+    if (!Array.isArray(catalog) || catalog.length === 0) throw new Error("The font catalog is empty.");
+    fontCatalog = catalog;
+  } catch {
+    fontCatalog = FALLBACK_FONT_CATALOG;
+  }
+
+  populateFontOptions();
+  populateWeightOptions(fontSelect instanceof HTMLSelectElement ? fontSelect.value : DEFAULT_FONT_FAMILY);
+}
+
+function syncInspectorToSelectedText() {
+  const record = getSelectedTextRecord();
+  if (!record) return;
+
+  const { element } = record;
+  const family = element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
+  const weight = Number(element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
+  if (fontSelect instanceof HTMLSelectElement) fontSelect.value = family;
+  populateWeightOptions(family, weight);
+  if (sizeSelect instanceof HTMLSelectElement) sizeSelect.value = element.dataset.fontSize || "14";
+  if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.value = element.dataset.lineHeight || "Auto";
+  if (letterSpacingInput instanceof HTMLInputElement) letterSpacingInput.value = element.dataset.letterSpacing || "0%";
+  if (textColorPicker instanceof HTMLInputElement) textColorPicker.value = element.dataset.textColor || "#ffffff";
+}
+
 function clearLayerSelection() {
   if (!selectedCanvasFrame && !selectedCanvasText) return;
   clearElementSelection();
@@ -125,6 +248,7 @@ function updateInspector() {
   const isTextSelected = selectedCanvasText !== null;
   if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected;
   if (textInspector instanceof HTMLElement) textInspector.hidden = !isTextSelected;
+  if (isTextSelected) syncInspectorToSelectedText();
 }
 
 function setLayerDragData(event, layerType, layerId) {
@@ -347,6 +471,18 @@ function createCanvasText(parentRecord, x, y) {
   text.spellcheck = false;
   text.setAttribute("aria-label", `Text ${textId}`);
   text.setAttribute("aria-selected", "false");
+  text.dataset.fontFamily = DEFAULT_FONT_FAMILY;
+  text.dataset.fontWeight = String(DEFAULT_FONT_WEIGHT);
+  text.dataset.fontSize = "14";
+  text.dataset.lineHeight = "Auto";
+  text.dataset.letterSpacing = "0%";
+  text.dataset.textColor = "#ffffff";
+  text.style.fontFamily = `${JSON.stringify(DEFAULT_FONT_FAMILY)}, sans-serif`;
+  text.style.fontWeight = String(DEFAULT_FONT_WEIGHT);
+  text.style.fontSize = "14px";
+  text.style.lineHeight = "normal";
+  text.style.letterSpacing = "0em";
+  text.style.color = "#ffffff";
 
   if (parentRecord) {
     parentRecord.element.append(text);
@@ -524,4 +660,116 @@ colorPicker?.addEventListener("input", () => {
   }
 });
 
+fontSelect?.addEventListener("change", () => {
+  const record = getSelectedTextRecord();
+  if (!record || !(fontSelect instanceof HTMLSelectElement)) return;
+  const family = fontSelect.value;
+  const font = getFontRecord(family);
+  const previousWeight = Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
+  populateWeightOptions(family, previousWeight);
+  const weight = weightSelect instanceof HTMLSelectElement
+    ? Number(weightSelect.value)
+    : DEFAULT_FONT_WEIGHT;
+  record.element.dataset.fontFamily = family;
+  record.element.dataset.fontWeight = String(weight);
+  record.element.style.fontFamily = `${JSON.stringify(family)}, ${getFontFallback(font?.category || "Sans Serif")}`;
+  record.element.style.fontWeight = String(weight);
+  loadGoogleFont(family, weight);
+});
+
+weightSelect?.addEventListener("change", () => {
+  const record = getSelectedTextRecord();
+  if (!record || !(weightSelect instanceof HTMLSelectElement)) return;
+  const family = record.element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
+  const weight = Number(weightSelect.value);
+  record.element.dataset.fontWeight = String(weight);
+  record.element.style.fontWeight = String(weight);
+  loadGoogleFont(family, weight);
+});
+
+sizeSelect?.addEventListener("change", () => {
+  const record = getSelectedTextRecord();
+  if (!record || !(sizeSelect instanceof HTMLSelectElement)) return;
+  record.element.dataset.fontSize = sizeSelect.value;
+  record.element.style.fontSize = `${sizeSelect.value}px`;
+});
+
+function applyLineHeightValue() {
+  const record = getSelectedTextRecord();
+  if (!record || !(lineHeightInput instanceof HTMLInputElement)) return false;
+  const value = lineHeightInput.value.trim();
+  if (/^auto$/i.test(value)) {
+    lineHeightInput.value = "Auto";
+    record.element.dataset.lineHeight = "Auto";
+    record.element.style.lineHeight = "normal";
+    return true;
+  }
+
+  if (!/^\d+(?:\.\d+)?$/.test(value)) return false;
+  const numberValue = Math.max(0, Number(value));
+  lineHeightInput.value = String(numberValue);
+  record.element.dataset.lineHeight = String(numberValue);
+  record.element.style.lineHeight = `${numberValue}px`;
+  return true;
+}
+
+lineHeightInput?.addEventListener("input", applyLineHeightValue);
+lineHeightInput?.addEventListener("blur", () => {
+  if (!applyLineHeightValue()) syncInspectorToSelectedText();
+});
+lineHeightInput?.addEventListener("keydown", (event) => {
+  if (!(lineHeightInput instanceof HTMLInputElement) || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  const record = getSelectedTextRecord();
+  if (!record) return;
+  event.preventDefault();
+  const direction = event.key === "ArrowUp" ? 1 : -1;
+  const value = lineHeightInput.value.trim();
+  let base = Number(value);
+  if (/^auto$/i.test(value) || !Number.isFinite(base)) {
+    const styles = getComputedStyle(record.element);
+    base = Number.parseFloat(styles.lineHeight);
+    if (!Number.isFinite(base)) base = Number.parseFloat(styles.fontSize) * 1.2;
+    base = Math.round(base);
+  }
+  lineHeightInput.value = String(Math.max(0, base + direction));
+  applyLineHeightValue();
+});
+
+function applyLetterSpacingValue() {
+  const record = getSelectedTextRecord();
+  if (!record || !(letterSpacingInput instanceof HTMLInputElement)) return false;
+  const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)$/i);
+  if (!match) return false;
+  const value = `${Number(match[1])}${match[2].toLowerCase()}`;
+  letterSpacingInput.value = value;
+  record.element.dataset.letterSpacing = value;
+  record.element.style.letterSpacing = match[2].toLowerCase() === "%"
+    ? `${Number(match[1]) / 100}em`
+    : value;
+  return true;
+}
+
+letterSpacingInput?.addEventListener("input", applyLetterSpacingValue);
+letterSpacingInput?.addEventListener("blur", () => {
+  if (!applyLetterSpacingValue()) syncInspectorToSelectedText();
+});
+letterSpacingInput?.addEventListener("keydown", (event) => {
+  if (!(letterSpacingInput instanceof HTMLInputElement) || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)$/i);
+  if (!match) return;
+  event.preventDefault();
+  const direction = event.key === "ArrowUp" ? 1 : -1;
+  letterSpacingInput.value = `${Number(match[1]) + direction}${match[2].toLowerCase()}`;
+  applyLetterSpacingValue();
+});
+
+textColorPicker?.addEventListener("input", () => {
+  const record = getSelectedTextRecord();
+  if (!record || !(textColorPicker instanceof HTMLInputElement)) return;
+  record.element.dataset.textColor = textColorPicker.value;
+  record.element.style.color = textColorPicker.value;
+});
+
+loadGoogleFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
+loadFontCatalog();
 renderTree();
