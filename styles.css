@@ -130,6 +130,11 @@ input {
   gap: 0;
 }
 
+.layers-panel .tree-view {
+  flex: 1 1 auto;
+  min-height: 24px;
+}
+
 .contained-list-item {
   padding: 4px 8px;
   color: var(--text-primary);
@@ -214,6 +219,22 @@ input {
 .tree-node.is-selected .icon-cell,
 .tree-node.is-selected .text-layer-icon {
   color: var(--icon-on-color);
+}
+
+.tree-node.is-drop-before {
+  box-shadow: inset 0 2px #992CFF;
+}
+
+.tree-node.is-drop-after {
+  box-shadow: inset 0 -2px #992CFF;
+}
+
+.tree-node.is-drop-inside {
+  box-shadow: inset 0 0 0 1px #992CFF;
+}
+
+.tree-view.is-drop-root {
+  box-shadow: inset 0 -2px #992CFF;
 }
 
 .tree-node[hidden] {
