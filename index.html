@@ -26,7 +26,15 @@
           </div>
         </section>
 
-        <div class="sidebar-divider" aria-hidden="true"></div>
+        <div
+          class="sidebar-divider"
+          role="separator"
+          aria-label="Resize Components and Layers panels"
+          aria-orientation="horizontal"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="50"
+        ></div>
 
         <section class="sidebar-panel layers-panel" aria-labelledby="layers-heading">
           <div class="panel-heading-wrap">
@@ -59,11 +67,51 @@
           <div class="color-picker-field">
             <label class="color-picker-label" for="canvas-color-picker">Color</label>
             <input
-              class="canvas-color-picker"
+              class="canvas-color-picker inspector-color-picker--compact"
               id="canvas-color-picker"
               type="color"
               value="#121619"
             />
+          </div>
+        </section>
+
+        <section class="sidebar-panel frame-panel" aria-labelledby="frame-heading" data-frame-inspector hidden>
+          <div class="panel-heading-wrap">
+            <h2 class="panel-heading" id="frame-heading">Frame</h2>
+          </div>
+
+          <div class="inspector-divider" aria-hidden="true"></div>
+
+          <div class="inspector-field frame-padding-field">
+            <span class="inspector-label" id="frame-padding-label">Padding</span>
+            <div class="frame-padding-grid" role="group" aria-labelledby="frame-padding-label">
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">l</span>
+                <input aria-label="Left padding" data-frame-padding="left" type="number" min="0" step="1" value="10" />
+              </label>
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">t</span>
+                <input aria-label="Top padding" data-frame-padding="top" type="number" min="0" step="1" value="10" />
+              </label>
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">r</span>
+                <input aria-label="Right padding" data-frame-padding="right" type="number" min="0" step="1" value="10" />
+              </label>
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">b</span>
+                <input aria-label="Bottom padding" data-frame-padding="bottom" type="number" min="0" step="1" value="10" />
+              </label>
+            </div>
+          </div>
+
+          <div class="inspector-field">
+            <label class="inspector-label" for="frame-radius">Radius</label>
+            <input class="inspector-control" id="frame-radius" type="number" min="0" step="1" value="0" />
+          </div>
+
+          <div class="inspector-field">
+            <label class="inspector-label" for="frame-color-picker">Color</label>
+            <input class="canvas-color-picker inspector-color-picker--compact is-transparent" id="frame-color-picker" type="color" value="#000000" />
           </div>
         </section>
 
