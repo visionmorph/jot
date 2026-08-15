@@ -139,6 +139,20 @@
             <label class="inspector-label" for="frame-color-picker">Color</label>
             <input class="canvas-color-picker inspector-color-picker--compact is-transparent" id="frame-color-picker" type="color" value="#000000" />
           </div>
+
+          <div class="inspector-field">
+            <label class="inspector-label" for="frame-html-tag">HTML tag</label>
+            <div class="inspector-select-wrap">
+              <input class="inspector-control inspector-combobox" id="frame-html-tag" type="text" list="frame-html-tag-options" value="div" />
+              <button class="inspector-picker-button" type="button" aria-label="Open HTML tag options" data-html-tag-picker-button>
+                <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+              </button>
+              <datalist id="frame-html-tag-options">
+                <option value="div"></option>
+                <option value="button"></option>
+              </datalist>
+            </div>
+          </div>
         </section>
 
         <section class="sidebar-panel text-panel" aria-labelledby="text-heading" data-text-inspector hidden>
