@@ -21,6 +21,7 @@ const frameColorPicker = document.querySelector("#frame-color-picker");
 const frameDirectionSelect = document.querySelector("#frame-direction");
 const frameGapInput = document.querySelector("#frame-gap");
 const frameGapPickerButton = document.querySelector("[data-gap-picker-button]");
+const exportComponentsButton = document.querySelector("[data-export-components]");
 
 const DEFAULT_FONT_FAMILY = "Inter";
 const DEFAULT_FONT_WEIGHT = 400;
@@ -973,6 +974,141 @@ frameGapPickerButton?.addEventListener("click", () => {
     }
   }
 });
+
+function toReactComponentName(value) {
+  const name = value
+    .trim()
+    .replace(/[^a-zA-Z0-9]+(.)/g, (_, character) => character.toUpperCase())
+    .replace(/^[a-z]/, (character) => character.toUpperCase())
+    .replace(/[^a-zA-Z0-9_$]/g, "");
+  if (!name) return "GeneratedComponent";
+  return /^\d/.test(name) ? `Component${name}` : name;
+}
+
+function formatReactStyle(style) {
+  const properties = Object.entries(style)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([property, value]) => `${property}: ${JSON.stringify(value)}`);
+  return `{ ${properties.join(", ")} }`;
+}
+
+function getExportFrameStyle(record) {
+  const element = record.element;
+  const isRoot = record.parentId === null;
+  return {
+    position: isRoot ? "absolute" : "relative",
+    left: isRoot ? element.style.left || "0px" : undefined,
+    top: isRoot ? element.style.top || "0px" : undefined,
+    display: "flex",
+    flexDirection: (element.dataset.direction || "horizontal") === "vertical" ? "column" : "row",
+    alignItems: "flex-start",
+    width: "100px",
+    height: "100px",
+    flex: isRoot ? undefined : "0 0 100px",
+    paddingLeft: `${element.dataset.paddingLeft || "10"}px`,
+    paddingTop: `${element.dataset.paddingTop || "10"}px`,
+    paddingRight: `${element.dataset.paddingRight || "10"}px`,
+    paddingBottom: `${element.dataset.paddingBottom || "10"}px`,
+    gap: `${element.dataset.gap || "10"}px`,
+    border: "0",
+    borderRadius: `${element.dataset.radius || "0"}px`,
+    outline: "none",
+    backgroundColor: element.dataset.frameColor || "transparent",
+    boxSizing: "border-box",
+  };
+}
+
+function getExportTextStyle(record) {
+  const element = record.element;
+  const isRoot = record.parentFrameId === null;
+  return {
+    position: isRoot ? "absolute" : "relative",
+    left: isRoot ? element.style.left || "0px" : undefined,
+    top: isRoot ? element.style.top || "0px" : undefined,
+    flex: isRoot ? undefined : "0 0 auto",
+    color: element.dataset.textColor || "#ffffff",
+    fontFamily: element.style.fontFamily || '"Inter", sans-serif',
+    fontSize: `${element.dataset.fontSize || "14"}px`,
+    fontWeight: Number(element.dataset.fontWeight || DEFAULT_FONT_WEIGHT),
+    lineHeight: (element.dataset.lineHeight || "Auto").toLowerCase() === "auto"
+      ? "normal"
+      : `${element.dataset.lineHeight}px`,
+    letterSpacing: element.style.letterSpacing || "0em",
+    whiteSpace: "pre-wrap",
+  };
+}
+
+function renderExportLayer(layer, depth) {
+  const indent = "  ".repeat(depth);
+  if (layer.type === "text") {
+    const value = layer.record.element.textContent || "";
+    return `${indent}<span style={${formatReactStyle(getExportTextStyle(layer.record))}}>{${JSON.stringify(value)}}</span>`;
+  }
+
+  const children = getLayerChildren(layer.record.id);
+  const style = formatReactStyle(getExportFrameStyle(layer.record));
+  if (children.length === 0) return `${indent}<div style={${style}} />`;
+  const childMarkup = children.map((child) => renderExportLayer(child, depth + 1)).join("\n");
+  return `${indent}<div style={${style}}>\n${childMarkup}\n${indent}</div>`;
+}
+
+function getExportFontLinks() {
+  const uniqueFonts = new Map();
+  textRecords.forEach((record) => {
+    const family = record.element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
+    const weight = Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
+    if (!uniqueFonts.has(family)) uniqueFonts.set(family, new Set());
+    uniqueFonts.get(family).add(weight);
+  });
+
+  return Array.from(uniqueFonts.entries()).map(([family, weights]) => {
+    const encodedFamily = encodeURIComponent(family).replace(/%20/g, "+");
+    const weightList = Array.from(weights).sort((a, b) => a - b).join(";");
+    const href = `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@${weightList}&display=swap`;
+    return `      <link rel="stylesheet" href=${JSON.stringify(href)} />`;
+  });
+}
+
+function createReactComponentSource(componentName) {
+  const rootLayers = getLayerChildren(null);
+  const layerMarkup = rootLayers.map((layer) => renderExportLayer(layer, 4)).join("\n");
+  const fontLinks = getExportFontLinks();
+  const fragmentChildren = [
+    ...fontLinks,
+    `      <div style={${formatReactStyle({ position: "relative", width: "100%", minHeight: "100%" })}}>`,
+    layerMarkup,
+    "      </div>",
+  ].filter(Boolean).join("\n");
+
+  return `import React from "react";\n\nexport default function ${componentName}() {\n  return (\n    <>\n${fragmentChildren}\n    </>\n  );\n}\n`;
+}
+
+function createStorySource(componentName) {
+  return `import ${componentName} from "./${componentName}";\n\nconst meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},\n};\n\nexport default meta;\n\nexport const Default = {};\n`;
+}
+
+function downloadExportFile(fileName, source) {
+  const blob = new Blob([source], { type: "text/javascript;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function exportAllComponents() {
+  const componentItems = Array.from(document.querySelectorAll(".contained-list-item"));
+  componentItems.forEach((item) => {
+    const componentName = toReactComponentName(item.textContent || "Generated Component");
+    downloadExportFile(`${componentName}.jsx`, createReactComponentSource(componentName));
+    downloadExportFile(`${componentName}.stories.jsx`, createStorySource(componentName));
+  });
+}
+
+exportComponentsButton?.addEventListener("click", exportAllComponents);
 
 loadGoogleFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
 loadFontCatalog();
