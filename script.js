@@ -1065,16 +1065,20 @@ function formatReactStyle(style) {
   return `{ ${properties.join(", ")} }`;
 }
 
+function isZeroCssValue(value) {
+  return /^-?0(?:\.0+)?(?:px|em|rem|%)?$/i.test(String(value).trim());
+}
+
 function getExportFrameStyle(record) {
   const element = record.element;
   const isRoot = record.parentId === null;
   const isAutoGap = element.dataset.gapMode === "auto";
+  const direction = element.dataset.direction || "horizontal";
+  const gap = element.dataset.gap || "10";
+  const radius = element.dataset.radius || "0";
   return {
-    position: isRoot ? "absolute" : "relative",
-    left: isRoot ? element.style.left || "0px" : undefined,
-    top: isRoot ? element.style.top || "0px" : undefined,
     display: "flex",
-    flexDirection: (element.dataset.direction || "horizontal") === "vertical" ? "column" : "row",
+    flexDirection: direction === "vertical" ? "column" : undefined,
     alignItems: "flex-start",
     width: "100px",
     height: "100px",
@@ -1083,11 +1087,10 @@ function getExportFrameStyle(record) {
     paddingTop: `${element.dataset.paddingTop || "10"}px`,
     paddingRight: `${element.dataset.paddingRight || "10"}px`,
     paddingBottom: `${element.dataset.paddingBottom || "10"}px`,
-    gap: isAutoGap ? "0px" : `${element.dataset.gap || "10"}px`,
-    justifyContent: isAutoGap ? "space-between" : "flex-start",
+    gap: isAutoGap || isZeroCssValue(`${gap}px`) ? undefined : `${gap}px`,
+    justifyContent: isAutoGap ? "space-between" : undefined,
     border: "0",
-    borderRadius: `${element.dataset.radius || "0"}px`,
-    outline: "none",
+    borderRadius: isZeroCssValue(`${radius}px`) ? undefined : `${radius}px`,
     backgroundColor: element.dataset.frameColor || "transparent",
     boxSizing: "border-box",
   };
@@ -1096,19 +1099,16 @@ function getExportFrameStyle(record) {
 function getExportTextStyle(record) {
   const element = record.element;
   const isRoot = record.parentFrameId === null;
+  const lineHeight = element.dataset.lineHeight || "Auto";
+  const letterSpacing = element.style.letterSpacing || "0em";
   return {
-    position: isRoot ? "absolute" : "relative",
-    left: isRoot ? element.style.left || "0px" : undefined,
-    top: isRoot ? element.style.top || "0px" : undefined,
     flex: isRoot ? undefined : "0 0 auto",
     color: element.dataset.textColor || "#ffffff",
     fontFamily: element.style.fontFamily || '"Inter", sans-serif',
     fontSize: `${element.dataset.fontSize || "14"}px`,
     fontWeight: Number(element.dataset.fontWeight || DEFAULT_FONT_WEIGHT),
-    lineHeight: (element.dataset.lineHeight || "Auto").toLowerCase() === "auto"
-      ? "normal"
-      : `${element.dataset.lineHeight}px`,
-    letterSpacing: element.style.letterSpacing || "0em",
+    lineHeight: lineHeight.toLowerCase() === "auto" ? undefined : `${lineHeight}px`,
+    letterSpacing: isZeroCssValue(letterSpacing) ? undefined : letterSpacing,
     whiteSpace: "pre-wrap",
   };
 }
@@ -1152,7 +1152,7 @@ function createReactComponentSource(componentName) {
   const fontLinks = getExportFontLinks();
   const fragmentChildren = [
     ...fontLinks,
-    `      <div style={${formatReactStyle({ position: "relative", width: "100%", minHeight: "100%" })}}>`,
+    `      <div style={${formatReactStyle({ width: "100%", minHeight: "100%" })}}>`,
     layerMarkup,
     "      </div>",
   ].filter(Boolean).join("\n");
