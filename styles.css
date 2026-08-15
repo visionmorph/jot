@@ -463,14 +463,14 @@ input {
 }
 
 .frame-padding-field {
-  width: 243px;
+  width: 247px;
 }
 
 .frame-padding-grid {
   display: grid;
   grid-template-columns: repeat(2, 119.5px);
-  width: 243px;
-  gap: 4px;
+  width: 247px;
+  gap: 8px;
 }
 
 .prefixed-number-control {
@@ -485,7 +485,8 @@ input {
 }
 
 .number-control-prefix {
-  flex: 0 0 auto;
+  width: 12px;
+  flex: 0 0 12px;
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 400;
@@ -547,6 +548,24 @@ input {
 .inspector-select {
   padding-right: 32px;
   appearance: none;
+}
+
+.inspector-combobox {
+  padding-right: 32px;
+}
+
+.inspector-picker-button {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--icon-secondary);
+  cursor: pointer;
 }
 
 .inspector-select-chevron {
