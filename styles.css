@@ -108,6 +108,8 @@ input {
   flex: 0 0 1px;
   background: var(--border-subtle-00);
   cursor: row-resize;
+  touch-action: none;
+  user-select: none;
 }
 
 .sidebar-divider::before {
@@ -431,8 +433,15 @@ input {
   gap: 12px;
 }
 
-.text-panel .panel-heading-wrap {
+.text-panel .panel-heading-wrap,
+.frame-panel .panel-heading-wrap {
   padding-left: 0;
+}
+
+.frame-panel {
+  padding-right: 16px;
+  padding-left: 16px;
+  gap: 12px;
 }
 
 .inspector-divider {
@@ -451,6 +460,58 @@ input {
 
 .inspector-field--color {
   width: 100%;
+}
+
+.frame-padding-field {
+  width: 243px;
+}
+
+.frame-padding-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 119.5px);
+  width: 243px;
+  gap: 4px;
+}
+
+.prefixed-number-control {
+  display: flex;
+  align-items: center;
+  width: 119.5px;
+  height: 24px;
+  padding: 4px 16px;
+  gap: 8px;
+  border-radius: 2px;
+  background: var(--layer-01);
+}
+
+.number-control-prefix {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.prefixed-number-control input {
+  width: 100%;
+  min-width: 0;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.prefixed-number-control:focus-within {
+  outline: 1px solid var(--icon-on-color);
+  outline-offset: -1px;
 }
 
 .inspector-label {
@@ -527,6 +588,10 @@ input {
   color: var(--text-primary);
   cursor: pointer;
   opacity: 1;
+}
+
+.inspector-color-picker--compact {
+  width: 119.5px;
 }
 
 .canvas-color-picker::-webkit-color-swatch-wrapper {
