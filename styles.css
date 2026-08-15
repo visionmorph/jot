@@ -156,6 +156,14 @@ input {
   padding-left: 48px;
 }
 
+.tree-node--dynamic {
+  padding-left: var(--tree-indent, 8px);
+}
+
+.dynamic-tree-item {
+  display: contents;
+}
+
 .tree-node.is-selected {
   background: var(--background-selected);
   color: var(--text-primary);
@@ -283,6 +291,13 @@ input {
 
 .canvas-frame:hover {
   outline: 2px solid #992CFF;
+}
+
+.canvas-frame > .canvas-frame {
+  position: relative;
+  left: auto !important;
+  top: auto !important;
+  flex: 0 0 100px;
 }
 
 .toolbar {
