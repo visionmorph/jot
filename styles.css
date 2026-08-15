@@ -102,10 +102,21 @@ input {
 }
 
 .sidebar-divider {
+  position: relative;
   width: 100%;
   height: 1px;
   flex: 0 0 1px;
   background: var(--border-subtle-00);
+  cursor: row-resize;
+}
+
+.sidebar-divider::before {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  bottom: -4px;
+  left: 0;
+  content: "";
 }
 
 .contained-list,
@@ -434,7 +445,12 @@ input {
 .inspector-field {
   display: flex;
   flex-direction: column;
+  width: 119.5px;
   gap: 4px;
+}
+
+.inspector-field--color {
+  width: 100%;
 }
 
 .inspector-label {
@@ -447,12 +463,12 @@ input {
 
 .inspector-select-wrap {
   position: relative;
-  width: 100%;
+  width: 119.5px;
   height: 24px;
 }
 
 .inspector-control {
-  width: 100%;
+  width: 119.5px;
   height: 24px;
   margin: 0;
   padding: 4px 16px;
