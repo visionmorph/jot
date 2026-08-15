@@ -6,9 +6,12 @@ const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
 
 let activeTool = "select";
 let selectedCanvasFrame = null;
+let selectedCanvasText = null;
 let nextFrameId = 1;
 let nextTextId = 1;
+let nextLayerOrder = 1;
 let frameRecords = [];
+let textRecords = [];
 const expandedFrameIds = new Set();
 
 function selectTool(toolName) {
@@ -27,27 +30,59 @@ function getFrameRecord(frameId) {
   return frameRecords.find((record) => record.id === frameId);
 }
 
-function getChildRecords(parentId) {
+function getTextRecord(textId) {
+  return textRecords.find((record) => record.id === textId);
+}
+
+function getFrameChildren(parentId) {
   return frameRecords.filter((record) => record.parentId === parentId);
 }
 
-function selectCanvasFrame(frameElement) {
-  frameRecords.forEach((record) => {
-    const isSelected = record.element === frameElement;
-    record.element.classList.toggle("is-selected", isSelected);
-    record.element.setAttribute("aria-selected", String(isSelected));
-  });
+function getTextChildren(parentFrameId) {
+  return textRecords.filter((record) => record.parentFrameId === parentFrameId);
+}
 
+function getLayerChildren(parentFrameId) {
+  return [
+    ...getFrameChildren(parentFrameId).map((record) => ({ type: "frame", record })),
+    ...getTextChildren(parentFrameId).map((record) => ({ type: "text", record })),
+  ].sort((a, b) => a.record.order - b.record.order);
+}
+
+function clearElementSelection() {
+  frameRecords.forEach((record) => {
+    record.element.classList.remove("is-selected");
+    record.element.setAttribute("aria-selected", "false");
+  });
+  textRecords.forEach((record) => {
+    record.element.classList.remove("is-selected");
+    record.element.setAttribute("aria-selected", "false");
+  });
+}
+
+function selectCanvasFrame(frameElement) {
+  clearElementSelection();
+  frameElement.classList.add("is-selected");
+  frameElement.setAttribute("aria-selected", "true");
   selectedCanvasFrame = frameElement;
+  selectedCanvasText = null;
   renderTree();
 }
 
-function clearCanvasFrameSelection() {
-  if (!selectedCanvasFrame) return;
-
-  selectedCanvasFrame.classList.remove("is-selected");
-  selectedCanvasFrame.setAttribute("aria-selected", "false");
+function selectCanvasText(textElement) {
+  clearElementSelection();
+  textElement.classList.add("is-selected");
+  textElement.setAttribute("aria-selected", "true");
+  selectedCanvasText = textElement;
   selectedCanvasFrame = null;
+  renderTree();
+}
+
+function clearLayerSelection() {
+  if (!selectedCanvasFrame && !selectedCanvasText) return;
+  clearElementSelection();
+  selectedCanvasFrame = null;
+  selectedCanvasText = null;
   renderTree();
 }
 
@@ -65,9 +100,21 @@ function createSquareIcon() {
   return square;
 }
 
-function renderTreeNode(record, depth) {
-  const childRecords = getChildRecords(record.id);
-  const isBranch = childRecords.length > 0;
+function setLayerDragData(event, layerType, layerId) {
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", `${layerType}:${layerId}`);
+}
+
+function getLayerDragData(event) {
+  const [type, rawId] = event.dataTransfer.getData("text/plain").split(":");
+  const id = Number(rawId);
+  if ((type !== "frame" && type !== "text") || !Number.isInteger(id)) return null;
+  return { type, id };
+}
+
+function renderFrameTreeNode(record, depth) {
+  const childLayers = getLayerChildren(record.id);
+  const isBranch = childLayers.length > 0;
   const isExpanded = expandedFrameIds.has(record.id);
   const item = document.createElement("div");
   const node = document.createElement("div");
@@ -76,6 +123,7 @@ function renderTreeNode(record, depth) {
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic";
+  node.draggable = true;
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
@@ -91,9 +139,23 @@ function renderTreeNode(record, depth) {
       selectCanvasFrame(record.element);
     }
   });
+  node.addEventListener("dragstart", (event) => {
+    event.stopPropagation();
+    setLayerDragData(event, "frame", record.id);
+  });
+  node.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+  });
+  node.addEventListener("drop", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const draggedLayer = getLayerDragData(event);
+    if (draggedLayer) nestLayer(draggedLayer, record.id);
+  });
 
   iconGroup.className = "branch-icon-group";
-
   if (isBranch) {
     const branchToggle = document.createElement("button");
     const chevron = document.createElement("span");
@@ -123,22 +185,70 @@ function renderTreeNode(record, depth) {
   item.append(node);
 
   if (isBranch && isExpanded) {
-    childRecords.forEach((childRecord) => item.append(renderTreeNode(childRecord, depth + 1)));
+    childLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, depth + 1)));
   }
 
   return item;
 }
 
+function renderTextTreeNode(record, depth) {
+  const item = document.createElement("div");
+  const node = document.createElement("div");
+  const iconGroup = document.createElement("span");
+  const textIcon = document.createElement("span");
+  const label = document.createElement("span");
+
+  item.className = "dynamic-tree-item";
+  node.className = "tree-node tree-node--dynamic";
+  node.draggable = true;
+  node.setAttribute("role", "treeitem");
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("aria-level", String(depth));
+  node.setAttribute("aria-selected", String(record.element === selectedCanvasText));
+  node.style.setProperty("--tree-indent", `${8 + (depth - 1) * 40}px`);
+  if (record.element === selectedCanvasText) node.classList.add("is-selected");
+
+  node.addEventListener("click", () => selectCanvasText(record.element));
+  node.addEventListener("keydown", (event) => {
+    if (event.target === node && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      selectCanvasText(record.element);
+    }
+  });
+  node.addEventListener("dragstart", (event) => {
+    event.stopPropagation();
+    setLayerDragData(event, "text", record.id);
+  });
+
+  iconGroup.className = "branch-icon-group";
+  iconGroup.append(createIconCell());
+  textIcon.className = "text-layer-icon";
+  textIcon.textContent = "T";
+  textIcon.setAttribute("aria-hidden", "true");
+  iconGroup.append(textIcon);
+  label.className = "tree-node-label";
+  label.textContent = `Text ${record.id}`;
+  node.append(iconGroup, label);
+  item.append(node);
+  return item;
+}
+
+function renderLayerTreeNode(layer, depth) {
+  return layer.type === "frame"
+    ? renderFrameTreeNode(layer.record, depth)
+    : renderTextTreeNode(layer.record, depth);
+}
+
 function renderTree() {
   if (!treeView) return;
-  const rootNodes = getChildRecords(null).map((record) => renderTreeNode(record, 1));
+  const rootNodes = getLayerChildren(null).map((layer) => renderLayerTreeNode(layer, 1));
   treeView.replaceChildren(...rootNodes);
 }
 
 function canNestFrame(draggedFrameId, parentFrameId) {
   if (draggedFrameId === parentFrameId) return false;
-
   let ancestor = getFrameRecord(parentFrameId);
+
   while (ancestor) {
     if (ancestor.id === draggedFrameId) return false;
     ancestor = ancestor.parentId === null ? undefined : getFrameRecord(ancestor.parentId);
@@ -147,22 +257,33 @@ function canNestFrame(draggedFrameId, parentFrameId) {
   return true;
 }
 
-function nestFrame(draggedFrameId, parentFrameId) {
-  if (!canNestFrame(draggedFrameId, parentFrameId)) return;
-
-  const draggedRecord = getFrameRecord(draggedFrameId);
+function nestLayer(layer, parentFrameId) {
   const parentRecord = getFrameRecord(parentFrameId);
-  if (!draggedRecord || !parentRecord) return;
+  if (!parentRecord) return;
 
-  draggedRecord.parentId = parentFrameId;
-  draggedRecord.element.style.left = "";
-  draggedRecord.element.style.top = "";
-  parentRecord.element.append(draggedRecord.element);
+  if (layer.type === "frame") {
+    if (!canNestFrame(layer.id, parentFrameId)) return;
+    const draggedRecord = getFrameRecord(layer.id);
+    if (!draggedRecord) return;
+    draggedRecord.parentId = parentFrameId;
+    draggedRecord.element.style.left = "";
+    draggedRecord.element.style.top = "";
+    parentRecord.element.append(draggedRecord.element);
+  } else {
+    const draggedRecord = getTextRecord(layer.id);
+    if (!draggedRecord) return;
+    draggedRecord.parentFrameId = parentFrameId;
+    draggedRecord.element.style.left = "";
+    draggedRecord.element.style.top = "";
+    parentRecord.element.append(draggedRecord.element);
+  }
+
   expandedFrameIds.add(parentFrameId);
   renderTree();
 }
 
 function startEditingText(textElement) {
+  selectCanvasText(textElement);
   textElement.contentEditable = "true";
   textElement.focus();
 
@@ -179,12 +300,21 @@ function createCanvasText(parentRecord, x, y) {
 
   const textId = nextTextId;
   nextTextId += 1;
-
   const text = document.createElement("div");
+  const record = {
+    id: textId,
+    parentFrameId: parentRecord?.id ?? null,
+    element: text,
+    order: nextLayerOrder,
+  };
+  nextLayerOrder += 1;
+
   text.className = "canvas-text";
   text.dataset.textId = String(textId);
   text.contentEditable = "false";
   text.spellcheck = false;
+  text.setAttribute("aria-label", `Text ${textId}`);
+  text.setAttribute("aria-selected", "false");
 
   if (parentRecord) {
     parentRecord.element.append(text);
@@ -195,35 +325,23 @@ function createCanvasText(parentRecord, x, y) {
   }
 
   text.addEventListener("click", (event) => {
-    if (activeTool === "text" || text.isContentEditable) {
-      event.stopPropagation();
-      startEditingText(text);
-    }
+    event.stopPropagation();
+    selectCanvasText(text);
   });
-
   text.addEventListener("dblclick", (event) => {
-    if (activeTool === "select") {
-      event.stopPropagation();
-      startEditingText(text);
-    }
+    event.stopPropagation();
+    startEditingText(text);
   });
-
   text.addEventListener("blur", () => {
     text.contentEditable = "false";
   });
-
-  text.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      text.blur();
-    }
-  });
-
   text.addEventListener("dragstart", (event) => {
     event.preventDefault();
     event.stopPropagation();
   });
 
+  textRecords.push(record);
+  renderTree();
   startEditingText(text);
 }
 
@@ -232,9 +350,14 @@ function createCanvasFrame(x, y) {
 
   const frameId = nextFrameId;
   nextFrameId += 1;
-
   const frame = document.createElement("div");
-  const record = { id: frameId, parentId: null, element: frame };
+  const record = {
+    id: frameId,
+    parentId: null,
+    element: frame,
+    order: nextLayerOrder,
+  };
+  nextLayerOrder += 1;
 
   frame.className = "canvas-frame";
   frame.draggable = true;
@@ -250,34 +373,26 @@ function createCanvasFrame(x, y) {
 
     if (activeTool === "text") {
       const frameBounds = frame.getBoundingClientRect();
-      createCanvasText(
-        record,
-        event.clientX - frameBounds.left,
-        event.clientY - frameBounds.top,
-      );
+      createCanvasText(record, event.clientX - frameBounds.left, event.clientY - frameBounds.top);
       return;
     }
 
     selectCanvasFrame(frame);
   });
-
   frame.addEventListener("dragstart", (event) => {
     event.stopPropagation();
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(frameId));
+    setLayerDragData(event, "frame", frameId);
   });
-
   frame.addEventListener("dragover", (event) => {
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = "move";
   });
-
   frame.addEventListener("drop", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    const draggedFrameId = Number(event.dataTransfer.getData("text/plain"));
-    if (Number.isInteger(draggedFrameId)) nestFrame(draggedFrameId, frameId);
+    const draggedLayer = getLayerDragData(event);
+    if (draggedLayer) nestLayer(draggedLayer, frameId);
   });
 
   frameRecords.push(record);
@@ -311,8 +426,7 @@ toolButtons.forEach((button) => {
 canvas?.addEventListener("click", (event) => {
   if (!(canvas instanceof HTMLElement) || event.target !== canvas) return;
 
-  clearCanvasFrameSelection();
-
+  clearLayerSelection();
   const canvasBounds = canvas.getBoundingClientRect();
   const x = event.clientX - canvasBounds.left;
   const y = event.clientY - canvasBounds.top;
@@ -328,6 +442,14 @@ canvas?.addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    selectTool("select");
+    if (document.activeElement instanceof HTMLElement && document.activeElement.classList.contains("canvas-text")) {
+      document.activeElement.blur();
+    }
+    return;
+  }
+
   if (
     !selectedCanvasFrame ||
     (event.key !== "Delete" && event.key !== "Backspace")
@@ -347,6 +469,9 @@ document.addEventListener("keydown", (event) => {
   const idsToDelete = collectFrameAndDescendantIds(selectedRecord.id);
   selectedCanvasFrame.remove();
   frameRecords = frameRecords.filter((record) => !idsToDelete.has(record.id));
+  textRecords = textRecords.filter(
+    (record) => record.parentFrameId === null || !idsToDelete.has(record.parentFrameId),
+  );
   idsToDelete.forEach((frameId) => expandedFrameIds.delete(frameId));
   selectedCanvasFrame = null;
   renderTree();
