@@ -1,6 +1,8 @@
 const canvas = document.querySelector("#canvas");
 const toolbar = document.querySelector(".toolbar");
 const treeView = document.querySelector("[data-tree-view]");
+const pageInspector = document.querySelector("[data-page-inspector]");
+const textInspector = document.querySelector("[data-text-inspector]");
 const colorPicker = document.querySelector("#canvas-color-picker");
 const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
 
@@ -119,6 +121,12 @@ function createSquareIcon() {
   return square;
 }
 
+function updateInspector() {
+  const isTextSelected = selectedCanvasText !== null;
+  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected;
+  if (textInspector instanceof HTMLElement) textInspector.hidden = !isTextSelected;
+}
+
 function setLayerDragData(event, layerType, layerId) {
   event.dataTransfer.effectAllowed = "move";
   event.dataTransfer.setData("text/plain", `${layerType}:${layerId}`);
@@ -193,8 +201,6 @@ function renderFrameTreeNode(record, depth) {
       renderTree();
     });
     iconGroup.append(branchToggle);
-  } else {
-    iconGroup.append(createIconCell());
   }
 
   iconGroup.append(createIconCell(createSquareIcon()));
@@ -240,13 +246,14 @@ function renderTextTreeNode(record, depth) {
   });
 
   iconGroup.className = "branch-icon-group";
-  iconGroup.append(createIconCell());
   textIcon.className = "text-layer-icon";
   textIcon.textContent = "T";
   textIcon.setAttribute("aria-hidden", "true");
   iconGroup.append(textIcon);
   label.className = "tree-node-label";
-  label.textContent = `Text ${record.id}`;
+  label.textContent = (record.element.textContent ?? "").length > 0
+    ? record.element.textContent
+    : "Text";
   node.append(iconGroup, label);
   item.append(node);
   return item;
@@ -262,6 +269,7 @@ function renderTree() {
   if (!treeView) return;
   const rootNodes = getLayerChildren(null).map((layer) => renderLayerTreeNode(layer, 1));
   treeView.replaceChildren(...rootNodes);
+  updateInspector();
 }
 
 function canNestFrame(draggedFrameId, parentFrameId) {
@@ -356,6 +364,7 @@ function createCanvasText(parentRecord, x, y) {
     event.stopPropagation();
     startEditingText(text);
   });
+  text.addEventListener("input", renderTree);
   text.addEventListener("blur", () => {
     if (record.isNew && (text.textContent ?? "").length === 0) {
       selectTool("select");
