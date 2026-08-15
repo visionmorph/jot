@@ -259,6 +259,28 @@ input {
   background: var(--background);
 }
 
+.canvas.is-frame-tool-active {
+  cursor: crosshair;
+}
+
+.canvas-frame {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  width: 100px;
+  height: 100px;
+  padding: 10px;
+  gap: 10px;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+}
+
+.canvas-frame:hover {
+  outline: 0.1px solid #992CFF;
+}
+
 .toolbar {
   position: absolute;
   bottom: 16px;
@@ -270,6 +292,7 @@ input {
   border-radius: 8px;
   background: var(--layer-01);
   transform: translateX(-50%);
+  z-index: 2;
 }
 
 .tool-button {
