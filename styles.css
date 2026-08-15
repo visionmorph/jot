@@ -271,6 +271,10 @@ input {
   cursor: crosshair;
 }
 
+.canvas.is-text-tool-active {
+  cursor: text;
+}
+
 .canvas-frame {
   position: absolute;
   z-index: 1;
@@ -298,6 +302,29 @@ input {
   left: auto !important;
   top: auto !important;
   flex: 0 0 100px;
+}
+
+.canvas-text {
+  min-width: 1px;
+  min-height: 16px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0;
+  white-space: pre-wrap;
+  cursor: text;
+  outline: none;
+}
+
+.canvas > .canvas-text {
+  position: absolute;
+  z-index: 1;
+}
+
+.canvas-frame > .canvas-text {
+  position: relative;
+  flex: 0 0 auto;
 }
 
 .toolbar {
