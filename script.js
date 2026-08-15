@@ -358,6 +358,7 @@ function createCanvasText(parentRecord, x, y) {
   });
   text.addEventListener("blur", () => {
     if (record.isNew && (text.textContent ?? "").length === 0) {
+      selectTool("select");
       removeCanvasText(text, true);
       return;
     }
