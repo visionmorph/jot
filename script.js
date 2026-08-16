@@ -29,6 +29,8 @@ const frameGapAutoOption = document.querySelector("[data-gap-option='auto']");
 const frameHtmlTagInput = document.querySelector("#frame-html-tag");
 const exportComponentsButton = document.querySelector("[data-export-components]");
 
+const RESIZE_HANDLE_DIRECTIONS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
 const DEFAULT_FONT_FAMILY = "Inter";
 const DEFAULT_FONT_WEIGHT = 400;
 const WEIGHT_LABELS = {
@@ -70,6 +72,163 @@ const HISTORY_LIMIT = 100;
 let isRestoringHistory = false;
 let isBatchingHistory = false;
 let canvasColorValue = colorPicker instanceof HTMLInputElement ? colorPicker.value : "#121619";
+let resizeInteraction = null;
+let observedResizeElement = null;
+
+const resizeOverlay = document.createElement("div");
+resizeOverlay.className = "resize-overlay";
+resizeOverlay.hidden = true;
+resizeOverlay.setAttribute("aria-hidden", "true");
+
+RESIZE_HANDLE_DIRECTIONS.forEach((direction) => {
+  const handle = document.createElement("button");
+  handle.className = `resize-handle resize-handle--${direction}`;
+  handle.type = "button";
+  handle.tabIndex = -1;
+  handle.dataset.resizeHandle = direction;
+  handle.setAttribute("aria-label", `Resize ${direction}`);
+  resizeOverlay.append(handle);
+});
+
+if (canvas instanceof HTMLElement) {
+  canvas.insertBefore(resizeOverlay, toolbar instanceof Node ? toolbar : null);
+}
+
+function getSelectedResizeElement() {
+  return selectedCanvasFrame || selectedCanvasText;
+}
+
+function getSelectedResizeRecord() {
+  const frameRecord = getSelectedFrameRecord();
+  if (frameRecord) return { type: "frame", record: frameRecord, parentId: frameRecord.parentId };
+  const textRecord = getSelectedTextRecord();
+  if (textRecord) return { type: "text", record: textRecord, parentId: textRecord.parentFrameId };
+  return null;
+}
+
+function positionResizeOverlay() {
+  if (!(canvas instanceof HTMLElement)) return;
+  const element = getSelectedResizeElement();
+  if (!(element instanceof HTMLElement) || !element.isConnected) {
+    resizeOverlay.hidden = true;
+    return;
+  }
+
+  const canvasBounds = canvas.getBoundingClientRect();
+  const bounds = element.getBoundingClientRect();
+  resizeOverlay.hidden = false;
+  resizeOverlay.style.left = `${bounds.left - canvasBounds.left}px`;
+  resizeOverlay.style.top = `${bounds.top - canvasBounds.top}px`;
+  resizeOverlay.style.width = `${bounds.width}px`;
+  resizeOverlay.style.height = `${bounds.height}px`;
+}
+
+const selectedLayerResizeObserver = typeof ResizeObserver === "function"
+  ? new ResizeObserver(() => requestAnimationFrame(positionResizeOverlay))
+  : null;
+
+function syncResizeOverlay() {
+  const element = getSelectedResizeElement();
+  if (element !== observedResizeElement) {
+    selectedLayerResizeObserver?.disconnect();
+    observedResizeElement = element;
+    if (element instanceof HTMLElement) selectedLayerResizeObserver?.observe(element);
+    if (canvas instanceof HTMLElement) selectedLayerResizeObserver?.observe(canvas);
+  }
+  positionResizeOverlay();
+}
+
+function applyResizePointerPosition(clientX, clientY) {
+  if (!resizeInteraction) return;
+  const { element, layer, direction } = resizeInteraction;
+  if (!element.isConnected) return;
+
+  const deltaX = clientX - resizeInteraction.pointerX;
+  const deltaY = clientY - resizeInteraction.pointerY;
+  const changesWidth = direction.includes("e") || direction.includes("w");
+  const changesHeight = direction.includes("n") || direction.includes("s");
+  const nextWidth = changesWidth
+    ? Math.max(0, Math.round(resizeInteraction.width + (direction.includes("w") ? -deltaX : deltaX)))
+    : resizeInteraction.width;
+  const nextHeight = changesHeight
+    ? Math.max(0, Math.round(resizeInteraction.height + (direction.includes("n") ? -deltaY : deltaY)))
+    : resizeInteraction.height;
+  const widthChanged = changesWidth && nextWidth !== Number(element.dataset.width || resizeInteraction.width);
+  const heightChanged = changesHeight && nextHeight !== Number(element.dataset.height || resizeInteraction.height);
+
+  if (!widthChanged && !heightChanged) return;
+  if (!resizeInteraction.hasRecordedHistory) {
+    recordHistory();
+    resizeInteraction.hasRecordedHistory = true;
+  }
+
+  if (changesWidth) {
+    element.dataset.width = String(nextWidth);
+    element.style.width = `${nextWidth}px`;
+    if (layer.parentId === null && direction.includes("w")) {
+      element.style.left = `${resizeInteraction.left + resizeInteraction.width - nextWidth}px`;
+    }
+  }
+  if (changesHeight) {
+    element.dataset.height = String(nextHeight);
+    element.style.height = `${nextHeight}px`;
+    if (layer.parentId === null && direction.includes("n")) {
+      element.style.top = `${resizeInteraction.top + resizeInteraction.height - nextHeight}px`;
+    }
+  }
+
+  if (layer.type === "frame") syncInspectorToSelectedFrame();
+  else syncSelectedTextSizeInputs();
+  positionResizeOverlay();
+}
+
+resizeOverlay.addEventListener("pointerdown", (event) => {
+  const handle = event.target instanceof HTMLElement ? event.target.closest("[data-resize-handle]") : null;
+  const layer = getSelectedResizeRecord();
+  const element = getSelectedResizeElement();
+  if (!(handle instanceof HTMLButtonElement) || !(element instanceof HTMLElement) || !layer || event.button !== 0) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  const canvasBounds = canvas instanceof HTMLElement ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
+  const bounds = element.getBoundingClientRect();
+  resizeInteraction = {
+    element,
+    layer,
+    direction: handle.dataset.resizeHandle || "se",
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    width: bounds.width,
+    height: bounds.height,
+    left: bounds.left - canvasBounds.left,
+    top: bounds.top - canvasBounds.top,
+    hasRecordedHistory: false,
+  };
+  handle.setPointerCapture(event.pointerId);
+});
+
+resizeOverlay.addEventListener("pointermove", (event) => {
+  if (!(event.target instanceof HTMLButtonElement) || !event.target.hasPointerCapture(event.pointerId)) return;
+  applyResizePointerPosition(event.clientX, event.clientY);
+});
+
+resizeOverlay.addEventListener("pointerup", (event) => {
+  if (!(event.target instanceof HTMLButtonElement) || !event.target.hasPointerCapture(event.pointerId)) return;
+  applyResizePointerPosition(event.clientX, event.clientY);
+  event.target.releasePointerCapture(event.pointerId);
+  resizeInteraction = null;
+  syncResizeOverlay();
+});
+
+resizeOverlay.addEventListener("pointercancel", (event) => {
+  if (event.target instanceof HTMLButtonElement && event.target.hasPointerCapture(event.pointerId)) {
+    event.target.releasePointerCapture(event.pointerId);
+  }
+  resizeInteraction = null;
+  syncResizeOverlay();
+});
+
+window.addEventListener("resize", syncResizeOverlay);
 
 function normalizeFrameHtmlTag(value) {
   return value.trim().toLowerCase() === "button" ? "button" : "div";
@@ -514,6 +673,7 @@ function updateInspector() {
   if (textInspector instanceof HTMLElement) textInspector.hidden = !isTextSelected;
   if (isTextSelected) syncInspectorToSelectedText();
   if (isFrameSelected) syncInspectorToSelectedFrame();
+  requestAnimationFrame(syncResizeOverlay);
 }
 
 function setLayerDragData(event, layerType, layerId) {
@@ -1625,6 +1785,7 @@ function getExportTextStyle(record) {
     lineHeight: lineHeight.toLowerCase() === "auto" ? undefined : `${lineHeight}px`,
     letterSpacing: isZeroCssValue(letterSpacing) ? undefined : letterSpacing,
     whiteSpace: "pre-wrap",
+    overflowWrap: width ? "anywhere" : undefined,
   };
 }
 
