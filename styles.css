@@ -394,6 +394,7 @@ input {
   line-height: 16px;
   letter-spacing: 0;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   cursor: default;
   outline: none;
 }
@@ -426,6 +427,90 @@ input {
 
 .canvas-text:hover {
   outline: 2px solid #992CFF;
+}
+
+.resize-overlay {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.resize-overlay[hidden] {
+  display: none;
+}
+
+.resize-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #992CFF;
+  background: var(--icon-on-color);
+  pointer-events: auto;
+}
+
+.resize-handle--nw,
+.resize-handle--n,
+.resize-handle--ne {
+  top: 0;
+}
+
+.resize-handle--sw,
+.resize-handle--s,
+.resize-handle--se {
+  top: 100%;
+}
+
+.resize-handle--nw,
+.resize-handle--w,
+.resize-handle--sw {
+  left: 0;
+}
+
+.resize-handle--ne,
+.resize-handle--e,
+.resize-handle--se {
+  left: 100%;
+}
+
+.resize-handle--n,
+.resize-handle--s {
+  left: 50%;
+}
+
+.resize-handle--w,
+.resize-handle--e {
+  top: 50%;
+}
+
+.resize-handle--nw,
+.resize-handle--ne,
+.resize-handle--sw,
+.resize-handle--se {
+  transform: translate(-50%, -50%);
+}
+
+.resize-handle--n,
+.resize-handle--s {
+  transform: translate(-50%, -50%);
+  cursor: ns-resize;
+}
+
+.resize-handle--w,
+.resize-handle--e {
+  transform: translate(-50%, -50%);
+  cursor: ew-resize;
+}
+
+.resize-handle--nw,
+.resize-handle--se {
+  cursor: nwse-resize;
+}
+
+.resize-handle--ne,
+.resize-handle--sw {
+  cursor: nesw-resize;
 }
 
 .toolbar {
