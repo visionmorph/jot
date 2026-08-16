@@ -42,6 +42,7 @@ input {
 
 .authoring-shell {
   display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100dvh;
   min-height: 0;
@@ -49,6 +50,14 @@ input {
   padding: 0;
   gap: 0;
   background: var(--background);
+}
+
+.authoring-workspace {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  gap: 0;
 }
 
 .left-sidebar,
@@ -59,6 +68,253 @@ input {
   min-width: 280px;
   height: 100%;
   background: var(--background);
+}
+
+.props-panel {
+  display: flex;
+  width: 100%;
+  height: 320px;
+  min-height: 320px;
+  flex: 0 0 320px;
+  flex-direction: column;
+  padding: 0;
+  gap: 0;
+  border-top: 1px solid var(--border-subtle-00);
+  background: var(--background);
+}
+
+.props-toolbar {
+  display: flex;
+  width: 100%;
+  padding: 8px 16px;
+}
+
+.add-prop-button {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  height: 24px;
+  margin: 0;
+  padding: 4px 16px;
+  gap: 8px;
+  border: 0;
+  border-radius: 2px;
+  background: var(--layer-01);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.add-prop-button:hover,
+.prop-remove-button:hover {
+  background: var(--layer-hover-01);
+}
+
+.add-prop-button:focus-visible,
+.prop-remove-button:focus-visible,
+.prop-toggle:focus-visible {
+  outline: 1px solid var(--icon-on-color);
+  outline-offset: -1px;
+}
+
+.plus-icon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: var(--icon-secondary);
+}
+
+.plus-icon::before,
+.plus-icon::after {
+  position: absolute;
+  top: 7px;
+  left: 3px;
+  width: 10px;
+  height: 1px;
+  background: currentColor;
+  content: "";
+}
+
+.plus-icon::after {
+  transform: rotate(90deg);
+}
+
+.props-table {
+  width: 100%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.props-table-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(120px, 0.9fr) minmax(100px, 0.7fr) minmax(160px, 1.2fr) minmax(160px, 1.2fr) 40px;
+  min-width: 900px;
+}
+
+.props-table-header .props-table-cell {
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0;
+}
+
+.props-table-cell {
+  min-width: 0;
+}
+
+.props-table-action-cell {
+  width: 40px;
+}
+
+.props-property-row {
+  border-bottom: 1px solid var(--border-subtle-00);
+}
+
+.props-property-row .props-table-cell {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+}
+
+.props-property-row .props-table-action-cell {
+  padding: 8px;
+}
+
+.prop-control,
+.prop-select-wrap {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+}
+
+.prop-control {
+  margin: 0;
+  padding: 4px 16px;
+  border: 0;
+  border-radius: 2px;
+  outline: 0;
+  background: var(--layer-01);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.prop-select-wrap {
+  position: relative;
+}
+
+.prop-select {
+  padding-right: 32px;
+  appearance: none;
+}
+
+.prop-select-wrap .inspector-select-chevron {
+  right: 10px;
+}
+
+.prop-control:focus-visible {
+  outline: 1px solid var(--icon-on-color);
+  outline-offset: -1px;
+}
+
+.prop-control:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+.prop-toggle {
+  position: relative;
+  width: 32px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: var(--layer-selected-01);
+  cursor: pointer;
+}
+
+.prop-toggle::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--icon-secondary);
+  content: "";
+  transition: transform 120ms ease;
+}
+
+.prop-toggle[aria-checked="true"] {
+  background: var(--background-active);
+}
+
+.prop-toggle[aria-checked="true"]::after {
+  background: var(--icon-on-color);
+  transform: translateX(16px);
+}
+
+.prop-remove-button {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--icon-secondary);
+  cursor: pointer;
+}
+
+.remove-icon {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  width: 8px;
+  height: 10px;
+  border: 1px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 1px 1px;
+}
+
+.remove-icon::before {
+  position: absolute;
+  top: -3px;
+  left: -2px;
+  width: 10px;
+  height: 1px;
+  background: currentColor;
+  content: "";
+}
+
+.remove-icon::after {
+  position: absolute;
+  top: -5px;
+  left: 2px;
+  width: 4px;
+  height: 2px;
+  border: 1px solid currentColor;
+  border-bottom: 0;
+  content: "";
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .left-sidebar {
