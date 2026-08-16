@@ -364,7 +364,7 @@ input {
   position: relative;
   left: auto !important;
   top: auto !important;
-  flex: 0 0 100px;
+  flex: 0 0 auto;
 }
 
 .canvas-text {
@@ -382,6 +382,14 @@ input {
 
 .canvas-text[contenteditable="true"] {
   cursor: text;
+}
+
+.canvas-text[data-width] {
+  min-width: 0;
+}
+
+.canvas-text[data-height] {
+  min-height: 0;
 }
 
 .canvas > .canvas-text {
@@ -516,6 +524,21 @@ input {
   grid-template-columns: repeat(2, 119.5px);
   width: 247px;
   gap: 8px;
+}
+
+.layer-size-field,
+.layer-size-row {
+  width: 100%;
+}
+
+.layer-size-row {
+  display: flex;
+  gap: 8px;
+}
+
+.layer-size-row .prefixed-number-control {
+  flex: 1 1 0;
+  width: 100%;
 }
 
 .prefixed-number-control {
