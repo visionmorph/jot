@@ -4,7 +4,10 @@
   --icon-on-color: #ffffff;
   --background: #121619;
   --layer-01: #21272a;
+  --background-hover: rgba(141, 141, 141, 0.16);
   --background-selected: rgba(141, 141, 141, 0.24);
+  --background-selected-hover: rgba(141, 141, 141, 0.32);
+  --background-active: rgba(141, 141, 141, 0.4);
   --layer-selected-01: #343a3f;
   --border-subtle-00: #343a3f;
   --layer-hover-01: #343a3f;
@@ -50,6 +53,8 @@ input {
 
 .left-sidebar,
 .right-sidebar {
+  position: relative;
+  z-index: 3;
   width: 280px;
   min-width: 280px;
   height: 100%;
@@ -214,6 +219,19 @@ input {
   background: var(--background-selected);
   color: var(--text-primary);
   font-weight: 600;
+}
+
+.tree-node:hover {
+  background: var(--background-hover);
+}
+
+.tree-node.is-selected:hover {
+  background: var(--background-selected-hover);
+}
+
+.tree-node:active,
+.tree-node.is-selected:active {
+  background: var(--background-active);
 }
 
 .tree-node.is-selected .icon-cell,
@@ -547,7 +565,7 @@ input {
   width: 119.5px;
   height: 24px;
   padding: 4px 16px;
-  gap: 8px;
+  gap: 4px;
   border-radius: 2px;
   background: var(--layer-01);
 }
