@@ -1995,35 +1995,15 @@ function renderExportLayer(layer, depth) {
   return `${indent}<${htmlTag}${attributes} style={${style}}>\n${childMarkup}\n${indent}</${htmlTag}>`;
 }
 
-function getExportFontLinks() {
-  const uniqueFonts = new Map();
-  textRecords.forEach((record) => {
-    const family = record.element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
-    const weight = Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
-    if (!uniqueFonts.has(family)) uniqueFonts.set(family, new Set());
-    uniqueFonts.get(family).add(weight);
-  });
-
-  return Array.from(uniqueFonts.entries()).map(([family, weights]) => {
-    const encodedFamily = encodeURIComponent(family).replace(/%20/g, "+");
-    const weightList = Array.from(weights).sort((a, b) => a - b).join(";");
-    const href = `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@${weightList}&display=swap`;
-    return `      <link rel="stylesheet" href=${JSON.stringify(href)} />`;
-  });
-}
-
 function createReactComponentSource(componentName) {
   const rootLayers = getLayerChildren(null);
-  const layerMarkup = rootLayers.map((layer) => renderExportLayer(layer, 4)).join("\n");
-  const fontLinks = getExportFontLinks();
-  const fragmentChildren = [
-    ...fontLinks,
-    `      <div style={${formatReactStyle({ width: "100%", minHeight: "100%" })}}>`,
-    layerMarkup,
-    "      </div>",
-  ].filter(Boolean).join("\n");
+  const componentMarkup = rootLayers.length === 0
+    ? "    <></>"
+    : rootLayers.length === 1
+      ? renderExportLayer(rootLayers[0], 2)
+      : `    <>\n${rootLayers.map((layer) => renderExportLayer(layer, 3)).join("\n")}\n    </>`;
 
-  return `import React from "react";\n\nexport default function ${componentName}() {\n  return (\n    <>\n${fragmentChildren}\n    </>\n  );\n}\n`;
+  return `import React from "react";\n\nexport default function ${componentName}() {\n  return (\n${componentMarkup}\n  );\n}\n`;
 }
 
 function createStorySource(componentName) {
