@@ -1,5 +1,6 @@
 const canvas = document.querySelector("#canvas");
 const toolbar = document.querySelector(".toolbar");
+const canvasRootStack = document.querySelector("[data-canvas-root-stack]");
 const treeView = document.querySelector("[data-tree-view]");
 const pageInspector = document.querySelector("[data-page-inspector]");
 const frameInspector = document.querySelector("[data-frame-inspector]");
@@ -60,12 +61,14 @@ const loadedGoogleFonts = new Set();
 let activeTool = "select";
 let selectedCanvasFrame = null;
 let selectedCanvasText = null;
+const selectedLayerKeys = new Set();
 let nextFrameId = 1;
 let nextTextId = 1;
 let nextLayerOrder = 1;
 let frameRecords = [];
 let textRecords = [];
 let suppressNextTextCreation = false;
+let suppressNextCanvasSurfaceClick = false;
 const expandedFrameIds = new Set();
 const undoHistory = [];
 const redoHistory = [];
@@ -167,7 +170,7 @@ function applyResizePointerPosition(clientX, clientY) {
     element.dataset.widthMode = "fixed";
     element.dataset.width = String(nextWidth);
     element.style.width = `${nextWidth}px`;
-    if (layer.parentId === null && direction.includes("w")) {
+    if (layer.type === "text" && layer.parentId === null && direction.includes("w")) {
       element.style.left = `${resizeInteraction.left + resizeInteraction.width - nextWidth}px`;
     }
   }
@@ -175,7 +178,7 @@ function applyResizePointerPosition(clientX, clientY) {
     element.dataset.heightMode = "fixed";
     element.dataset.height = String(nextHeight);
     element.style.height = `${nextHeight}px`;
-    if (layer.parentId === null && direction.includes("n")) {
+    if (layer.type === "text" && layer.parentId === null && direction.includes("n")) {
       element.style.top = `${resizeInteraction.top + resizeInteraction.height - nextHeight}px`;
     }
   }
@@ -359,6 +362,53 @@ function getLayerChildren(parentFrameId) {
   ].sort((a, b) => a.record.order - b.record.order);
 }
 
+function getLayerKey(type, id) {
+  return `${type}:${id}`;
+}
+
+function getFrameSelectionKeys(frameId) {
+  const keys = [getLayerKey("frame", frameId)];
+  getLayerChildren(frameId).forEach((layer) => {
+    if (layer.type === "frame") keys.push(...getFrameSelectionKeys(layer.record.id));
+    else keys.push(getLayerKey("text", layer.record.id));
+  });
+  return keys;
+}
+
+function getElementForLayerKey(key) {
+  const [type, rawId] = key.split(":");
+  const id = Number(rawId);
+  if (type === "frame") return getFrameRecord(id)?.element ?? null;
+  if (type === "text") return getTextRecord(id)?.element ?? null;
+  return null;
+}
+
+function isLayerSelected(type, id) {
+  return selectedLayerKeys.has(getLayerKey(type, id));
+}
+
+function syncElementSelectionStyles() {
+  clearElementSelection();
+  selectedLayerKeys.forEach((key) => {
+    const element = getElementForLayerKey(key);
+    if (!(element instanceof HTMLElement)) return;
+    element.classList.add("is-selected");
+    element.setAttribute("aria-selected", "true");
+  });
+}
+
+function setPrimarySelectionFromKey(key) {
+  const [type, rawId] = key?.split(":") ?? [];
+  const id = Number(rawId);
+  selectedCanvasFrame = type === "frame" ? getFrameRecord(id)?.element ?? null : null;
+  selectedCanvasText = type === "text" ? getTextRecord(id)?.element ?? null : null;
+}
+
+function setPrimarySelectionToLatest() {
+  const keys = [...selectedLayerKeys];
+  setPrimarySelectionFromKey(keys[keys.length - 1]);
+}
+
 function captureWorkspaceState() {
   return {
     frames: frameRecords.map((record) => ({
@@ -380,6 +430,7 @@ function captureWorkspaceState() {
     })),
     selectedCanvasFrame,
     selectedCanvasText,
+    selectedLayerKeys: [...selectedLayerKeys],
     expandedFrameIds: [...expandedFrameIds],
     nextFrameId,
     nextTextId,
@@ -400,7 +451,9 @@ function restoreElementState(element, dataset, style) {
 
 function attachRestoredLayers(parentFrameId, parentElement) {
   getLayerChildren(parentFrameId).forEach((layer) => {
-    if (parentElement === canvas) canvas.insertBefore(layer.record.element, toolbar);
+    if (parentElement === canvas && layer.type === "frame" && canvasRootStack instanceof HTMLElement) {
+      canvasRootStack.append(layer.record.element);
+    } else if (parentElement === canvas) canvas.insertBefore(layer.record.element, toolbar);
     else parentElement.append(layer.record.element);
     if (layer.type === "frame") attachRestoredLayers(layer.record.id, layer.record.element);
   });
@@ -441,17 +494,21 @@ function restoreWorkspaceState(snapshot) {
   snapshot.expandedFrameIds.forEach((frameId) => expandedFrameIds.add(frameId));
   selectedCanvasFrame = snapshot.selectedCanvasFrame;
   selectedCanvasText = snapshot.selectedCanvasText;
+  selectedLayerKeys.clear();
+  (snapshot.selectedLayerKeys ?? []).forEach((key) => selectedLayerKeys.add(key));
+  if (selectedLayerKeys.size === 0) {
+    if (selectedCanvasFrame) {
+      const record = frameRecords.find((frameRecord) => frameRecord.element === selectedCanvasFrame);
+      if (record) selectedLayerKeys.add(getLayerKey("frame", record.id));
+    }
+    if (selectedCanvasText) {
+      const record = textRecords.find((textRecord) => textRecord.element === selectedCanvasText);
+      if (record) selectedLayerKeys.add(getLayerKey("text", record.id));
+    }
+  }
 
   attachRestoredLayers(null, canvas);
-  clearElementSelection();
-  if (selectedCanvasFrame) {
-    selectedCanvasFrame.classList.add("is-selected");
-    selectedCanvasFrame.setAttribute("aria-selected", "true");
-  }
-  if (selectedCanvasText) {
-    selectedCanvasText.classList.add("is-selected");
-    selectedCanvasText.setAttribute("aria-selected", "true");
-  }
+  syncElementSelectionStyles();
   canvas.style.backgroundColor = snapshot.canvasColor;
   canvasColorValue = snapshot.canvasColor;
   if (colorPicker instanceof HTMLInputElement) colorPicker.value = snapshot.canvasColor;
@@ -492,12 +549,21 @@ function clearElementSelection() {
   });
 }
 
-function selectCanvasFrame(frameElement) {
-  clearElementSelection();
-  frameElement.classList.add("is-selected");
-  frameElement.setAttribute("aria-selected", "true");
-  selectedCanvasFrame = frameElement;
-  selectedCanvasText = null;
+function selectCanvasFrame(frameElement, additive = false) {
+  const record = frameRecords.find((frameRecord) => frameRecord.element === frameElement);
+  if (!record) return;
+  const frameKey = getLayerKey("frame", record.id);
+  const selectionKeys = additive ? getFrameSelectionKeys(record.id) : [frameKey];
+
+  if (!additive) selectedLayerKeys.clear();
+  if (additive && selectedLayerKeys.has(frameKey)) {
+    selectionKeys.forEach((key) => selectedLayerKeys.delete(key));
+    setPrimarySelectionToLatest();
+  } else {
+    selectionKeys.forEach((key) => selectedLayerKeys.add(key));
+    setPrimarySelectionFromKey(frameKey);
+  }
+  syncElementSelectionStyles();
   renderTree();
 }
 
@@ -512,14 +578,20 @@ function expandFramePath(parentFrameId) {
   }
 }
 
-function selectCanvasText(textElement) {
+function selectCanvasText(textElement, additive = false) {
   const record = textRecords.find((textRecord) => textRecord.element === textElement);
   if (record) expandFramePath(record.parentFrameId);
-  clearElementSelection();
-  textElement.classList.add("is-selected");
-  textElement.setAttribute("aria-selected", "true");
-  selectedCanvasText = textElement;
-  selectedCanvasFrame = null;
+  if (!record) return;
+  const textKey = getLayerKey("text", record.id);
+  if (!additive) selectedLayerKeys.clear();
+  if (additive && selectedLayerKeys.has(textKey)) {
+    selectedLayerKeys.delete(textKey);
+    setPrimarySelectionToLatest();
+  } else {
+    selectedLayerKeys.add(textKey);
+    setPrimarySelectionFromKey(textKey);
+  }
+  syncElementSelectionStyles();
   renderTree();
 }
 
@@ -687,7 +759,8 @@ function syncInspectorToSelectedFrame() {
 }
 
 function clearLayerSelection() {
-  if (!selectedCanvasFrame && !selectedCanvasText) return;
+  if (selectedLayerKeys.size === 0) return;
+  selectedLayerKeys.clear();
   clearElementSelection();
   selectedCanvasFrame = null;
   selectedCanvasText = null;
@@ -698,9 +771,11 @@ function removeCanvasText(textElement, suppressCreationForCurrentClick = false) 
   const textRecord = textRecords.find((record) => record.element === textElement);
   textElement.remove();
   if (textRecord) {
+    selectedLayerKeys.delete(getLayerKey("text", textRecord.id));
     textRecords = textRecords.filter((record) => record.id !== textRecord.id);
   }
-  if (selectedCanvasText === textElement) selectedCanvasText = null;
+  if (selectedCanvasText === textElement) setPrimarySelectionToLatest();
+  syncElementSelectionStyles();
 
   if (suppressCreationForCurrentClick) {
     suppressNextTextCreation = true;
@@ -764,12 +839,12 @@ function renderFrameTreeNode(record, depth) {
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
-  node.setAttribute("aria-selected", String(record.element === selectedCanvasFrame));
+  node.setAttribute("aria-selected", String(isLayerSelected("frame", record.id)));
   node.style.setProperty("--tree-indent", `${8 + (depth - 1) * 40}px`);
-  if (record.element === selectedCanvasFrame) node.classList.add("is-selected");
+  if (isLayerSelected("frame", record.id)) node.classList.add("is-selected");
   if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
 
-  node.addEventListener("click", () => selectCanvasFrame(record.element));
+  node.addEventListener("click", (event) => selectCanvasFrame(record.element, event.ctrlKey));
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
@@ -843,11 +918,11 @@ function renderTextTreeNode(record, depth) {
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
-  node.setAttribute("aria-selected", String(record.element === selectedCanvasText));
+  node.setAttribute("aria-selected", String(isLayerSelected("text", record.id)));
   node.style.setProperty("--tree-indent", `${8 + (depth - 1) * 40}px`);
-  if (record.element === selectedCanvasText) node.classList.add("is-selected");
+  if (isLayerSelected("text", record.id)) node.classList.add("is-selected");
 
-  node.addEventListener("click", () => selectCanvasText(record.element));
+  node.addEventListener("click", (event) => selectCanvasText(record.element, event.ctrlKey));
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
@@ -937,7 +1012,9 @@ function syncLayerDomOrder(parentFrameId) {
   const parentElement = parentFrameId === null ? canvas : getFrameRecord(parentFrameId)?.element;
   if (!(parentElement instanceof HTMLElement)) return;
   getLayerChildren(parentFrameId).forEach((layer) => {
-    if (parentFrameId === null) canvas.insertBefore(layer.record.element, toolbar);
+    if (parentFrameId === null && layer.type === "frame" && canvasRootStack instanceof HTMLElement) {
+      canvasRootStack.append(layer.record.element);
+    } else if (parentFrameId === null) canvas.insertBefore(layer.record.element, toolbar);
     else parentElement.append(layer.record.element);
   });
 }
@@ -1026,8 +1103,8 @@ function showTreeDropIndicator(node, position) {
   node.classList.add(`is-drop-${position}`);
 }
 
-function startEditingText(textElement) {
-  selectCanvasText(textElement);
+function startEditingText(textElement, selectText = true) {
+  if (selectText) selectCanvasText(textElement);
   textElement.contentEditable = "true";
   textElement.focus();
 
@@ -1045,6 +1122,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
     return;
   }
   if (options.recordHistory !== false) recordHistory();
+  clearLayerSelection();
 
   const textId = nextTextId;
   nextTextId += 1;
@@ -1058,7 +1136,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   };
   nextLayerOrder += 1;
 
-  text.className = "canvas-text";
+  text.className = "canvas-text is-new-empty";
   text.dataset.textId = String(textId);
   text.contentEditable = "false";
   text.spellcheck = false;
@@ -1090,13 +1168,23 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   text.addEventListener("click", (event) => {
     event.stopPropagation();
     if (activeTool === "text") startEditingText(text);
-    else selectCanvasText(text);
+    else selectCanvasText(text, event.ctrlKey);
   });
   text.addEventListener("dblclick", (event) => {
     event.stopPropagation();
     startEditingText(text);
   });
   text.addEventListener("input", () => {
+    const hasContent = (text.textContent ?? "").length > 0;
+    text.classList.toggle("is-new-empty", record.isNew && !hasContent);
+    const textKey = getLayerKey("text", record.id);
+    if (record.isNew && hasContent && !selectedLayerKeys.has(textKey)) {
+      selectCanvasText(text);
+    } else if (record.isNew && !hasContent && selectedLayerKeys.has(textKey)) {
+      selectedLayerKeys.delete(textKey);
+      setPrimarySelectionToLatest();
+      syncElementSelectionStyles();
+    }
     redoHistory.length = 0;
     renderTree();
   });
@@ -1110,6 +1198,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
 
     const wasNewText = record.isNew;
     record.isNew = false;
+    text.classList.remove("is-new-empty");
     text.contentEditable = "false";
     if (wasNewText) {
       selectTool("select");
@@ -1127,7 +1216,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   textRecords.push(record);
   applyLayerSizing("text", record);
   renderTree();
-  if (options.beginEditing !== false) startEditingText(text);
+  if (options.beginEditing !== false) startEditingText(text, false);
   return record;
 }
 
@@ -1179,6 +1268,11 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
     event.stopPropagation();
     if (event.target !== frame) return;
 
+    if (suppressNextCanvasSurfaceClick) {
+      suppressNextCanvasSurfaceClick = false;
+      return;
+    }
+
     if (activeTool === "text") {
       const frameBounds = frame.getBoundingClientRect();
       createCanvasText(record, event.clientX - frameBounds.left, event.clientY - frameBounds.top);
@@ -1192,7 +1286,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
       return;
     }
 
-    selectCanvasFrame(frame);
+    selectCanvasFrame(frame, event.ctrlKey);
   });
   frame.addEventListener("dragstart", (event) => {
     event.stopPropagation();
@@ -1215,10 +1309,12 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
     parentRecord.element.append(frame);
     expandedFrameIds.add(parentRecord.id);
   } else {
-    canvas.insertBefore(frame, toolbar);
+    if (canvasRootStack instanceof HTMLElement) canvasRootStack.append(frame);
+    else canvas.insertBefore(frame, toolbar);
   }
   applyLayerSizing("frame", record);
   renderTree();
+  if (options.select !== false) selectCanvasFrame(frame);
   return record;
 }
 
@@ -1253,7 +1349,7 @@ function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false) {
   const source = sourceRecord.element;
   const x = Number.parseFloat(source.style.left || "0") + (offsetRoot ? 16 : 0);
   const y = Number.parseFloat(source.style.top || "0") + (offsetRoot ? 16 : 0);
-  const duplicateRecord = createCanvasFrame(x, y, parentRecord, { recordHistory: false });
+  const duplicateRecord = createCanvasFrame(x, y, parentRecord, { recordHistory: false, select: false });
   if (!duplicateRecord) return;
 
   const duplicate = duplicateRecord.element;
@@ -1376,8 +1472,30 @@ canvas?.addEventListener("drop", (event) => {
   );
 });
 
+canvas?.addEventListener("pointerdown", (event) => {
+  if (!(canvas instanceof HTMLElement)) return;
+  const activeText = document.activeElement instanceof HTMLElement
+    && document.activeElement.classList.contains("canvas-text")
+    && document.activeElement.isContentEditable
+      ? document.activeElement
+      : null;
+  const target = event.target;
+  const isCanvasSurface = target === canvas
+    || (target instanceof HTMLElement && target.classList.contains("canvas-frame"));
+  if (!activeText || !isCanvasSurface) return;
+
+  suppressNextCanvasSurfaceClick = true;
+  if ((activeText.textContent ?? "").length > 0) selectCanvasText(activeText);
+  selectTool("select");
+}, true);
+
 canvas?.addEventListener("click", (event) => {
   if (!(canvas instanceof HTMLElement) || event.target !== canvas) return;
+
+  if (suppressNextCanvasSurfaceClick) {
+    suppressNextCanvasSurfaceClick = false;
+    return;
+  }
 
   clearLayerSelection();
   const canvasBounds = canvas.getBoundingClientRect();
@@ -1417,11 +1535,16 @@ document.addEventListener("keydown", (event) => {
   }
 
   if (event.key === "Escape") {
-    selectTool("select");
     const activeText = document.activeElement instanceof HTMLElement && document.activeElement.classList.contains("canvas-text")
       ? document.activeElement
       : null;
-    activeText?.blur();
+    selectTool("select");
+    if (activeText) {
+      if ((activeText.textContent ?? "").length > 0) selectCanvasText(activeText);
+      activeText.blur();
+    } else if (selectedCanvasText) {
+      clearLayerSelection();
+    }
     return;
   }
 
@@ -1448,31 +1571,42 @@ document.addEventListener("keydown", (event) => {
   if (
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
     (target instanceof HTMLElement && target.isContentEditable)
   ) return;
 
-  if (selectedCanvasText) {
-    event.preventDefault();
-    recordHistory();
-    removeCanvasText(selectedCanvasText);
-    return;
-  }
-
-  if (!selectedCanvasFrame) return;
+  if (selectedLayerKeys.size === 0) return;
 
   event.preventDefault();
-  const selectedRecord = frameRecords.find((record) => record.element === selectedCanvasFrame);
-  if (!selectedRecord) return;
-
   recordHistory();
-  const idsToDelete = collectFrameAndDescendantIds(selectedRecord.id);
-  selectedCanvasFrame.remove();
-  frameRecords = frameRecords.filter((record) => !idsToDelete.has(record.id));
-  textRecords = textRecords.filter(
-    (record) => record.parentFrameId === null || !idsToDelete.has(record.parentFrameId),
-  );
-  idsToDelete.forEach((frameId) => expandedFrameIds.delete(frameId));
+  const frameIdsToDelete = new Set();
+  const textIdsToDelete = new Set();
+  selectedLayerKeys.forEach((key) => {
+    const [type, rawId] = key.split(":");
+    const id = Number(rawId);
+    if (type === "frame") {
+      collectFrameAndDescendantIds(id).forEach((frameId) => frameIdsToDelete.add(frameId));
+    } else if (type === "text") textIdsToDelete.add(id);
+  });
+  textRecords.forEach((record) => {
+    if (record.parentFrameId !== null && frameIdsToDelete.has(record.parentFrameId)) {
+      textIdsToDelete.add(record.id);
+    }
+  });
+
+  frameRecords.forEach((record) => {
+    if (frameIdsToDelete.has(record.id)) record.element.remove();
+  });
+  textRecords.forEach((record) => {
+    if (textIdsToDelete.has(record.id)) record.element.remove();
+  });
+  frameRecords = frameRecords.filter((record) => !frameIdsToDelete.has(record.id));
+  textRecords = textRecords.filter((record) => !textIdsToDelete.has(record.id));
+  frameIdsToDelete.forEach((frameId) => expandedFrameIds.delete(frameId));
+  selectedLayerKeys.clear();
   selectedCanvasFrame = null;
+  selectedCanvasText = null;
+  syncElementSelectionStyles();
   renderTree();
 });
 
