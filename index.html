@@ -87,14 +87,26 @@
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="frame-size-label">Size</span>
             <div class="layer-size-row" role="group" aria-labelledby="frame-size-label">
-              <label class="prefixed-number-control">
+              <div class="prefixed-number-control size-mode-combobox" data-size-combobox="frame-width">
                 <span class="number-control-prefix" aria-hidden="true">w</span>
-                <input aria-label="Frame width" data-frame-size="width" type="number" min="0" step="1" value="100" />
-              </label>
-              <label class="prefixed-number-control">
+                <input aria-label="Frame width" data-frame-size="width" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-width-size-menu" />
+                <button class="inspector-combobox-toggle" type="button" aria-label="Open frame width sizing options" aria-expanded="false" data-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="inspector-combobox-menu" id="frame-width-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fixed">Fixed</button>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="hug">Hug</button>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fill">Fill</button>
+                </div>
+              </div>
+              <div class="prefixed-number-control size-mode-combobox" data-size-combobox="frame-height">
                 <span class="number-control-prefix" aria-hidden="true">h</span>
-                <input aria-label="Frame height" data-frame-size="height" type="number" min="0" step="1" value="100" />
-              </label>
+                <input aria-label="Frame height" data-frame-size="height" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-height-size-menu" />
+                <button class="inspector-combobox-toggle" type="button" aria-label="Open frame height sizing options" aria-expanded="false" data-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="inspector-combobox-menu" id="frame-height-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fixed">Fixed</button>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="hug">Hug</button>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fill">Fill</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -186,14 +198,26 @@
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="text-layer-size-label">Size</span>
             <div class="layer-size-row" role="group" aria-labelledby="text-layer-size-label">
-              <label class="prefixed-number-control">
+              <div class="prefixed-number-control size-mode-combobox" data-size-combobox="text-width">
                 <span class="number-control-prefix" aria-hidden="true">w</span>
-                <input aria-label="Text width" data-text-layer-size="width" type="number" min="0" step="1" value="0" />
-              </label>
-              <label class="prefixed-number-control">
+                <input aria-label="Text width" data-text-layer-size="width" type="text" inputmode="decimal" value="Hug" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-width-size-menu" />
+                <button class="inspector-combobox-toggle" type="button" aria-label="Open text width sizing options" aria-expanded="false" data-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="inspector-combobox-menu" id="text-width-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fixed">Fixed</button>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="hug">Hug</button>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fill">Fill</button>
+                </div>
+              </div>
+              <div class="prefixed-number-control size-mode-combobox" data-size-combobox="text-height">
                 <span class="number-control-prefix" aria-hidden="true">h</span>
-                <input aria-label="Text height" data-text-layer-size="height" type="number" min="0" step="1" value="0" />
-              </label>
+                <input aria-label="Text height" data-text-layer-size="height" type="text" inputmode="decimal" value="Hug" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-height-size-menu" />
+                <button class="inspector-combobox-toggle" type="button" aria-label="Open text height sizing options" aria-expanded="false" data-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="inspector-combobox-menu" id="text-height-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fixed">Fixed</button>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="hug">Hug</button>
+                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fill">Fill</button>
+                </div>
+              </div>
             </div>
           </div>
 
