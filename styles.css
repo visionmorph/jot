@@ -355,6 +355,27 @@ input {
   cursor: text;
 }
 
+.canvas-root-stack {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.canvas-root-stack > .canvas-frame {
+  position: relative;
+  left: auto !important;
+  top: auto !important;
+  flex: 0 0 auto;
+  pointer-events: auto;
+}
+
 .canvas-frame {
   position: absolute;
   z-index: 1;
@@ -425,7 +446,7 @@ input {
   outline: 1px solid #992CFF;
 }
 
-.canvas-text:hover {
+.canvas-text:hover:not(.is-new-empty) {
   outline: 2px solid #992CFF;
 }
 
