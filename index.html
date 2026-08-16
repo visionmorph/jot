@@ -13,8 +13,7 @@
   </head>
   <body>
     <main class="authoring-shell">
-      <div class="authoring-workspace">
-        <aside class="left-sidebar" aria-label="Component and layer navigation">
+      <aside class="left-sidebar" aria-label="Component and layer navigation">
         <section class="sidebar-panel components-panel" aria-labelledby="components-heading">
           <div class="panel-heading-wrap">
             <h1 class="panel-heading" id="components-heading">Components</h1>
@@ -46,8 +45,9 @@
 
           <div class="tree-view" role="tree" aria-label="Layers" data-tree-view></div>
         </section>
-        </aside>
+      </aside>
 
+      <div class="canvas-properties-wrapper">
         <section class="canvas" id="canvas" aria-label="Canvas">
         <div class="canvas-root-stack" data-canvas-root-stack></div>
         <div class="toolbar" role="toolbar" aria-label="Canvas tools">
@@ -284,7 +284,6 @@
           </div>
         </section>
         </aside>
-      </div>
 
       <section class="props-panel" aria-label="Component properties">
         <div class="props-toolbar">
@@ -306,6 +305,7 @@
           <div class="props-table-body" role="rowgroup" data-prop-rows></div>
         </div>
       </section>
+      </div>
     </main>
   </body>
 </html>
