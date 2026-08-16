@@ -17,6 +17,7 @@ const componentsPanel = document.querySelector(".components-panel");
 const sidebarDivider = document.querySelector(".sidebar-divider");
 const frameSizeInputs = Array.from(document.querySelectorAll("[data-frame-size]"));
 const textLayerSizeInputs = Array.from(document.querySelectorAll("[data-text-layer-size]"));
+const sizeModeComboboxes = Array.from(document.querySelectorAll("[data-size-combobox]"));
 const framePaddingInputs = Array.from(document.querySelectorAll("[data-frame-padding]"));
 const frameRadiusInput = document.querySelector("#frame-radius");
 const frameColorPicker = document.querySelector("#frame-color-picker");
@@ -163,6 +164,7 @@ function applyResizePointerPosition(clientX, clientY) {
   }
 
   if (changesWidth) {
+    element.dataset.widthMode = "fixed";
     element.dataset.width = String(nextWidth);
     element.style.width = `${nextWidth}px`;
     if (layer.parentId === null && direction.includes("w")) {
@@ -170,6 +172,7 @@ function applyResizePointerPosition(clientX, clientY) {
     }
   }
   if (changesHeight) {
+    element.dataset.heightMode = "fixed";
     element.dataset.height = String(nextHeight);
     element.style.height = `${nextHeight}px`;
     if (layer.parentId === null && direction.includes("n")) {
@@ -177,6 +180,7 @@ function applyResizePointerPosition(clientX, clientY) {
     }
   }
 
+  applyLayerSizing(layer.type, layer.record);
   if (layer.type === "frame") syncInspectorToSelectedFrame();
   else syncSelectedTextSizeInputs();
   positionResizeOverlay();
@@ -290,6 +294,54 @@ function getFrameRecord(frameId) {
 
 function getTextRecord(textId) {
   return textRecords.find((record) => record.id === textId);
+}
+
+function getLayerDimensionMode(element, dimension, fallback = "fixed") {
+  const mode = element.dataset[`${dimension}Mode`];
+  return mode === "hug" || mode === "fill" ? mode : fallback;
+}
+
+function getLayerSizingContext(type, record) {
+  const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+  const parentRecord = parentId === null ? null : getFrameRecord(parentId);
+  const parentDirection = parentRecord?.element.dataset.direction === "vertical" ? "vertical" : "horizontal";
+  return { parentId, parentDirection };
+}
+
+function applyLayerSizing(type, record) {
+  const element = record.element;
+  const { parentId, parentDirection } = getLayerSizingContext(type, record);
+  const widthMode = getLayerDimensionMode(element, "width", type === "text" ? "hug" : "fixed");
+  const heightMode = getLayerDimensionMode(element, "height", type === "text" ? "hug" : "fixed");
+  const isRoot = parentId === null;
+  const mainDimension = parentDirection === "vertical" ? "height" : "width";
+  const mainMode = mainDimension === "width" ? widthMode : heightMode;
+  const crossMode = mainDimension === "width" ? heightMode : widthMode;
+
+  const applyDimension = (dimension, mode, fallbackValue) => {
+    if (mode === "fixed") {
+      element.style[dimension] = `${element.dataset[dimension] || fallbackValue}px`;
+    } else if (mode === "hug") {
+      element.style[dimension] = "fit-content";
+    } else if (isRoot) {
+      element.style[dimension] = "100%";
+    } else {
+      element.style[dimension] = "auto";
+    }
+  };
+
+  applyDimension("width", widthMode, type === "frame" ? "100" : "0");
+  applyDimension("height", heightMode, type === "frame" ? "100" : "0");
+  element.style.flex = isRoot ? "" : mainMode === "fill" ? "1 1 0" : "0 0 auto";
+  element.style.alignSelf = !isRoot && crossMode === "fill" ? "stretch" : "";
+  element.style.minWidth = !isRoot && mainDimension === "width" && widthMode === "fill" ? "0" : "";
+  element.style.minHeight = !isRoot && mainDimension === "height" && heightMode === "fill" ? "0" : "";
+}
+
+function applyAllLayerSizing() {
+  frameRecords.forEach((record) => applyLayerSizing("frame", record));
+  textRecords.forEach((record) => applyLayerSizing("text", record));
+  requestAnimationFrame(syncResizeOverlay);
 }
 
 function getFrameChildren(parentId) {
@@ -563,8 +615,12 @@ function syncSelectedTextSizeInputs() {
     if (!(input instanceof HTMLInputElement)) return;
     const dimension = input.dataset.textLayerSize;
     if (dimension !== "width" && dimension !== "height") return;
-    const explicitValue = element.dataset[dimension];
-    input.value = explicitValue || String(Math.round(bounds[dimension]));
+    const mode = getLayerDimensionMode(element, dimension, "hug");
+    input.value = mode === "fixed"
+      ? element.dataset[dimension] || String(Math.round(bounds[dimension]))
+      : mode === "fill" ? "Fill" : "Hug";
+    const wrapper = input.closest("[data-size-combobox]");
+    if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
   });
 }
 
@@ -602,7 +658,12 @@ function syncInspectorToSelectedFrame() {
     if (!(input instanceof HTMLInputElement)) return;
     const dimension = input.dataset.frameSize;
     if (dimension !== "width" && dimension !== "height") return;
-    input.value = element.dataset[dimension] || "100";
+    const mode = getLayerDimensionMode(element, dimension);
+    input.value = mode === "fixed"
+      ? element.dataset[dimension] || "100"
+      : mode === "fill" ? "Fill" : "Hug";
+    const wrapper = input.closest("[data-size-combobox]");
+    if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
   });
 
   framePaddingInputs.forEach((input) => {
@@ -922,6 +983,7 @@ function moveLayer(layer, parentFrameId, targetIndex, rootPosition) {
   normalizeSiblingOrder(parentFrameId);
   syncLayerDomOrder(previousParentId);
   if (parentFrameId !== previousParentId) syncLayerDomOrder(parentFrameId);
+  applyAllLayerSizing();
   renderTree();
   return true;
 }
@@ -1008,6 +1070,8 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   text.dataset.lineHeight = "Auto";
   text.dataset.letterSpacing = "0%";
   text.dataset.textColor = "#ffffff";
+  text.dataset.widthMode = "hug";
+  text.dataset.heightMode = "hug";
   text.style.fontFamily = `${JSON.stringify(DEFAULT_FONT_FAMILY)}, sans-serif`;
   text.style.fontWeight = String(DEFAULT_FONT_WEIGHT);
   text.style.fontSize = "14px";
@@ -1061,6 +1125,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   });
 
   textRecords.push(record);
+  applyLayerSizing("text", record);
   renderTree();
   if (options.beginEditing !== false) startEditingText(text);
   return record;
@@ -1092,6 +1157,8 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.dataset.paddingBottom = "10";
   frame.dataset.width = "100";
   frame.dataset.height = "100";
+  frame.dataset.widthMode = "fixed";
+  frame.dataset.heightMode = "fixed";
   frame.dataset.radius = "0";
   frame.dataset.frameColor = "";
   frame.dataset.direction = "horizontal";
@@ -1150,6 +1217,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   } else {
     canvas.insertBefore(frame, toolbar);
   }
+  applyLayerSizing("frame", record);
   renderTree();
   return record;
 }
@@ -1546,34 +1614,140 @@ textColorPicker?.addEventListener("input", () => {
   record.element.style.color = textColorPicker.value;
 });
 
-frameSizeInputs.forEach((input) => {
-  if (!(input instanceof HTMLInputElement)) return;
-  input.addEventListener("focus", () => input.select());
-  input.addEventListener("input", () => {
+function getSizeInputContext(input) {
+  const frameDimension = input.dataset.frameSize;
+  const textDimension = input.dataset.textLayerSize;
+  if (frameDimension === "width" || frameDimension === "height") {
     const record = getSelectedFrameRecord();
-    const dimension = input.dataset.frameSize;
-    const value = Number(input.value);
-    if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value) || value < 0) return;
-    if (Number(record.element.dataset[dimension] || "100") !== value) recordHistory();
-    record.element.dataset[dimension] = String(value);
-    record.element.style[dimension] = `${value}px`;
+    return record ? { type: "frame", record, dimension: frameDimension } : null;
+  }
+  if (textDimension === "width" || textDimension === "height") {
+    const record = getSelectedTextRecord();
+    return record ? { type: "text", record, dimension: textDimension } : null;
+  }
+  return null;
+}
+
+function setSizeComboboxOpen(wrapper, isOpen) {
+  const input = wrapper.querySelector("input");
+  const toggle = wrapper.querySelector("[data-size-toggle]");
+  const menu = wrapper.querySelector("[data-size-menu]");
+  if (!(input instanceof HTMLInputElement) || !(menu instanceof HTMLElement)) return;
+  sizeModeComboboxes.forEach((combobox) => {
+    const otherMenu = combobox.querySelector("[data-size-menu]");
+    const otherInput = combobox.querySelector("input");
+    const otherToggle = combobox.querySelector("[data-size-toggle]");
+    if (otherMenu instanceof HTMLElement) otherMenu.hidden = true;
+    otherInput?.setAttribute("aria-expanded", "false");
+    otherToggle?.setAttribute("aria-expanded", "false");
   });
-  input.addEventListener("blur", syncInspectorToSelectedFrame);
+  menu.hidden = !isOpen;
+  input.setAttribute("aria-expanded", String(isOpen));
+  toggle?.setAttribute("aria-expanded", String(isOpen));
+}
+
+function updateSizeOptionSelection(wrapper, mode) {
+  wrapper.querySelectorAll("[data-size-option]").forEach((option) => {
+    option.setAttribute("aria-selected", String(option.getAttribute("data-size-option") === mode));
+  });
+}
+
+function applySizeInputValue(input, rawValue = input.value, normalize = true) {
+  const context = getSizeInputContext(input);
+  if (!context) return false;
+  const { type, record, dimension } = context;
+  const element = record.element;
+  const trimmedValue = rawValue.trim();
+  const requestedMode = /^hug$/i.test(trimmedValue)
+    ? "hug"
+    : /^fill$/i.test(trimmedValue)
+      ? "fill"
+      : /^fixed$/i.test(trimmedValue)
+        ? "fixed"
+        : null;
+  const numberMatch = trimmedValue.match(/^\d+(?:\.\d+)?$/);
+  if (!requestedMode && !numberMatch) return false;
+
+  const currentMode = getLayerDimensionMode(element, dimension, type === "text" ? "hug" : "fixed");
+  const mode = numberMatch ? "fixed" : requestedMode;
+  let fixedValue = Number(element.dataset[dimension]);
+  if (numberMatch) fixedValue = Math.max(0, Number(numberMatch[0]));
+  if (mode === "fixed" && !Number.isFinite(fixedValue)) {
+    fixedValue = Math.round(element.getBoundingClientRect()[dimension]);
+  }
+  const hasChange = currentMode !== mode
+    || (mode === "fixed" && Number(element.dataset[dimension]) !== fixedValue);
+  if (hasChange) recordHistory();
+
+  element.dataset[`${dimension}Mode`] = mode;
+  if (mode === "fixed") element.dataset[dimension] = String(fixedValue);
+  applyLayerSizing(type, record);
+  if (normalize) input.value = mode === "fixed" ? String(fixedValue) : mode === "fill" ? "Fill" : "Hug";
+  const wrapper = input.closest("[data-size-combobox]");
+  if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
+  requestAnimationFrame(syncResizeOverlay);
+  return true;
+}
+
+sizeModeComboboxes.forEach((wrapper) => {
+  const input = wrapper.querySelector("input");
+  const toggle = wrapper.querySelector("[data-size-toggle]");
+  const menu = wrapper.querySelector("[data-size-menu]");
+  if (!(input instanceof HTMLInputElement) || !(menu instanceof HTMLElement)) return;
+
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("input", () => applySizeInputValue(input, input.value, false));
+  input.addEventListener("blur", (event) => {
+    if (event.relatedTarget instanceof Node && wrapper.contains(event.relatedTarget)) return;
+    if (!applySizeInputValue(input)) {
+      if (input.dataset.frameSize) syncInspectorToSelectedFrame();
+      else syncInspectorToSelectedText();
+    }
+    setSizeComboboxOpen(wrapper, false);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSizeComboboxOpen(wrapper, true);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSizeComboboxOpen(wrapper, false);
+      if (input.dataset.frameSize) syncInspectorToSelectedFrame();
+      else syncInspectorToSelectedText();
+      return;
+    }
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    if (!applySizeInputValue(input)) {
+      if (input.dataset.frameSize) syncInspectorToSelectedFrame();
+      else syncInspectorToSelectedText();
+    }
+    setSizeComboboxOpen(wrapper, false);
+  });
+
+  toggle?.addEventListener("click", () => {
+    setSizeComboboxOpen(wrapper, menu.hidden);
+    input.focus();
+  });
+
+  wrapper.querySelectorAll("[data-size-option]").forEach((option) => {
+    option.addEventListener("pointerdown", (event) => event.preventDefault());
+    option.addEventListener("click", () => {
+      const mode = option.getAttribute("data-size-option");
+      if (mode) applySizeInputValue(input, mode);
+      setSizeComboboxOpen(wrapper, false);
+      input.focus();
+    });
+  });
 });
 
-textLayerSizeInputs.forEach((input) => {
-  if (!(input instanceof HTMLInputElement)) return;
-  input.addEventListener("focus", () => input.select());
-  input.addEventListener("input", () => {
-    const record = getSelectedTextRecord();
-    const dimension = input.dataset.textLayerSize;
-    const value = Number(input.value);
-    if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value) || value < 0) return;
-    if (Number(record.element.dataset[dimension] || Number.NaN) !== value) recordHistory();
-    record.element.dataset[dimension] = String(value);
-    record.element.style[dimension] = `${value}px`;
-  });
-  input.addEventListener("blur", syncInspectorToSelectedText);
+document.addEventListener("pointerdown", (event) => {
+  if (!(event.target instanceof Node)) return;
+  if (sizeModeComboboxes.some((wrapper) => wrapper.contains(event.target))) return;
+  const firstCombobox = sizeModeComboboxes[0];
+  if (firstCombobox instanceof HTMLElement) setSizeComboboxOpen(firstCombobox, false);
 });
 
 framePaddingInputs.forEach((input) => {
@@ -1622,6 +1796,7 @@ frameDirectionSelect?.addEventListener("change", () => {
   if ((record.element.dataset.direction || "horizontal") !== direction) recordHistory();
   record.element.dataset.direction = direction;
   record.element.style.flexDirection = direction === "vertical" ? "column" : "row";
+  applyAllLayerSizing();
 });
 
 function setFrameGapMenuOpen(isOpen) {
@@ -1738,22 +1913,41 @@ function isZeroCssValue(value) {
   return /^-?0(?:\.0+)?(?:px|em|rem|%)?$/i.test(String(value).trim());
 }
 
+function getExportSizingStyle(type, record) {
+  const element = record.element;
+  const { parentId, parentDirection } = getLayerSizingContext(type, record);
+  const isRoot = parentId === null;
+  const widthMode = getLayerDimensionMode(element, "width", type === "text" ? "hug" : "fixed");
+  const heightMode = getLayerDimensionMode(element, "height", type === "text" ? "hug" : "fixed");
+  const mainDimension = parentDirection === "vertical" ? "height" : "width";
+  const mainMode = mainDimension === "width" ? widthMode : heightMode;
+  const crossMode = mainDimension === "width" ? heightMode : widthMode;
+  const dimensionValue = (dimension, mode, fallback) => {
+    if (mode === "fixed") return `${element.dataset[dimension] || fallback}px`;
+    if (mode === "hug") return "fit-content";
+    return isRoot ? "100%" : "auto";
+  };
+  return {
+    width: dimensionValue("width", widthMode, type === "frame" ? "100" : "0"),
+    height: dimensionValue("height", heightMode, type === "frame" ? "100" : "0"),
+    flex: isRoot ? undefined : mainMode === "fill" ? "1 1 0" : "0 0 auto",
+    alignSelf: !isRoot && crossMode === "fill" ? "stretch" : undefined,
+    minWidth: !isRoot && mainDimension === "width" && widthMode === "fill" ? 0 : undefined,
+    minHeight: !isRoot && mainDimension === "height" && heightMode === "fill" ? 0 : undefined,
+  };
+}
+
 function getExportFrameStyle(record) {
   const element = record.element;
-  const isRoot = record.parentId === null;
   const isAutoGap = element.dataset.gapMode === "auto";
   const direction = element.dataset.direction || "horizontal";
   const gap = element.dataset.gap || "10";
   const radius = element.dataset.radius || "0";
-  const width = element.dataset.width || "100";
-  const height = element.dataset.height || "100";
   return {
     display: "flex",
     flexDirection: direction === "vertical" ? "column" : undefined,
     alignItems: "flex-start",
-    width: `${width}px`,
-    height: `${height}px`,
-    flex: isRoot ? undefined : `0 0 ${width}px`,
+    ...getExportSizingStyle("frame", record),
     paddingLeft: `${element.dataset.paddingLeft || "10"}px`,
     paddingTop: `${element.dataset.paddingTop || "10"}px`,
     paddingRight: `${element.dataset.paddingRight || "10"}px`,
@@ -1769,15 +1963,11 @@ function getExportFrameStyle(record) {
 
 function getExportTextStyle(record) {
   const element = record.element;
-  const isRoot = record.parentFrameId === null;
   const lineHeight = element.dataset.lineHeight || "Auto";
   const letterSpacing = element.style.letterSpacing || "0em";
-  const width = element.dataset.width;
-  const height = element.dataset.height;
+  const widthMode = getLayerDimensionMode(element, "width", "hug");
   return {
-    flex: isRoot ? undefined : "0 0 auto",
-    width: width ? `${width}px` : undefined,
-    height: height ? `${height}px` : undefined,
+    ...getExportSizingStyle("text", record),
     color: element.dataset.textColor || "#ffffff",
     fontFamily: element.style.fontFamily || '"Inter", sans-serif',
     fontSize: `${element.dataset.fontSize || "14"}px`,
@@ -1785,7 +1975,7 @@ function getExportTextStyle(record) {
     lineHeight: lineHeight.toLowerCase() === "auto" ? undefined : `${lineHeight}px`,
     letterSpacing: isZeroCssValue(letterSpacing) ? undefined : letterSpacing,
     whiteSpace: "pre-wrap",
-    overflowWrap: width ? "anywhere" : undefined,
+    overflowWrap: widthMode === "hug" ? undefined : "anywhere",
   };
 }
 
