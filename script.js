@@ -30,6 +30,8 @@ const frameGapMenu = document.querySelector("[data-gap-menu]");
 const frameGapAutoOption = document.querySelector("[data-gap-option='auto']");
 const frameHtmlTagInput = document.querySelector("#frame-html-tag");
 const exportComponentsButton = document.querySelector("[data-export-components]");
+const addPropButton = document.querySelector("[data-add-prop]");
+const propRowsContainer = document.querySelector("[data-prop-rows]");
 
 const RESIZE_HANDLE_DIRECTIONS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
@@ -67,6 +69,8 @@ let nextTextId = 1;
 let nextLayerOrder = 1;
 let frameRecords = [];
 let textRecords = [];
+let componentProps = [];
+let nextComponentPropId = 1;
 let suppressNextTextCreation = false;
 let suppressNextCanvasSurfaceClick = false;
 const expandedFrameIds = new Set();
@@ -435,6 +439,8 @@ function captureWorkspaceState() {
     nextFrameId,
     nextTextId,
     nextLayerOrder,
+    componentProps: componentProps.map((prop) => ({ ...prop })),
+    nextComponentPropId,
     canvasColor: canvasColorValue,
     activeTool,
   };
@@ -490,6 +496,8 @@ function restoreWorkspaceState(snapshot) {
   nextFrameId = snapshot.nextFrameId;
   nextTextId = snapshot.nextTextId;
   nextLayerOrder = snapshot.nextLayerOrder;
+  componentProps = (snapshot.componentProps ?? []).map((prop) => ({ ...prop }));
+  nextComponentPropId = snapshot.nextComponentPropId ?? 1;
   expandedFrameIds.clear();
   snapshot.expandedFrameIds.forEach((frameId) => expandedFrameIds.add(frameId));
   selectedCanvasFrame = snapshot.selectedCanvasFrame;
@@ -969,11 +977,162 @@ function renderLayerTreeNode(layer, depth) {
     : renderTextTreeNode(layer.record, depth);
 }
 
+function getCompatibleDisabledTargets() {
+  return frameRecords.filter((record) =>
+    record.parentId === null
+    && normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div") === "button");
+}
+
+function createPropSelect(options, value, ariaLabel, onChange, disabled = false) {
+  const wrap = document.createElement("div");
+  const select = document.createElement("select");
+  const chevron = document.createElement("span");
+
+  wrap.className = "prop-select-wrap";
+  select.className = "prop-control prop-select";
+  select.setAttribute("aria-label", ariaLabel);
+  select.disabled = disabled;
+  options.forEach((optionRecord) => {
+    const option = document.createElement("option");
+    option.value = optionRecord.value;
+    option.textContent = optionRecord.label;
+    option.disabled = Boolean(optionRecord.disabled);
+    select.append(option);
+  });
+  select.value = value;
+  select.addEventListener("change", () => onChange(select.value));
+  chevron.className = "chevron inspector-select-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  wrap.append(select, chevron);
+  return wrap;
+}
+
+function renderComponentProps() {
+  if (!(propRowsContainer instanceof HTMLElement)) return;
+  const compatibleTargets = getCompatibleDisabledTargets();
+  const rows = componentProps.map((prop) => {
+    const row = document.createElement("div");
+    row.className = "props-table-row props-property-row";
+    row.setAttribute("role", "row");
+
+    const createCell = (isAction = false) => {
+      const cell = document.createElement("div");
+      cell.className = `props-table-cell${isAction ? " props-table-action-cell" : ""}`;
+      cell.setAttribute("role", "cell");
+      return cell;
+    };
+
+    const nameCell = createCell();
+    const nameInput = document.createElement("input");
+    nameInput.className = "prop-control";
+    nameInput.type = "text";
+    nameInput.value = prop.name;
+    nameInput.setAttribute("aria-label", "Prop name");
+    nameInput.addEventListener("change", () => {
+      const name = nameInput.value.trim() || "disabled";
+      if (name === prop.name) return;
+      recordHistory();
+      prop.name = name;
+      nameInput.value = name;
+    });
+    nameCell.append(nameInput);
+
+    const typeCell = createCell();
+    typeCell.append(createPropSelect(
+      [{ value: "boolean", label: "Boolean" }],
+      "boolean",
+      "Prop type",
+      () => {},
+    ));
+
+    const defaultCell = createCell();
+    const defaultToggle = document.createElement("button");
+    defaultToggle.className = "prop-toggle";
+    defaultToggle.type = "button";
+    defaultToggle.setAttribute("role", "switch");
+    defaultToggle.setAttribute("aria-label", `Default value: ${prop.defaultValue ? "true" : "false"}`);
+    defaultToggle.setAttribute("aria-checked", String(prop.defaultValue));
+    defaultToggle.addEventListener("click", () => {
+      recordHistory();
+      prop.defaultValue = !prop.defaultValue;
+      renderComponentProps();
+    });
+    defaultCell.append(defaultToggle);
+
+    const targetCell = createCell();
+    const hasCurrentTarget = compatibleTargets.some((record) => record.id === prop.targetFrameId);
+    const targetOptions = compatibleTargets.length > 0
+      ? [
+          { value: "", label: "Select layer", disabled: true },
+          ...compatibleTargets.map((record) => ({ value: String(record.id), label: `Frame ${record.id}` })),
+        ]
+      : [{ value: "", label: "No button target", disabled: true }];
+    targetCell.append(createPropSelect(
+      targetOptions,
+      hasCurrentTarget ? String(prop.targetFrameId) : "",
+      "Target layer",
+      (value) => {
+        const targetFrameId = Number(value);
+        if (!Number.isInteger(targetFrameId) || targetFrameId === prop.targetFrameId) return;
+        recordHistory();
+        prop.targetFrameId = targetFrameId;
+        renderComponentProps();
+      },
+      compatibleTargets.length === 0,
+    ));
+
+    const propertyCell = createCell();
+    propertyCell.append(createPropSelect(
+      [{ value: "disabled", label: "disabled" }],
+      "disabled",
+      "Target property",
+      () => {},
+      !hasCurrentTarget,
+    ));
+
+    const actionCell = createCell(true);
+    const removeButton = document.createElement("button");
+    const removeIcon = document.createElement("span");
+    removeButton.className = "prop-remove-button";
+    removeButton.type = "button";
+    removeButton.setAttribute("aria-label", `Remove ${prop.name} prop`);
+    removeIcon.className = "remove-icon";
+    removeIcon.setAttribute("aria-hidden", "true");
+    removeButton.append(removeIcon);
+    removeButton.addEventListener("click", () => {
+      recordHistory();
+      componentProps = componentProps.filter((componentProp) => componentProp.id !== prop.id);
+      renderComponentProps();
+    });
+    actionCell.append(removeButton);
+
+    row.append(nameCell, typeCell, defaultCell, targetCell, propertyCell, actionCell);
+    return row;
+  });
+  propRowsContainer.replaceChildren(...rows);
+}
+
+function addDisabledProp() {
+  recordHistory();
+  const target = getCompatibleDisabledTargets()[0];
+  componentProps.push({
+    id: nextComponentPropId,
+    name: "disabled",
+    type: "boolean",
+    defaultValue: false,
+    targetFrameId: target?.id ?? null,
+    property: "disabled",
+  });
+  nextComponentPropId += 1;
+  renderComponentProps();
+}
+
 function renderTree() {
   if (!treeView) return;
   const rootNodes = getLayerChildren(null).map((layer) => renderLayerTreeNode(layer, 1));
   treeView.replaceChildren(...rootNodes);
   updateInspector();
+  renderComponentProps();
 }
 
 function canNestFrame(draggedFrameId, parentFrameId) {
@@ -1518,7 +1677,8 @@ document.addEventListener("keydown", (event) => {
   const isFormEditing =
     shortcutTarget instanceof HTMLInputElement ||
     shortcutTarget instanceof HTMLTextAreaElement ||
-    shortcutTarget instanceof HTMLSelectElement;
+    shortcutTarget instanceof HTMLSelectElement ||
+    (shortcutTarget instanceof HTMLElement && Boolean(shortcutTarget.closest(".props-panel")));
   const isCommandShortcut = event.ctrlKey || event.metaKey;
 
   if (isCommandShortcut && event.key.toLowerCase() === "z" && !isContentEditing) {
@@ -1552,7 +1712,7 @@ document.addEventListener("keydown", (event) => {
     shortcutTarget instanceof HTMLInputElement ||
     shortcutTarget instanceof HTMLTextAreaElement ||
     shortcutTarget instanceof HTMLSelectElement ||
-    (shortcutTarget instanceof HTMLElement && shortcutTarget.isContentEditable);
+    (shortcutTarget instanceof HTMLElement && (shortcutTarget.isContentEditable || Boolean(shortcutTarget.closest(".props-panel"))));
   const toolShortcut = {
     v: "select",
     t: "text",
@@ -1572,7 +1732,7 @@ document.addEventListener("keydown", (event) => {
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
+    (target instanceof HTMLElement && (target.isContentEditable || Boolean(target.closest(".props-panel"))))
   ) return;
 
   if (selectedLayerKeys.size === 0) return;
@@ -2024,6 +2184,7 @@ frameHtmlTagInput?.addEventListener("change", () => {
   const htmlTag = normalizeFrameHtmlTag(frameHtmlTagInput.value);
   if ((record.element.dataset.htmlTag || "div") !== htmlTag) recordHistory();
   record.element.dataset.htmlTag = htmlTag;
+  renderComponentProps();
 });
 
 function toReactComponentName(value) {
@@ -2113,7 +2274,32 @@ function getExportTextStyle(record) {
   };
 }
 
-function renderExportLayer(layer, depth) {
+function getExportComponentProps() {
+  const usedNames = new Set();
+  return componentProps.flatMap((prop, index) => {
+    const target = getFrameRecord(prop.targetFrameId);
+    if (
+      prop.type !== "boolean"
+      || prop.property !== "disabled"
+      || !target
+      || target.parentId !== null
+      || normalizeFrameHtmlTag(target.element.dataset.htmlTag || "div") !== "button"
+    ) return [];
+
+    let exportName = prop.name.trim().replace(/[^a-zA-Z0-9_$]/g, "");
+    if (!/^[a-zA-Z_$]/.test(exportName)) exportName = `prop${index + 1}`;
+    const baseName = exportName || `prop${index + 1}`;
+    let suffix = 2;
+    while (usedNames.has(exportName)) {
+      exportName = `${baseName}${suffix}`;
+      suffix += 1;
+    }
+    usedNames.add(exportName);
+    return [{ ...prop, exportName }];
+  });
+}
+
+function renderExportLayer(layer, depth, exportProps) {
   const indent = "  ".repeat(depth);
   if (layer.type === "text") {
     const value = layer.record.element.textContent || "";
@@ -2123,25 +2309,42 @@ function renderExportLayer(layer, depth) {
   const children = getLayerChildren(layer.record.id);
   const style = formatReactStyle(getExportFrameStyle(layer.record));
   const htmlTag = normalizeFrameHtmlTag(layer.record.element.dataset.htmlTag || "div");
-  const attributes = htmlTag === "button" ? ' type="button"' : "";
+  const disabledProp = exportProps.find((prop) => prop.targetFrameId === layer.record.id && prop.property === "disabled");
+  const attributes = htmlTag === "button"
+    ? ` type="button"${disabledProp ? ` disabled={${disabledProp.exportName}}` : ""}`
+    : "";
   if (children.length === 0) return `${indent}<${htmlTag}${attributes} style={${style}} />`;
-  const childMarkup = children.map((child) => renderExportLayer(child, depth + 1)).join("\n");
+  const childMarkup = children.map((child) => renderExportLayer(child, depth + 1, exportProps)).join("\n");
   return `${indent}<${htmlTag}${attributes} style={${style}}>\n${childMarkup}\n${indent}</${htmlTag}>`;
 }
 
 function createReactComponentSource(componentName) {
   const rootLayers = getLayerChildren(null);
+  const exportProps = getExportComponentProps();
   const componentMarkup = rootLayers.length === 0
     ? "    <></>"
     : rootLayers.length === 1
-      ? renderExportLayer(rootLayers[0], 2)
-      : `    <>\n${rootLayers.map((layer) => renderExportLayer(layer, 3)).join("\n")}\n    </>`;
+      ? renderExportLayer(rootLayers[0], 2, exportProps)
+      : `    <>\n${rootLayers.map((layer) => renderExportLayer(layer, 3, exportProps)).join("\n")}\n    </>`;
+  const parameters = exportProps.length > 0
+    ? `{ ${exportProps.map((prop) => `${prop.exportName} = ${prop.defaultValue}`).join(", ")} }`
+    : "";
 
-  return `import React from "react";\n\nexport default function ${componentName}() {\n  return (\n${componentMarkup}\n  );\n}\n`;
+  return `import React from "react";\n\nexport default function ${componentName}(${parameters}) {\n  return (\n${componentMarkup}\n  );\n}\n`;
 }
 
 function createStorySource(componentName) {
-  return `import ${componentName} from "./${componentName}";\n\nconst meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},\n};\n\nexport default meta;\n\nexport const Default = {};\n`;
+  const exportProps = getExportComponentProps();
+  const argTypes = exportProps.length > 0
+    ? `\n  argTypes: {\n${exportProps.map((prop) => `    ${prop.exportName}: { control: "boolean" },`).join("\n")}\n  },`
+    : "";
+  const defaultArgs = exportProps.length > 0
+    ? `{\n  args: {\n${exportProps.map((prop) => `    ${prop.exportName}: ${prop.defaultValue},`).join("\n")}\n  },\n}`
+    : "{}";
+  const disabledStory = exportProps.length > 0
+    ? `\n\nexport const Disabled = {\n  args: {\n${exportProps.map((prop) => `    ${prop.exportName}: true,`).join("\n")}\n  },\n};`
+    : "";
+  return `import ${componentName} from "./${componentName}";\n\nconst meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${argTypes}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};${disabledStory}\n`;
 }
 
 function downloadExportFile(fileName, source) {
@@ -2166,6 +2369,7 @@ function exportAllComponents() {
 }
 
 exportComponentsButton?.addEventListener("click", exportAllComponents);
+addPropButton?.addEventListener("click", addDisabledProp);
 
 loadGoogleFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
 loadGoogleFont(DEFAULT_FONT_FAMILY, 600);
