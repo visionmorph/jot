@@ -13,7 +13,8 @@
   </head>
   <body>
     <main class="authoring-shell">
-      <aside class="left-sidebar" aria-label="Component and layer navigation">
+      <div class="authoring-workspace">
+        <aside class="left-sidebar" aria-label="Component and layer navigation">
         <section class="sidebar-panel components-panel" aria-labelledby="components-heading">
           <div class="panel-heading-wrap">
             <h1 class="panel-heading" id="components-heading">Components</h1>
@@ -45,9 +46,9 @@
 
           <div class="tree-view" role="tree" aria-label="Layers" data-tree-view></div>
         </section>
-      </aside>
+        </aside>
 
-      <section class="canvas" id="canvas" aria-label="Canvas">
+        <section class="canvas" id="canvas" aria-label="Canvas">
         <div class="canvas-root-stack" data-canvas-root-stack></div>
         <div class="toolbar" role="toolbar" aria-label="Canvas tools">
           <button class="tool-button is-toggled" type="button" aria-label="Select" aria-pressed="true" data-tool="select">
@@ -60,9 +61,9 @@
             <span class="toolbar-text-icon" aria-hidden="true">T</span>
           </button>
         </div>
-      </section>
+        </section>
 
-      <aside class="right-sidebar" aria-label="Inspector">
+        <aside class="right-sidebar" aria-label="Inspector">
         <section class="sidebar-panel page-panel" aria-labelledby="page-heading" data-page-inspector>
           <div class="panel-heading-wrap">
             <h2 class="panel-heading" id="page-heading">Page</h2>
@@ -282,7 +283,29 @@
             <input class="canvas-color-picker" id="text-color-picker" type="color" value="#ffffff" />
           </div>
         </section>
-      </aside>
+        </aside>
+      </div>
+
+      <section class="props-panel" aria-label="Component properties">
+        <div class="props-toolbar">
+          <button class="add-prop-button" type="button" data-add-prop>
+            <span class="plus-icon" aria-hidden="true"></span>
+            <span>Add prop</span>
+          </button>
+        </div>
+
+        <div class="props-table" role="table" aria-label="Props">
+          <div class="props-table-row props-table-header" role="row">
+            <div class="props-table-cell" role="columnheader">Name</div>
+            <div class="props-table-cell" role="columnheader">Type</div>
+            <div class="props-table-cell" role="columnheader">Default</div>
+            <div class="props-table-cell" role="columnheader">Target</div>
+            <div class="props-table-cell" role="columnheader">Property</div>
+            <div class="props-table-cell props-table-action-cell" role="columnheader"><span class="sr-only">Actions</span></div>
+          </div>
+          <div class="props-table-body" role="rowgroup" data-prop-rows></div>
+        </div>
+      </section>
     </main>
   </body>
 </html>
