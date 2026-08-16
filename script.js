@@ -15,6 +15,8 @@ const textColorPicker = document.querySelector("#text-color-picker");
 const leftSidebar = document.querySelector(".left-sidebar");
 const componentsPanel = document.querySelector(".components-panel");
 const sidebarDivider = document.querySelector(".sidebar-divider");
+const frameSizeInputs = Array.from(document.querySelectorAll("[data-frame-size]"));
+const textLayerSizeInputs = Array.from(document.querySelectorAll("[data-text-layer-size]"));
 const framePaddingInputs = Array.from(document.querySelectorAll("[data-frame-padding]"));
 const frameRadiusInput = document.querySelector("#frame-radius");
 const frameColorPicker = document.querySelector("#frame-color-picker");
@@ -393,6 +395,20 @@ async function loadFontCatalog() {
   populateWeightOptions(fontSelect instanceof HTMLSelectElement ? fontSelect.value : DEFAULT_FONT_FAMILY);
 }
 
+function syncSelectedTextSizeInputs() {
+  const record = getSelectedTextRecord();
+  if (!record) return;
+  const { element } = record;
+  const bounds = element.getBoundingClientRect();
+  textLayerSizeInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const dimension = input.dataset.textLayerSize;
+    if (dimension !== "width" && dimension !== "height") return;
+    const explicitValue = element.dataset[dimension];
+    input.value = explicitValue || String(Math.round(bounds[dimension]));
+  });
+}
+
 function syncInspectorToSelectedText() {
   const record = getSelectedTextRecord();
   if (!record) return;
@@ -406,6 +422,7 @@ function syncInspectorToSelectedText() {
   if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.value = element.dataset.lineHeight || "Auto";
   if (letterSpacingInput instanceof HTMLInputElement) letterSpacingInput.value = element.dataset.letterSpacing || "0%";
   if (textColorPicker instanceof HTMLInputElement) textColorPicker.value = element.dataset.textColor || "#ffffff";
+  syncSelectedTextSizeInputs();
 }
 
 function syncInspectorToSelectedFrame() {
@@ -421,6 +438,13 @@ function syncInspectorToSelectedFrame() {
       ? "Auto"
       : `${element.dataset.gap || "10"}px`;
   }
+
+  frameSizeInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const dimension = input.dataset.frameSize;
+    if (dimension !== "width" && dimension !== "height") return;
+    input.value = element.dataset[dimension] || "100";
+  });
 
   framePaddingInputs.forEach((input) => {
     if (!(input instanceof HTMLInputElement)) return;
@@ -906,12 +930,16 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.dataset.paddingTop = "10";
   frame.dataset.paddingRight = "10";
   frame.dataset.paddingBottom = "10";
+  frame.dataset.width = "100";
+  frame.dataset.height = "100";
   frame.dataset.radius = "0";
   frame.dataset.frameColor = "";
   frame.dataset.direction = "horizontal";
   frame.dataset.gap = "10";
   frame.dataset.gapMode = "fixed";
   frame.dataset.htmlTag = "div";
+  frame.style.width = "100px";
+  frame.style.height = "100px";
   if (parentRecord) {
     frame.style.left = "";
     frame.style.top = "";
@@ -1244,6 +1272,7 @@ fontSelect?.addEventListener("change", () => {
   record.element.style.fontFamily = `${JSON.stringify(family)}, ${getFontFallback(font?.category || "Sans Serif")}`;
   record.element.style.fontWeight = String(weight);
   loadGoogleFont(family, weight);
+  requestAnimationFrame(syncSelectedTextSizeInputs);
 });
 
 weightSelect?.addEventListener("change", () => {
@@ -1255,6 +1284,7 @@ weightSelect?.addEventListener("change", () => {
   record.element.dataset.fontWeight = String(weight);
   record.element.style.fontWeight = String(weight);
   loadGoogleFont(family, weight);
+  requestAnimationFrame(syncSelectedTextSizeInputs);
 });
 
 sizeSelect?.addEventListener("change", () => {
@@ -1263,6 +1293,7 @@ sizeSelect?.addEventListener("change", () => {
   if ((record.element.dataset.fontSize || "14") !== sizeSelect.value) recordHistory();
   record.element.dataset.fontSize = sizeSelect.value;
   record.element.style.fontSize = `${sizeSelect.value}px`;
+  requestAnimationFrame(syncSelectedTextSizeInputs);
 });
 
 function applyLineHeightValue() {
@@ -1274,6 +1305,7 @@ function applyLineHeightValue() {
     lineHeightInput.value = "Auto";
     record.element.dataset.lineHeight = "Auto";
     record.element.style.lineHeight = "normal";
+    requestAnimationFrame(syncSelectedTextSizeInputs);
     return true;
   }
 
@@ -1283,6 +1315,7 @@ function applyLineHeightValue() {
   lineHeightInput.value = String(numberValue);
   record.element.dataset.lineHeight = String(numberValue);
   record.element.style.lineHeight = `${numberValue}px`;
+  requestAnimationFrame(syncSelectedTextSizeInputs);
   return true;
 }
 
@@ -1327,6 +1360,7 @@ function applyLetterSpacingValue() {
   record.element.style.letterSpacing = match[2].toLowerCase() === "%"
     ? `${Number(match[1]) / 100}em`
     : value;
+  requestAnimationFrame(syncSelectedTextSizeInputs);
   return true;
 }
 
@@ -1350,6 +1384,36 @@ textColorPicker?.addEventListener("input", () => {
   if ((record.element.dataset.textColor || "#ffffff") !== textColorPicker.value) recordHistory();
   record.element.dataset.textColor = textColorPicker.value;
   record.element.style.color = textColorPicker.value;
+});
+
+frameSizeInputs.forEach((input) => {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("input", () => {
+    const record = getSelectedFrameRecord();
+    const dimension = input.dataset.frameSize;
+    const value = Number(input.value);
+    if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value) || value < 0) return;
+    if (Number(record.element.dataset[dimension] || "100") !== value) recordHistory();
+    record.element.dataset[dimension] = String(value);
+    record.element.style[dimension] = `${value}px`;
+  });
+  input.addEventListener("blur", syncInspectorToSelectedFrame);
+});
+
+textLayerSizeInputs.forEach((input) => {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("input", () => {
+    const record = getSelectedTextRecord();
+    const dimension = input.dataset.textLayerSize;
+    const value = Number(input.value);
+    if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value) || value < 0) return;
+    if (Number(record.element.dataset[dimension] || Number.NaN) !== value) recordHistory();
+    record.element.dataset[dimension] = String(value);
+    record.element.style[dimension] = `${value}px`;
+  });
+  input.addEventListener("blur", syncInspectorToSelectedText);
 });
 
 framePaddingInputs.forEach((input) => {
@@ -1521,13 +1585,15 @@ function getExportFrameStyle(record) {
   const direction = element.dataset.direction || "horizontal";
   const gap = element.dataset.gap || "10";
   const radius = element.dataset.radius || "0";
+  const width = element.dataset.width || "100";
+  const height = element.dataset.height || "100";
   return {
     display: "flex",
     flexDirection: direction === "vertical" ? "column" : undefined,
     alignItems: "flex-start",
-    width: "100px",
-    height: "100px",
-    flex: isRoot ? undefined : "0 0 100px",
+    width: `${width}px`,
+    height: `${height}px`,
+    flex: isRoot ? undefined : `0 0 ${width}px`,
     paddingLeft: `${element.dataset.paddingLeft || "10"}px`,
     paddingTop: `${element.dataset.paddingTop || "10"}px`,
     paddingRight: `${element.dataset.paddingRight || "10"}px`,
@@ -1546,8 +1612,12 @@ function getExportTextStyle(record) {
   const isRoot = record.parentFrameId === null;
   const lineHeight = element.dataset.lineHeight || "Auto";
   const letterSpacing = element.style.letterSpacing || "0em";
+  const width = element.dataset.width;
+  const height = element.dataset.height;
   return {
     flex: isRoot ? undefined : "0 0 auto",
+    width: width ? `${width}px` : undefined,
+    height: height ? `${height}px` : undefined,
     color: element.dataset.textColor || "#ffffff",
     fontFamily: element.style.fontFamily || '"Inter", sans-serif',
     fontSize: `${element.dataset.fontSize || "14"}px`,
