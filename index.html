@@ -84,6 +84,20 @@
 
           <div class="inspector-divider" aria-hidden="true"></div>
 
+          <div class="inspector-field layer-size-field">
+            <span class="inspector-label" id="frame-size-label">Size</span>
+            <div class="layer-size-row" role="group" aria-labelledby="frame-size-label">
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">w</span>
+                <input aria-label="Frame width" data-frame-size="width" type="number" min="0" step="1" value="100" />
+              </label>
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">h</span>
+                <input aria-label="Frame height" data-frame-size="height" type="number" min="0" step="1" value="100" />
+              </label>
+            </div>
+          </div>
+
           <div class="inspector-field">
             <label class="inspector-label" for="frame-direction">Direction</label>
             <div class="inspector-select-wrap">
@@ -168,6 +182,20 @@
           </div>
 
           <div class="inspector-divider" aria-hidden="true"></div>
+
+          <div class="inspector-field layer-size-field">
+            <span class="inspector-label" id="text-layer-size-label">Size</span>
+            <div class="layer-size-row" role="group" aria-labelledby="text-layer-size-label">
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">w</span>
+                <input aria-label="Text width" data-text-layer-size="width" type="number" min="0" step="1" value="0" />
+              </label>
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">h</span>
+                <input aria-label="Text height" data-text-layer-size="height" type="number" min="0" step="1" value="0" />
+              </label>
+            </div>
+          </div>
 
           <div class="inspector-field">
             <label class="inspector-label" for="text-font">Font</label>
