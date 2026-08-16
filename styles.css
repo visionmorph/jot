@@ -644,6 +644,19 @@ input {
   width: 100%;
 }
 
+.size-mode-combobox {
+  position: relative;
+  padding-right: 32px;
+}
+
+.size-mode-combobox .inspector-combobox-toggle {
+  width: 28px;
+}
+
+.size-mode-combobox .inspector-combobox-menu {
+  width: 100%;
+}
+
 .prefixed-number-control {
   display: flex;
   align-items: center;
