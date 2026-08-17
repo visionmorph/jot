@@ -896,6 +896,32 @@ input {
   padding-left: 0;
 }
 
+.inspector-field.text-font-field,
+.text-inspector-row {
+  width: 100%;
+}
+
+.text-font-field .inspector-select-wrap,
+.text-font-field .inspector-control {
+  width: 100%;
+}
+
+.text-inspector-row {
+  display: flex;
+  gap: 8px;
+}
+
+.text-inspector-row .inspector-field {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.text-inspector-row .inspector-select-wrap,
+.text-inspector-row .inspector-control {
+  width: 100%;
+}
+
 .frame-panel {
   padding-right: 16px;
   padding-left: 16px;
