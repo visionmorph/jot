@@ -216,8 +216,8 @@ input {
 
 .prop-control {
   margin: 0;
-  padding: 4px 16px;
-  border: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle-01);
   border-radius: 2px;
   outline: 0;
   background: var(--layer-01);
@@ -903,11 +903,28 @@ input {
 }
 
 .frame-direction-field {
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  gap: 4px;
 }
 
 .frame-alignment-field {
   width: 119.5px;
+}
+
+.frame-alignment-div {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  gap: 8px;
+}
+
+.frame-gap-radius-stack {
+  display: flex;
+  flex-direction: column;
+  width: 119.5px;
+  gap: 12px;
 }
 
 .frame-direction-toggle {
@@ -984,6 +1001,22 @@ input {
   grid-row: span 1;
 }
 
+.frame-alignment-option:nth-child(1) {
+  border-radius: 4px 0 0;
+}
+
+.frame-alignment-option:nth-child(3) {
+  border-radius: 0 4px 0 0;
+}
+
+.frame-alignment-option:nth-child(7) {
+  border-radius: 0 0 0 4px;
+}
+
+.frame-alignment-option:nth-child(9) {
+  border-radius: 0 0 4px;
+}
+
 .frame-alignment-option:hover {
   background: var(--layer-hover-01);
 }
@@ -992,15 +1025,71 @@ input {
   background: var(--layer-selected-01);
 }
 
-.frame-alignment-option > span {
+.alignment-dot {
   width: 4px;
   height: 4px;
   border-radius: 2px;
   background: var(--layer-02);
 }
 
-.frame-alignment-option.is-selected > span {
+.alignment-lines {
+  display: none;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 16px;
+  height: 10px;
+  gap: 2px;
+}
+
+.alignment-lines > span {
+  width: 16px;
+  height: 4px;
+  flex: 0 0 4px;
+  border-radius: 2px;
   background: var(--background-brand);
+}
+
+.alignment-lines > span:last-child {
+  width: 8px;
+}
+
+.frame-alignment-option.is-selected .alignment-dot {
+  display: none;
+}
+
+.frame-alignment-option.is-selected .alignment-lines {
+  display: flex;
+}
+
+[data-frame-alignment$="-center"] .alignment-lines,
+[data-text-alignment$="-center"] .alignment-lines,
+[data-frame-alignment="center"] .alignment-lines,
+[data-text-alignment="center"] .alignment-lines {
+  align-items: center;
+}
+
+[data-frame-alignment$="-right"] .alignment-lines,
+[data-text-alignment$="-right"] .alignment-lines {
+  align-items: flex-end;
+}
+
+.frame-alignment-grid[data-direction="vertical"] .alignment-lines {
+  flex-direction: row;
+  align-items: flex-start;
+  width: 26px;
+  height: 16px;
+}
+
+.frame-alignment-grid[data-direction="vertical"] .alignment-lines > span {
+  transform: rotate(90deg);
+}
+
+.frame-alignment-grid[data-direction="vertical"] [data-frame-alignment^="center"] .alignment-lines {
+  align-items: center;
+}
+
+.frame-alignment-grid[data-direction="vertical"] [data-frame-alignment^="bottom"] .alignment-lines {
+  align-items: flex-end;
 }
 
 .inspector-section-divider {
@@ -1088,8 +1177,9 @@ input {
   align-items: center;
   width: 119.5px;
   height: 24px;
-  padding: 4px 16px;
+  padding: 4px 8px;
   gap: 4px;
+  border: 1px solid var(--border-subtle-01);
   border-radius: 2px;
   background: var(--layer-01);
 }
@@ -1166,9 +1256,9 @@ input {
   width: 119.5px;
   height: 24px;
   margin: 0;
-  padding: 4px 16px;
+  padding: 4px 8px;
   gap: 8px;
-  border: 0;
+  border: 1px solid var(--border-subtle-01);
   border-radius: 2px;
   background: var(--layer-01);
   color: var(--text-primary);
