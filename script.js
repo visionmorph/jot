@@ -22,7 +22,11 @@ const sizeModeComboboxes = Array.from(document.querySelectorAll("[data-size-comb
 const framePaddingInputs = Array.from(document.querySelectorAll("[data-frame-padding]"));
 const frameRadiusInput = document.querySelector("#frame-radius");
 const frameColorPicker = document.querySelector("#frame-color-picker");
-const frameDirectionSelect = document.querySelector("#frame-direction");
+const frameDirectionOptions = Array.from(document.querySelectorAll("[data-frame-direction]"));
+const frameAlignmentOptions = Array.from(document.querySelectorAll("[data-frame-alignment]"));
+const frameOutlineColorPicker = document.querySelector("#frame-outline-color-picker");
+const frameOutlinePositionSelect = document.querySelector("#frame-outline-position");
+const frameOutlineWeightInput = document.querySelector("#frame-outline-weight");
 const frameGapInput = document.querySelector("#frame-gap");
 const frameGapCombobox = document.querySelector("[data-gap-combobox]");
 const frameGapToggle = document.querySelector("[data-gap-toggle]");
@@ -243,6 +247,50 @@ window.addEventListener("resize", syncResizeOverlay);
 
 function normalizeFrameHtmlTag(value) {
   return value.trim().toLowerCase() === "button" ? "button" : "div";
+}
+
+function normalizeFrameAlignment(value) {
+  const alignments = [
+    "top-left", "top-center", "top-right",
+    "center-left", "center", "center-right",
+    "bottom-left", "bottom-center", "bottom-right",
+  ];
+  return alignments.includes(value) ? value : "top-left";
+}
+
+function getFrameAlignmentValues(element) {
+  const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
+  const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
+  const toFlexValue = (value) => value === "center" ? "center" : value === "right" || value === "bottom" ? "flex-end" : "flex-start";
+  const direction = element.dataset.direction === "vertical" ? "vertical" : "horizontal";
+  return direction === "vertical"
+    ? { alignItems: toFlexValue(horizontal), justifyContent: toFlexValue(vertical) }
+    : { alignItems: toFlexValue(vertical), justifyContent: toFlexValue(horizontal) };
+}
+
+function applyFrameAlignment(element) {
+  const values = getFrameAlignmentValues(element);
+  element.style.alignItems = values.alignItems;
+  element.style.justifyContent = element.dataset.gapMode === "auto" ? "space-between" : values.justifyContent;
+}
+
+function getFrameOutlineBoxShadow(element) {
+  const color = element.dataset.outlineColor || "";
+  const weight = Math.max(0, Number(element.dataset.outlineWeight || "1"));
+  if (!color || !Number.isFinite(weight) || weight === 0) return "";
+  const position = ["inside", "outside", "center"].includes(element.dataset.outlinePosition)
+    ? element.dataset.outlinePosition
+    : "inside";
+  if (position === "outside") return `0 0 0 ${weight}px ${color}`;
+  if (position === "center") {
+    const halfWeight = weight / 2;
+    return `0 0 0 ${halfWeight}px ${color}, inset 0 0 0 ${halfWeight}px ${color}`;
+  }
+  return `inset 0 0 0 ${weight}px ${color}`;
+}
+
+function applyFrameOutline(element) {
+  element.style.boxShadow = getFrameOutlineBoxShadow(element);
 }
 
 function resizeLeftSidebarPanels(clientY) {
@@ -725,9 +773,16 @@ function syncInspectorToSelectedFrame() {
   if (!record) return;
   const { element } = record;
 
-  if (frameDirectionSelect instanceof HTMLSelectElement) {
-    frameDirectionSelect.value = element.dataset.direction || "horizontal";
-  }
+  frameDirectionOptions.forEach((option) => {
+    const isSelected = option.getAttribute("data-frame-direction") === (element.dataset.direction || "horizontal");
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-pressed", String(isSelected));
+  });
+  frameAlignmentOptions.forEach((option) => {
+    const isSelected = option.getAttribute("data-frame-alignment") === normalizeFrameAlignment(element.dataset.alignment || "top-left");
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-pressed", String(isSelected));
+  });
   if (frameGapInput instanceof HTMLInputElement) {
     frameGapInput.value = element.dataset.gapMode === "auto"
       ? "Auto"
@@ -760,6 +815,19 @@ function syncInspectorToSelectedFrame() {
     const color = element.dataset.frameColor || "";
     frameColorPicker.value = color || "#000000";
     frameColorPicker.classList.toggle("is-transparent", color.length === 0);
+  }
+  if (frameOutlineColorPicker instanceof HTMLInputElement) {
+    const color = element.dataset.outlineColor || "";
+    frameOutlineColorPicker.value = color || "#000000";
+    frameOutlineColorPicker.classList.toggle("is-transparent", color.length === 0);
+  }
+  if (frameOutlinePositionSelect instanceof HTMLSelectElement) {
+    frameOutlinePositionSelect.value = ["inside", "outside", "center"].includes(element.dataset.outlinePosition)
+      ? element.dataset.outlinePosition
+      : "inside";
+  }
+  if (frameOutlineWeightInput instanceof HTMLInputElement) {
+    frameOutlineWeightInput.value = element.dataset.outlineWeight || "1";
   }
   if (frameHtmlTagInput instanceof HTMLSelectElement) {
     frameHtmlTagInput.value = normalizeFrameHtmlTag(element.dataset.htmlTag || "div");
@@ -1410,8 +1478,12 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.dataset.radius = "0";
   frame.dataset.frameColor = "";
   frame.dataset.direction = "horizontal";
+  frame.dataset.alignment = "top-left";
   frame.dataset.gap = "10";
   frame.dataset.gapMode = "fixed";
+  frame.dataset.outlineColor = "";
+  frame.dataset.outlinePosition = "inside";
+  frame.dataset.outlineWeight = "1";
   frame.dataset.htmlTag = "div";
   frame.style.width = "100px";
   frame.style.height = "100px";
@@ -1472,6 +1544,8 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
     else canvas.insertBefore(frame, toolbar);
   }
   applyLayerSizing("frame", record);
+  applyFrameAlignment(frame);
+  applyFrameOutline(frame);
   renderTree();
   if (options.select !== false) selectCanvasFrame(frame);
   return record;
@@ -2083,15 +2157,66 @@ frameColorPicker?.addEventListener("input", () => {
   frameColorPicker.classList.remove("is-transparent");
 });
 
-frameDirectionSelect?.addEventListener("change", () => {
-  const record = getSelectedFrameRecord();
-  if (!record || !(frameDirectionSelect instanceof HTMLSelectElement)) return;
-  const direction = frameDirectionSelect.value === "vertical" ? "vertical" : "horizontal";
-  if ((record.element.dataset.direction || "horizontal") !== direction) recordHistory();
-  record.element.dataset.direction = direction;
-  record.element.style.flexDirection = direction === "vertical" ? "column" : "row";
-  applyAllLayerSizing();
+frameDirectionOptions.forEach((option) => {
+  option.addEventListener("click", () => {
+    const record = getSelectedFrameRecord();
+    const direction = option.getAttribute("data-frame-direction") === "vertical" ? "vertical" : "horizontal";
+    if (!record || (record.element.dataset.direction || "horizontal") === direction) return;
+    recordHistory();
+    record.element.dataset.direction = direction;
+    record.element.style.flexDirection = direction === "vertical" ? "column" : "row";
+    applyFrameAlignment(record.element);
+    applyAllLayerSizing();
+    syncInspectorToSelectedFrame();
+  });
 });
+
+frameAlignmentOptions.forEach((option) => {
+  option.addEventListener("click", () => {
+    const record = getSelectedFrameRecord();
+    const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
+    if (!record || normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment) return;
+    recordHistory();
+    record.element.dataset.alignment = alignment;
+    applyFrameAlignment(record.element);
+    syncInspectorToSelectedFrame();
+  });
+});
+
+frameOutlineColorPicker?.addEventListener("input", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameOutlineColorPicker instanceof HTMLInputElement)) return;
+  if ((record.element.dataset.outlineColor || "") !== frameOutlineColorPicker.value) recordHistory();
+  record.element.dataset.outlineColor = frameOutlineColorPicker.value;
+  frameOutlineColorPicker.classList.remove("is-transparent");
+  applyFrameOutline(record.element);
+});
+
+frameOutlinePositionSelect?.addEventListener("change", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameOutlinePositionSelect instanceof HTMLSelectElement)) return;
+  const position = ["outside", "center"].includes(frameOutlinePositionSelect.value)
+    ? frameOutlinePositionSelect.value
+    : "inside";
+  if ((record.element.dataset.outlinePosition || "inside") === position) return;
+  recordHistory();
+  record.element.dataset.outlinePosition = position;
+  applyFrameOutline(record.element);
+});
+
+frameOutlineWeightInput?.addEventListener("focus", () => {
+  if (frameOutlineWeightInput instanceof HTMLInputElement) frameOutlineWeightInput.select();
+});
+frameOutlineWeightInput?.addEventListener("input", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameOutlineWeightInput instanceof HTMLInputElement)) return;
+  const weight = Number(frameOutlineWeightInput.value);
+  if (!Number.isFinite(weight) || weight < 0) return;
+  if (Number(record.element.dataset.outlineWeight || "1") !== weight) recordHistory();
+  record.element.dataset.outlineWeight = String(weight);
+  applyFrameOutline(record.element);
+});
+frameOutlineWeightInput?.addEventListener("blur", syncInspectorToSelectedFrame);
 
 function setFrameGapMenuOpen(isOpen) {
   if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;
@@ -2109,7 +2234,7 @@ function applyFrameGapValue(normalize = true) {
     if (record.element.dataset.gapMode !== "auto") recordHistory();
     record.element.dataset.gapMode = "auto";
     record.element.style.gap = "0px";
-    record.element.style.justifyContent = "space-between";
+    applyFrameAlignment(record.element);
     if (normalize) frameGapInput.value = "Auto";
     return true;
   }
@@ -2123,7 +2248,7 @@ function applyFrameGapValue(normalize = true) {
   record.element.dataset.gapMode = "fixed";
   record.element.dataset.gap = String(gap);
   record.element.style.gap = `${gap}px`;
-  record.element.style.justifyContent = "flex-start";
+  applyFrameAlignment(record.element);
   if (normalize) frameGapInput.value = `${gap}px`;
   return true;
 }
@@ -2238,20 +2363,25 @@ function getExportFrameStyle(record) {
   const direction = element.dataset.direction || "horizontal";
   const gap = element.dataset.gap || "10";
   const radius = element.dataset.radius || "0";
+  const alignment = getFrameAlignmentValues(element);
+  const outlineBoxShadow = getFrameOutlineBoxShadow(element);
   return {
     display: "flex",
     flexDirection: direction === "vertical" ? "column" : undefined,
-    alignItems: "flex-start",
+    alignItems: alignment.alignItems,
     ...getExportSizingStyle("frame", record),
     paddingLeft: `${element.dataset.paddingLeft || "10"}px`,
     paddingTop: `${element.dataset.paddingTop || "10"}px`,
     paddingRight: `${element.dataset.paddingRight || "10"}px`,
     paddingBottom: `${element.dataset.paddingBottom || "10"}px`,
     gap: isAutoGap || isZeroCssValue(`${gap}px`) ? undefined : `${gap}px`,
-    justifyContent: isAutoGap ? "space-between" : undefined,
+    justifyContent: isAutoGap || alignment.justifyContent !== "flex-start"
+      ? (isAutoGap ? "space-between" : alignment.justifyContent)
+      : undefined,
     border: "0",
     borderRadius: isZeroCssValue(`${radius}px`) ? undefined : `${radius}px`,
     backgroundColor: element.dataset.frameColor || "transparent",
+    boxShadow: outlineBoxShadow || undefined,
     boxSizing: "border-box",
   };
 }
@@ -2341,10 +2471,7 @@ function createStorySource(componentName) {
   const defaultArgs = exportProps.length > 0
     ? `{\n  args: {\n${exportProps.map((prop) => `    ${prop.exportName}: ${prop.defaultValue},`).join("\n")}\n  },\n}`
     : "{}";
-  const disabledStory = exportProps.length > 0
-    ? `\n\nexport const Disabled = {\n  args: {\n${exportProps.map((prop) => `    ${prop.exportName}: true,`).join("\n")}\n  },\n};`
-    : "";
-  return `import ${componentName} from "./${componentName}";\n\nconst meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${argTypes}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};${disabledStory}\n`;
+  return `import ${componentName} from "./${componentName}";\n\nconst meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${argTypes}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};\n`;
 }
 
 function downloadExportFile(fileName, source) {
