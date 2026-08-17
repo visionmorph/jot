@@ -9,7 +9,10 @@
   --background-selected-hover: rgba(141, 141, 141, 0.32);
   --background-active: rgba(141, 141, 141, 0.4);
   --layer-selected-01: #343a3f;
+  --layer-02: #343a3f;
   --border-subtle-00: #343a3f;
+  --border-subtle-01: #4d5358;
+  --background-brand: #4589ff;
   --layer-hover-01: #343a3f;
   --text-secondary: #c1c7cd;
   --text-disabled: rgba(244, 244, 244, 0.25);
@@ -619,7 +622,9 @@ input {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  background: var(--background);
+  background-color: var(--background);
+  background-image: linear-gradient(180deg, rgba(145, 145, 145, 0.1) 0%, rgba(43, 43, 43, 0.1) 100%);
+  background-image: linear-gradient(180deg, color(display-p3 0.569 0.569 0.569 / 0.1) 0%, color(display-p3 0.169 0.169 0.169 / 0.1) 100%);
 }
 
 .canvas.is-frame-tool-active {
@@ -817,7 +822,8 @@ input {
   align-items: center;
   padding: 8px;
   gap: 0;
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle-01);
+  border-radius: 12px;
   background: var(--layer-01);
   transform: translateX(-50%);
   z-index: 2;
@@ -832,7 +838,7 @@ input {
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 2px;
+  border-radius: 4px;
   background: transparent;
   color: var(--icon-secondary);
   cursor: pointer;
@@ -894,6 +900,130 @@ input {
   padding-right: 16px;
   padding-left: 16px;
   gap: 12px;
+}
+
+.frame-direction-field {
+  width: 100%;
+}
+
+.frame-alignment-field {
+  width: 119.5px;
+}
+
+.frame-direction-toggle {
+  display: flex;
+  width: 100%;
+  padding: 2px 3px;
+  gap: 0;
+  border: 1px solid var(--border-subtle-01);
+  border-radius: 4px;
+  background: var(--layer-01);
+}
+
+.frame-direction-option {
+  width: 100%;
+  margin: 0;
+  padding: 1px 12px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.frame-direction-option.is-selected {
+  background: var(--layer-selected-01);
+  color: var(--text-primary);
+}
+
+.frame-direction-option:focus-visible,
+.frame-alignment-option:focus-visible {
+  outline: 1px solid var(--icon-on-color);
+  outline-offset: -1px;
+}
+
+.frame-alignment-field {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  gap: 4px;
+  border-radius: 0;
+}
+
+.frame-alignment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  width: 119.5px;
+  height: 119.5px;
+  padding: 1px;
+  gap: 1px;
+  border-radius: 4px;
+  background: var(--border-subtle-01);
+  overflow: hidden;
+}
+
+.frame-alignment-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--layer-01);
+  cursor: pointer;
+  grid-column: span 1;
+  grid-row: span 1;
+}
+
+.frame-alignment-option:hover {
+  background: var(--layer-hover-01);
+}
+
+.frame-alignment-option.is-selected {
+  background: var(--layer-selected-01);
+}
+
+.frame-alignment-option > span {
+  width: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--layer-02);
+}
+
+.frame-alignment-option.is-selected > span {
+  background: var(--background-brand);
+}
+
+.inspector-section-divider {
+  width: 100%;
+  height: 1px;
+  flex: 0 0 1px;
+  background: var(--border-subtle-01);
+}
+
+.inspector-section-title {
+  width: 100%;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0;
+}
+
+.frame-outline-row {
+  display: flex;
+  width: 100%;
+  gap: 8px;
 }
 
 .inspector-divider {
@@ -991,7 +1121,8 @@ input {
 }
 
 .prefixed-number-control input[type="number"],
-#frame-radius {
+#frame-radius,
+#frame-outline-weight {
   appearance: textfield;
   -moz-appearance: textfield;
 }
@@ -999,7 +1130,9 @@ input {
 .prefixed-number-control input[type="number"]::-webkit-inner-spin-button,
 .prefixed-number-control input[type="number"]::-webkit-outer-spin-button,
 #frame-radius::-webkit-inner-spin-button,
-#frame-radius::-webkit-outer-spin-button {
+#frame-radius::-webkit-outer-spin-button,
+#frame-outline-weight::-webkit-inner-spin-button,
+#frame-outline-weight::-webkit-outer-spin-button {
   margin: 0;
   -webkit-appearance: none;
 }
