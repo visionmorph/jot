@@ -24,6 +24,8 @@ const frameRadiusInput = document.querySelector("#frame-radius");
 const frameColorPicker = document.querySelector("#frame-color-picker");
 const frameDirectionOptions = Array.from(document.querySelectorAll("[data-frame-direction]"));
 const frameAlignmentOptions = Array.from(document.querySelectorAll("[data-frame-alignment]"));
+const frameAlignmentGrid = document.querySelector("[data-frame-alignment-grid]");
+const textAlignmentOptions = Array.from(document.querySelectorAll("[data-text-alignment]"));
 const frameOutlineColorPicker = document.querySelector("#frame-outline-color-picker");
 const frameOutlinePositionSelect = document.querySelector("#frame-outline-position");
 const frameOutlineWeightInput = document.querySelector("#frame-outline-weight");
@@ -272,6 +274,23 @@ function applyFrameAlignment(element) {
   const values = getFrameAlignmentValues(element);
   element.style.alignItems = values.alignItems;
   element.style.justifyContent = element.dataset.gapMode === "auto" ? "space-between" : values.justifyContent;
+}
+
+function getTextAlignmentValues(element) {
+  const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
+  const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
+  return {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    justifyContent: vertical === "center" ? "center" : vertical === "bottom" ? "flex-end" : "flex-start",
+    textAlign: horizontal === "center" ? "center" : horizontal === "right" ? "right" : "left",
+  };
+}
+
+function applyTextAlignment(element) {
+  const values = getTextAlignmentValues(element);
+  Object.assign(element.style, values);
 }
 
 function getFrameOutlineBoxShadow(element) {
@@ -765,6 +784,11 @@ function syncInspectorToSelectedText() {
   if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.value = element.dataset.lineHeight || "Auto";
   if (letterSpacingInput instanceof HTMLInputElement) letterSpacingInput.value = element.dataset.letterSpacing || "0%";
   if (textColorPicker instanceof HTMLInputElement) textColorPicker.value = element.dataset.textColor || "#ffffff";
+  textAlignmentOptions.forEach((option) => {
+    const isSelected = option.getAttribute("data-text-alignment") === normalizeFrameAlignment(element.dataset.alignment || "top-left");
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-pressed", String(isSelected));
+  });
   syncSelectedTextSizeInputs();
 }
 
@@ -778,6 +802,9 @@ function syncInspectorToSelectedFrame() {
     option.classList.toggle("is-selected", isSelected);
     option.setAttribute("aria-pressed", String(isSelected));
   });
+  if (frameAlignmentGrid instanceof HTMLElement) {
+    frameAlignmentGrid.dataset.direction = element.dataset.direction === "vertical" ? "vertical" : "horizontal";
+  }
   frameAlignmentOptions.forEach((option) => {
     const isSelected = option.getAttribute("data-frame-alignment") === normalizeFrameAlignment(element.dataset.alignment || "top-left");
     option.classList.toggle("is-selected", isSelected);
@@ -1375,6 +1402,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   text.dataset.lineHeight = "Auto";
   text.dataset.letterSpacing = "0%";
   text.dataset.textColor = "#ffffff";
+  text.dataset.alignment = "top-left";
   text.dataset.widthMode = "hug";
   text.dataset.heightMode = "hug";
   text.style.fontFamily = `${JSON.stringify(DEFAULT_FONT_FAMILY)}, sans-serif`;
@@ -1383,6 +1411,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   text.style.lineHeight = "normal";
   text.style.letterSpacing = "0em";
   text.style.color = "#ffffff";
+  applyTextAlignment(text);
 
   if (parentRecord) {
     parentRecord.element.append(text);
@@ -1982,6 +2011,19 @@ textColorPicker?.addEventListener("input", () => {
   record.element.style.color = textColorPicker.value;
 });
 
+textAlignmentOptions.forEach((option) => {
+  option.addEventListener("click", () => {
+    const record = getSelectedTextRecord();
+    const alignment = normalizeFrameAlignment(option.getAttribute("data-text-alignment") || "top-left");
+    if (!record || normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment) return;
+    recordHistory();
+    record.element.dataset.alignment = alignment;
+    applyTextAlignment(record.element);
+    syncInspectorToSelectedText();
+    requestAnimationFrame(syncResizeOverlay);
+  });
+});
+
 function getSizeInputContext(input) {
   const frameDimension = input.dataset.frameSize;
   const textDimension = input.dataset.textLayerSize;
@@ -2401,6 +2443,7 @@ function getExportTextStyle(record) {
     letterSpacing: isZeroCssValue(letterSpacing) ? undefined : letterSpacing,
     whiteSpace: "pre-wrap",
     overflowWrap: widthMode === "hug" ? undefined : "anywhere",
+    ...getTextAlignmentValues(element),
   };
 }
 
