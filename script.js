@@ -280,16 +280,18 @@ function getTextAlignmentValues(element) {
   const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
   const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
   return {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "stretch",
-    justifyContent: vertical === "center" ? "center" : vertical === "bottom" ? "flex-end" : "flex-start",
+    display: "block",
+    alignContent: vertical === "center" ? "center" : vertical === "bottom" ? "end" : "start",
     textAlign: horizontal === "center" ? "center" : horizontal === "right" ? "right" : "left",
   };
 }
 
 function applyTextAlignment(element) {
   const values = getTextAlignmentValues(element);
+  element.style.display = "";
+  element.style.flexDirection = "";
+  element.style.alignItems = "";
+  element.style.justifyContent = "";
   Object.assign(element.style, values);
 }
 
@@ -396,7 +398,7 @@ function applyLayerSizing(type, record) {
     if (mode === "fixed") {
       element.style[dimension] = `${element.dataset[dimension] || fallbackValue}px`;
     } else if (mode === "hug") {
-      element.style[dimension] = "fit-content";
+      element.style[dimension] = "max-content";
     } else if (isRoot) {
       element.style[dimension] = "100%";
     } else {
@@ -2386,7 +2388,7 @@ function getExportSizingStyle(type, record) {
   const crossMode = mainDimension === "width" ? heightMode : widthMode;
   const dimensionValue = (dimension, mode, fallback) => {
     if (mode === "fixed") return `${element.dataset[dimension] || fallback}px`;
-    if (mode === "hug") return "fit-content";
+    if (mode === "hug") return "max-content";
     return isRoot ? "100%" : "auto";
   };
   return {
