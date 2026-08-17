@@ -86,6 +86,29 @@
 
           <div class="inspector-divider" aria-hidden="true"></div>
 
+          <div class="inspector-field frame-direction-field">
+            <span class="inspector-label" id="frame-direction-label">Direction</span>
+            <div class="frame-direction-toggle" role="group" aria-labelledby="frame-direction-label">
+              <button class="frame-direction-option is-selected" type="button" aria-pressed="true" data-frame-direction="horizontal">Horizontal</button>
+              <button class="frame-direction-option" type="button" aria-pressed="false" data-frame-direction="vertical">Vertical</button>
+            </div>
+          </div>
+
+          <div class="frame-alignment-field">
+            <span class="inspector-label" id="frame-alignment-label">Alignment</span>
+            <div class="frame-alignment-grid" role="group" aria-labelledby="frame-alignment-label">
+              <button class="frame-alignment-option is-selected" type="button" aria-label="Align top left" aria-pressed="true" data-frame-alignment="top-left"><span aria-hidden="true"></span></button>
+              <button class="frame-alignment-option" type="button" aria-label="Align top center" aria-pressed="false" data-frame-alignment="top-center"><span aria-hidden="true"></span></button>
+              <button class="frame-alignment-option" type="button" aria-label="Align top right" aria-pressed="false" data-frame-alignment="top-right"><span aria-hidden="true"></span></button>
+              <button class="frame-alignment-option" type="button" aria-label="Align center left" aria-pressed="false" data-frame-alignment="center-left"><span aria-hidden="true"></span></button>
+              <button class="frame-alignment-option" type="button" aria-label="Align center" aria-pressed="false" data-frame-alignment="center"><span aria-hidden="true"></span></button>
+              <button class="frame-alignment-option" type="button" aria-label="Align center right" aria-pressed="false" data-frame-alignment="center-right"><span aria-hidden="true"></span></button>
+              <button class="frame-alignment-option" type="button" aria-label="Align bottom left" aria-pressed="false" data-frame-alignment="bottom-left"><span aria-hidden="true"></span></button>
+              <button class="frame-alignment-option" type="button" aria-label="Align bottom center" aria-pressed="false" data-frame-alignment="bottom-center"><span aria-hidden="true"></span></button>
+              <button class="frame-alignment-option" type="button" aria-label="Align bottom right" aria-pressed="false" data-frame-alignment="bottom-right"><span aria-hidden="true"></span></button>
+            </div>
+          </div>
+
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="frame-size-label">Size</span>
             <div class="layer-size-row" role="group" aria-labelledby="frame-size-label">
@@ -109,17 +132,6 @@
                   <button class="inspector-combobox-option" type="button" role="option" data-size-option="fill">Fill</button>
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div class="inspector-field">
-            <label class="inspector-label" for="frame-direction">Direction</label>
-            <div class="inspector-select-wrap">
-              <select class="inspector-control inspector-select" id="frame-direction">
-                <option value="horizontal" selected>Horizontal</option>
-                <option value="vertical">Vertical</option>
-              </select>
-              <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
             </div>
           </div>
 
@@ -173,9 +185,38 @@
             <input class="inspector-control" id="frame-radius" type="number" min="0" step="1" value="0" />
           </div>
 
+          <div class="inspector-section-divider" aria-hidden="true"></div>
+          <h3 class="inspector-section-title">Background</h3>
+
           <div class="inspector-field">
             <label class="inspector-label" for="frame-color-picker">Color</label>
             <input class="canvas-color-picker inspector-color-picker--compact is-transparent" id="frame-color-picker" type="color" value="#000000" />
+          </div>
+
+          <div class="inspector-section-divider" aria-hidden="true"></div>
+          <h3 class="inspector-section-title">Outline</h3>
+
+          <div class="inspector-field">
+            <label class="inspector-label" for="frame-outline-color-picker">Color</label>
+            <input class="canvas-color-picker inspector-color-picker--compact is-transparent" id="frame-outline-color-picker" type="color" value="#000000" />
+          </div>
+
+          <div class="frame-outline-row">
+            <div class="inspector-field">
+              <label class="inspector-label" for="frame-outline-position">Position</label>
+              <div class="inspector-select-wrap">
+                <select class="inspector-control inspector-select" id="frame-outline-position">
+                  <option value="inside" selected>Inside</option>
+                  <option value="outside">Outside</option>
+                  <option value="center">Center</option>
+                </select>
+                <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+              </div>
+            </div>
+            <div class="inspector-field">
+              <label class="inspector-label" for="frame-outline-weight">Weight</label>
+              <input class="inspector-control" id="frame-outline-weight" type="number" min="0" step="1" value="1" />
+            </div>
           </div>
 
           <div class="inspector-field">
