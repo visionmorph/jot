@@ -61,7 +61,7 @@
             <svg class="tool-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 4H27V6H5V4Z" fill="currentColor" /><path d="M15 6H17V28H15V6Z" fill="currentColor" /></svg>
           </button>
           <button class="tool-button" type="button" aria-label="Import SVG" data-vector-import>
-            <span class="vector-tool-icon" aria-hidden="true"></span>
+            <svg class="tool-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M28,9H14V6H6v8H9V28h2V14h3V11H28ZM12,12H8V8h4Z" fill="currentColor" /><rect width="32" height="32" fill="none" /></svg>
           </button>
           <input type="file" accept=".svg,image/svg+xml" data-vector-file-input hidden />
         </div>
@@ -380,6 +380,11 @@
                 <input aria-label="Vector height" data-vector-size="height" type="number" min="0" step="1" value="24" />
               </label>
             </div>
+          </div>
+
+          <div class="inspector-field">
+            <label class="inspector-label" for="vector-color-picker">Color</label>
+            <input class="canvas-color-picker inspector-color-picker--compact" id="vector-color-picker" type="color" value="#000000" />
           </div>
         </section>
         </aside>
