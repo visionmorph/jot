@@ -1632,14 +1632,24 @@ function parseSvgLength(value) {
   return match ? Number(match[1]) : null;
 }
 
+function hasUnsafeSvgCss(cssText) {
+  if (/@import|expression\s*\(|(?:javascript|vbscript|data\s*:\s*text\/html)\s*:/i.test(cssText)) return true;
+  const urlReferences = [...cssText.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/gi)];
+  return urlReferences.some((match) => !match[1].trim().startsWith("#"));
+}
+
 function sanitizeSvgText(svgText) {
   const parsed = new DOMParser().parseFromString(svgText, "image/svg+xml");
   if (parsed.querySelector("parsererror")) throw new Error("The selected file is not valid SVG.");
   const root = parsed.documentElement;
   if (root.localName.toLowerCase() !== "svg") throw new Error("The selected file does not contain an SVG root.");
 
-  root.querySelectorAll("script, foreignObject, iframe, object, embed, style, image, animate, animateMotion, animateTransform, set")
+  root.querySelectorAll("script, foreignObject, iframe, object, embed, image, animate, animateMotion, animateTransform, set")
     .forEach((element) => element.remove());
+
+  root.querySelectorAll("style").forEach((styleElement) => {
+    if (hasUnsafeSvgCss(styleElement.textContent || "")) styleElement.remove();
+  });
 
   [root, ...root.querySelectorAll("*")].forEach((element) => {
     Array.from(element.attributes).forEach((attribute) => {
@@ -3034,7 +3044,8 @@ function serializeSvgElementToJsx(element, depth, rootStyle = null) {
     if (node.nodeType === Node.ELEMENT_NODE) {
       return [serializeSvgElementToJsx(node, depth + 1)];
     }
-    if (node.nodeType === Node.TEXT_NODE && (node.textContent || "").trim().length > 0) {
+    if ((node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE)
+      && (node.textContent || "").trim().length > 0) {
       return [`${"  ".repeat(depth + 1)}{${JSON.stringify(node.textContent)}}`];
     }
     return [];
