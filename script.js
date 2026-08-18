@@ -5,6 +5,7 @@ const treeView = document.querySelector("[data-tree-view]");
 const pageInspector = document.querySelector("[data-page-inspector]");
 const frameInspector = document.querySelector("[data-frame-inspector]");
 const textInspector = document.querySelector("[data-text-inspector]");
+const vectorInspector = document.querySelector("[data-vector-inspector]");
 const colorPicker = document.querySelector("#canvas-color-picker");
 const toolButtons = Array.from(document.querySelectorAll("[data-tool]"));
 const fontSelect = document.querySelector("#text-font");
@@ -18,6 +19,7 @@ const componentsPanel = document.querySelector(".components-panel");
 const sidebarDivider = document.querySelector(".sidebar-divider");
 const frameSizeInputs = Array.from(document.querySelectorAll("[data-frame-size]"));
 const textLayerSizeInputs = Array.from(document.querySelectorAll("[data-text-layer-size]"));
+const vectorSizeInputs = Array.from(document.querySelectorAll("[data-vector-size]"));
 const sizeModeComboboxes = Array.from(document.querySelectorAll("[data-size-combobox]"));
 const framePaddingInputs = Array.from(document.querySelectorAll("[data-frame-padding]"));
 const frameRadiusInput = document.querySelector("#frame-radius");
@@ -38,6 +40,8 @@ const frameHtmlTagInput = document.querySelector("#frame-html-tag");
 const exportComponentsButton = document.querySelector("[data-export-components]");
 const addPropButton = document.querySelector("[data-add-prop]");
 const propRowsContainer = document.querySelector("[data-prop-rows]");
+const vectorImportButton = document.querySelector("[data-vector-import]");
+const vectorFileInput = document.querySelector("[data-vector-file-input]");
 
 const RESIZE_HANDLE_DIRECTIONS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
@@ -69,12 +73,15 @@ const loadedGoogleFonts = new Set();
 let activeTool = "select";
 let selectedCanvasFrame = null;
 let selectedCanvasText = null;
+let selectedCanvasVector = null;
 const selectedLayerKeys = new Set();
 let nextFrameId = 1;
 let nextTextId = 1;
+let nextVectorId = 1;
 let nextLayerOrder = 1;
 let frameRecords = [];
 let textRecords = [];
+let vectorRecords = [];
 let componentProps = [];
 let nextComponentPropId = 1;
 let suppressNextTextCreation = false;
@@ -109,7 +116,7 @@ if (canvas instanceof HTMLElement) {
 }
 
 function getSelectedResizeElement() {
-  return selectedCanvasFrame || selectedCanvasText;
+  return selectedCanvasFrame || selectedCanvasText || selectedCanvasVector;
 }
 
 function getSelectedResizeRecord() {
@@ -117,6 +124,8 @@ function getSelectedResizeRecord() {
   if (frameRecord) return { type: "frame", record: frameRecord, parentId: frameRecord.parentId };
   const textRecord = getSelectedTextRecord();
   if (textRecord) return { type: "text", record: textRecord, parentId: textRecord.parentFrameId };
+  const vectorRecord = getSelectedVectorRecord();
+  if (vectorRecord) return { type: "vector", record: vectorRecord, parentId: vectorRecord.parentFrameId };
   return null;
 }
 
@@ -180,7 +189,7 @@ function applyResizePointerPosition(clientX, clientY) {
     element.dataset.widthMode = "fixed";
     element.dataset.width = String(nextWidth);
     element.style.width = `${nextWidth}px`;
-    if (layer.type === "text" && layer.parentId === null && direction.includes("w")) {
+    if (layer.type !== "frame" && layer.parentId === null && direction.includes("w")) {
       element.style.left = `${resizeInteraction.left + resizeInteraction.width - nextWidth}px`;
     }
   }
@@ -188,14 +197,15 @@ function applyResizePointerPosition(clientX, clientY) {
     element.dataset.heightMode = "fixed";
     element.dataset.height = String(nextHeight);
     element.style.height = `${nextHeight}px`;
-    if (layer.type === "text" && layer.parentId === null && direction.includes("n")) {
+    if (layer.type !== "frame" && layer.parentId === null && direction.includes("n")) {
       element.style.top = `${resizeInteraction.top + resizeInteraction.height - nextHeight}px`;
     }
   }
 
   applyLayerSizing(layer.type, layer.record);
   if (layer.type === "frame") syncInspectorToSelectedFrame();
-  else syncSelectedTextSizeInputs();
+  else if (layer.type === "text") syncSelectedTextSizeInputs();
+  else syncInspectorToSelectedVector();
   positionResizeOverlay();
 }
 
@@ -380,6 +390,10 @@ function getTextRecord(textId) {
   return textRecords.find((record) => record.id === textId);
 }
 
+function getVectorRecord(vectorId) {
+  return vectorRecords.find((record) => record.id === vectorId);
+}
+
 function getLayerDimensionMode(element, dimension, fallback = "fixed") {
   const mode = element.dataset[`${dimension}Mode`];
   return mode === "hug" || mode === "fill" ? mode : fallback;
@@ -414,8 +428,9 @@ function applyLayerSizing(type, record) {
     }
   };
 
-  applyDimension("width", widthMode, type === "frame" ? "100" : "0");
-  applyDimension("height", heightMode, type === "frame" ? "100" : "0");
+  const fallbackSize = type === "frame" ? "100" : type === "vector" ? "24" : "0";
+  applyDimension("width", widthMode, fallbackSize);
+  applyDimension("height", heightMode, fallbackSize);
   element.style.flex = isRoot ? "" : mainMode === "fill" ? "1 1 0" : "0 0 auto";
   element.style.alignSelf = !isRoot && crossMode === "fill" ? "stretch" : "";
   element.style.minWidth = !isRoot && mainDimension === "width" && widthMode === "fill" ? "0" : "";
@@ -425,6 +440,7 @@ function applyLayerSizing(type, record) {
 function applyAllLayerSizing() {
   frameRecords.forEach((record) => applyLayerSizing("frame", record));
   textRecords.forEach((record) => applyLayerSizing("text", record));
+  vectorRecords.forEach((record) => applyLayerSizing("vector", record));
   requestAnimationFrame(syncResizeOverlay);
 }
 
@@ -436,10 +452,15 @@ function getTextChildren(parentFrameId) {
   return textRecords.filter((record) => record.parentFrameId === parentFrameId);
 }
 
+function getVectorChildren(parentFrameId) {
+  return vectorRecords.filter((record) => record.parentFrameId === parentFrameId);
+}
+
 function getLayerChildren(parentFrameId) {
   return [
     ...getFrameChildren(parentFrameId).map((record) => ({ type: "frame", record })),
     ...getTextChildren(parentFrameId).map((record) => ({ type: "text", record })),
+    ...getVectorChildren(parentFrameId).map((record) => ({ type: "vector", record })),
   ].sort((a, b) => a.record.order - b.record.order);
 }
 
@@ -451,7 +472,7 @@ function getFrameSelectionKeys(frameId) {
   const keys = [getLayerKey("frame", frameId)];
   getLayerChildren(frameId).forEach((layer) => {
     if (layer.type === "frame") keys.push(...getFrameSelectionKeys(layer.record.id));
-    else keys.push(getLayerKey("text", layer.record.id));
+    else keys.push(getLayerKey(layer.type, layer.record.id));
   });
   return keys;
 }
@@ -461,6 +482,7 @@ function getElementForLayerKey(key) {
   const id = Number(rawId);
   if (type === "frame") return getFrameRecord(id)?.element ?? null;
   if (type === "text") return getTextRecord(id)?.element ?? null;
+  if (type === "vector") return getVectorRecord(id)?.element ?? null;
   return null;
 }
 
@@ -483,6 +505,7 @@ function setPrimarySelectionFromKey(key) {
   const id = Number(rawId);
   selectedCanvasFrame = type === "frame" ? getFrameRecord(id)?.element ?? null : null;
   selectedCanvasText = type === "text" ? getTextRecord(id)?.element ?? null : null;
+  selectedCanvasVector = type === "vector" ? getVectorRecord(id)?.element ?? null : null;
 }
 
 function setPrimarySelectionToLatest() {
@@ -509,12 +532,23 @@ function captureWorkspaceState() {
       textContent: record.element.textContent ?? "",
       contentEditable: record.element.contentEditable,
     })),
+    vectors: vectorRecords.map((record) => ({
+      record,
+      parentFrameId: record.parentFrameId,
+      order: record.order,
+      name: record.name,
+      svgSource: record.svgSource,
+      dataset: { ...record.element.dataset },
+      style: record.element.getAttribute("style"),
+    })),
     selectedCanvasFrame,
     selectedCanvasText,
+    selectedCanvasVector,
     selectedLayerKeys: [...selectedLayerKeys],
     expandedFrameIds: [...expandedFrameIds],
     nextFrameId,
     nextTextId,
+    nextVectorId,
     nextLayerOrder,
     componentProps: componentProps.map((prop) => ({ ...prop })),
     nextComponentPropId,
@@ -549,8 +583,10 @@ function restoreWorkspaceState(snapshot) {
   const allElements = new Set([
     ...frameRecords.map((record) => record.element),
     ...textRecords.map((record) => record.element),
+    ...vectorRecords.map((record) => record.element),
     ...snapshot.frames.map((entry) => entry.record.element),
     ...snapshot.texts.map((entry) => entry.record.element),
+    ...(snapshot.vectors ?? []).map((entry) => entry.record.element),
   ]);
   allElements.forEach((element) => element.remove());
 
@@ -569,9 +605,18 @@ function restoreWorkspaceState(snapshot) {
     entry.record.element.contentEditable = entry.contentEditable;
     return entry.record;
   });
+  vectorRecords = (snapshot.vectors ?? []).map((entry) => {
+    entry.record.parentFrameId = entry.parentFrameId;
+    entry.record.order = entry.order;
+    entry.record.name = entry.name;
+    entry.record.svgSource = entry.svgSource;
+    restoreElementState(entry.record.element, entry.dataset, entry.style);
+    return entry.record;
+  });
 
   nextFrameId = snapshot.nextFrameId;
   nextTextId = snapshot.nextTextId;
+  nextVectorId = snapshot.nextVectorId ?? 1;
   nextLayerOrder = snapshot.nextLayerOrder;
   componentProps = (snapshot.componentProps ?? []).map((prop) => ({ ...prop }));
   nextComponentPropId = snapshot.nextComponentPropId ?? 1;
@@ -579,6 +624,7 @@ function restoreWorkspaceState(snapshot) {
   snapshot.expandedFrameIds.forEach((frameId) => expandedFrameIds.add(frameId));
   selectedCanvasFrame = snapshot.selectedCanvasFrame;
   selectedCanvasText = snapshot.selectedCanvasText;
+  selectedCanvasVector = snapshot.selectedCanvasVector ?? null;
   selectedLayerKeys.clear();
   (snapshot.selectedLayerKeys ?? []).forEach((key) => selectedLayerKeys.add(key));
   if (selectedLayerKeys.size === 0) {
@@ -589,6 +635,10 @@ function restoreWorkspaceState(snapshot) {
     if (selectedCanvasText) {
       const record = textRecords.find((textRecord) => textRecord.element === selectedCanvasText);
       if (record) selectedLayerKeys.add(getLayerKey("text", record.id));
+    }
+    if (selectedCanvasVector) {
+      const record = vectorRecords.find((vectorRecord) => vectorRecord.element === selectedCanvasVector);
+      if (record) selectedLayerKeys.add(getLayerKey("vector", record.id));
     }
   }
 
@@ -629,6 +679,10 @@ function clearElementSelection() {
     record.element.setAttribute("aria-selected", "false");
   });
   textRecords.forEach((record) => {
+    record.element.classList.remove("is-selected");
+    record.element.setAttribute("aria-selected", "false");
+  });
+  vectorRecords.forEach((record) => {
     record.element.classList.remove("is-selected");
     record.element.setAttribute("aria-selected", "false");
   });
@@ -680,6 +734,23 @@ function selectCanvasText(textElement, additive = false) {
   renderTree();
 }
 
+function selectCanvasVector(vectorElement, additive = false) {
+  const record = vectorRecords.find((vectorRecord) => vectorRecord.element === vectorElement);
+  if (record) expandFramePath(record.parentFrameId);
+  if (!record) return;
+  const vectorKey = getLayerKey("vector", record.id);
+  if (!additive) selectedLayerKeys.clear();
+  if (additive && selectedLayerKeys.has(vectorKey)) {
+    selectedLayerKeys.delete(vectorKey);
+    setPrimarySelectionToLatest();
+  } else {
+    selectedLayerKeys.add(vectorKey);
+    setPrimarySelectionFromKey(vectorKey);
+  }
+  syncElementSelectionStyles();
+  renderTree();
+}
+
 function getSelectedTextRecord() {
   return selectedCanvasText
     ? textRecords.find((record) => record.element === selectedCanvasText)
@@ -689,6 +760,12 @@ function getSelectedTextRecord() {
 function getSelectedFrameRecord() {
   return selectedCanvasFrame
     ? frameRecords.find((record) => record.element === selectedCanvasFrame)
+    : undefined;
+}
+
+function getSelectedVectorRecord() {
+  return selectedCanvasVector
+    ? vectorRecords.find((record) => record.element === selectedCanvasVector)
     : undefined;
 }
 
@@ -871,12 +948,25 @@ function syncInspectorToSelectedFrame() {
   }
 }
 
+function syncInspectorToSelectedVector() {
+  const record = getSelectedVectorRecord();
+  if (!record) return;
+  const bounds = record.element.getBoundingClientRect();
+  vectorSizeInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const dimension = input.dataset.vectorSize;
+    if (dimension !== "width" && dimension !== "height") return;
+    input.value = record.element.dataset[dimension] || String(Math.round(bounds[dimension]));
+  });
+}
+
 function clearLayerSelection() {
   if (selectedLayerKeys.size === 0) return;
   selectedLayerKeys.clear();
   clearElementSelection();
   selectedCanvasFrame = null;
   selectedCanvasText = null;
+  selectedCanvasVector = null;
   renderTree();
 }
 
@@ -912,6 +1002,12 @@ function createSquareIcon() {
 }
 
 function createLayerTypeIcon(type) {
+  if (type === "vector") {
+    const icon = document.createElement("span");
+    icon.className = "vector-layer-icon";
+    icon.setAttribute("aria-hidden", "true");
+    return icon;
+  }
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("class", "layer-type-icon");
   svg.setAttribute("viewBox", "0 0 32 32");
@@ -933,11 +1029,14 @@ function createLayerTypeIcon(type) {
 function updateInspector() {
   const isTextSelected = selectedCanvasText !== null;
   const isFrameSelected = selectedCanvasFrame !== null;
-  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected || isFrameSelected;
+  const isVectorSelected = selectedCanvasVector !== null;
+  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected || isFrameSelected || isVectorSelected;
   if (frameInspector instanceof HTMLElement) frameInspector.hidden = !isFrameSelected;
   if (textInspector instanceof HTMLElement) textInspector.hidden = !isTextSelected;
+  if (vectorInspector instanceof HTMLElement) vectorInspector.hidden = !isVectorSelected;
   if (isTextSelected) syncInspectorToSelectedText();
   if (isFrameSelected) syncInspectorToSelectedFrame();
+  if (isVectorSelected) syncInspectorToSelectedVector();
   requestAnimationFrame(syncResizeOverlay);
 }
 
@@ -949,7 +1048,7 @@ function setLayerDragData(event, layerType, layerId) {
 function getLayerDragData(event) {
   const [type, rawId] = event.dataTransfer.getData("text/plain").split(":");
   const id = Number(rawId);
-  if ((type !== "frame" && type !== "text") || !Number.isInteger(id)) return null;
+  if ((type !== "frame" && type !== "text" && type !== "vector") || !Number.isInteger(id)) return null;
   return { type, id };
 }
 
@@ -1088,10 +1187,62 @@ function renderTextTreeNode(record, depth) {
   return item;
 }
 
+function renderVectorTreeNode(record, depth) {
+  const item = document.createElement("div");
+  const node = document.createElement("div");
+  const iconGroup = document.createElement("span");
+  const label = document.createElement("span");
+
+  item.className = "dynamic-tree-item";
+  node.className = "tree-node tree-node--dynamic";
+  node.draggable = true;
+  node.setAttribute("role", "treeitem");
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("aria-level", String(depth));
+  node.setAttribute("aria-selected", String(isLayerSelected("vector", record.id)));
+  node.style.setProperty("--tree-indent", `${8 + (depth - 1) * 40}px`);
+  if (isLayerSelected("vector", record.id)) node.classList.add("is-selected");
+
+  node.addEventListener("click", (event) => selectCanvasVector(record.element, event.ctrlKey));
+  node.addEventListener("keydown", (event) => {
+    if (event.target === node && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      selectCanvasVector(record.element);
+    }
+  });
+  node.addEventListener("dragstart", (event) => {
+    event.stopPropagation();
+    setLayerDragData(event, "vector", record.id);
+  });
+  node.addEventListener("dragend", clearTreeDropIndicators);
+  node.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    showTreeDropIndicator(node, getTreeDropPosition(event, false));
+  });
+  node.addEventListener("drop", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const draggedLayer = getLayerDragData(event);
+    const position = getTreeDropPosition(event, false);
+    clearTreeDropIndicators();
+    if (draggedLayer) moveLayerRelative(draggedLayer, { type: "vector", id: record.id }, position);
+  });
+
+  iconGroup.className = "branch-icon-group";
+  iconGroup.append(createIconCell(createLayerTypeIcon("vector")));
+  label.className = "tree-node-label";
+  label.textContent = record.name || `Vector ${record.id}`;
+  node.append(iconGroup, label);
+  item.append(node);
+  return item;
+}
+
 function renderLayerTreeNode(layer, depth) {
-  return layer.type === "frame"
-    ? renderFrameTreeNode(layer.record, depth)
-    : renderTextTreeNode(layer.record, depth);
+  if (layer.type === "frame") return renderFrameTreeNode(layer.record, depth);
+  if (layer.type === "text") return renderTextTreeNode(layer.record, depth);
+  return renderVectorTreeNode(layer.record, depth);
 }
 
 function getCompatibleDisabledTargets() {
@@ -1346,11 +1497,14 @@ function canNestFrame(draggedFrameId, parentFrameId) {
 
 function getLayerParentId(layer) {
   if (layer.type === "frame") return getFrameRecord(layer.id)?.parentId ?? null;
-  return getTextRecord(layer.id)?.parentFrameId ?? null;
+  if (layer.type === "text") return getTextRecord(layer.id)?.parentFrameId ?? null;
+  return getVectorRecord(layer.id)?.parentFrameId ?? null;
 }
 
 function getLayerRecord(layer) {
-  return layer.type === "frame" ? getFrameRecord(layer.id) : getTextRecord(layer.id);
+  if (layer.type === "frame") return getFrameRecord(layer.id);
+  if (layer.type === "text") return getTextRecord(layer.id);
+  return getVectorRecord(layer.id);
 }
 
 function normalizeSiblingOrder(parentFrameId) {
@@ -1361,6 +1515,7 @@ function normalizeSiblingOrder(parentFrameId) {
     1,
     ...frameRecords.map((record) => record.order + 1),
     ...textRecords.map((record) => record.order + 1),
+    ...vectorRecords.map((record) => record.order + 1),
   );
 }
 
@@ -1470,6 +1625,123 @@ function startEditingText(textElement, selectText = true) {
   range.selectNodeContents(textElement);
   selection?.removeAllRanges();
   selection?.addRange(range);
+}
+
+function parseSvgLength(value) {
+  const match = String(value || "").trim().match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
+  return match ? Number(match[1]) : null;
+}
+
+function sanitizeSvgText(svgText) {
+  const parsed = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  if (parsed.querySelector("parsererror")) throw new Error("The selected file is not valid SVG.");
+  const root = parsed.documentElement;
+  if (root.localName.toLowerCase() !== "svg") throw new Error("The selected file does not contain an SVG root.");
+
+  root.querySelectorAll("script, foreignObject, iframe, object, embed, style, image, animate, animateMotion, animateTransform, set")
+    .forEach((element) => element.remove());
+
+  [root, ...root.querySelectorAll("*")].forEach((element) => {
+    Array.from(element.attributes).forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim();
+      const isEventHandler = name.startsWith("on");
+      const isExternalReference = (name === "href" || name === "xlink:href") && !value.startsWith("#");
+      const hasUnsafeProtocol = /(?:javascript|vbscript|data\s*:\s*text\/html)\s*:/i.test(value);
+      const urlReferences = [...value.matchAll(/url\(\s*['"]?([^'")]+)['"]?\s*\)/gi)];
+      const hasExternalUrl = urlReferences.some((match) => !match[1].trim().startsWith("#"));
+      const hasUnsafeStyle = name === "style" && /expression\s*\(/i.test(value);
+      if (isEventHandler || isExternalReference || hasUnsafeProtocol || hasExternalUrl || hasUnsafeStyle) {
+        element.removeAttribute(attribute.name);
+      }
+    });
+  });
+
+  const viewBox = (root.getAttribute("viewBox") || "")
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  const viewBoxWidth = viewBox.length === 4 && Number.isFinite(viewBox[2]) && viewBox[2] > 0 ? viewBox[2] : null;
+  const viewBoxHeight = viewBox.length === 4 && Number.isFinite(viewBox[3]) && viewBox[3] > 0 ? viewBox[3] : null;
+  const width = parseSvgLength(root.getAttribute("width")) || viewBoxWidth || 24;
+  const height = parseSvgLength(root.getAttribute("height")) || viewBoxHeight || 24;
+  root.removeAttribute("width");
+  root.removeAttribute("height");
+  if (!root.hasAttribute("viewBox")) root.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  if (!root.hasAttribute("xmlns")) root.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+
+  return {
+    source: new XMLSerializer().serializeToString(root),
+    width,
+    height,
+  };
+}
+
+function createCanvasSvg(svgSource) {
+  const parsed = new DOMParser().parseFromString(svgSource, "image/svg+xml");
+  const svg = document.importNode(parsed.documentElement, true);
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", "100%");
+  svg.setAttribute("preserveAspectRatio", svg.getAttribute("preserveAspectRatio") || "xMidYMid meet");
+  svg.style.display = "block";
+  svg.style.width = "100%";
+  svg.style.height = "100%";
+  return svg;
+}
+
+function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = {}) {
+  if (!(canvas instanceof HTMLElement)) return;
+  if (options.recordHistory !== false) recordHistory();
+
+  const vectorId = nextVectorId;
+  nextVectorId += 1;
+  const vector = document.createElement("div");
+  const width = Math.max(0, Number(svgDefinition.width) || 24);
+  const height = Math.max(0, Number(svgDefinition.height) || 24);
+  const record = {
+    id: vectorId,
+    parentFrameId: parentRecord?.id ?? null,
+    element: vector,
+    order: nextLayerOrder,
+    name: svgDefinition.name || `Vector ${vectorId}`,
+    svgSource: svgDefinition.source,
+  };
+  nextLayerOrder += 1;
+
+  vector.className = "canvas-vector";
+  vector.draggable = true;
+  vector.dataset.vectorId = String(vectorId);
+  vector.dataset.width = String(width);
+  vector.dataset.height = String(height);
+  vector.dataset.widthMode = "fixed";
+  vector.dataset.heightMode = "fixed";
+  vector.setAttribute("aria-label", record.name);
+  vector.setAttribute("aria-selected", "false");
+  vector.append(createCanvasSvg(record.svgSource));
+
+  if (parentRecord) {
+    parentRecord.element.append(vector);
+    expandedFrameIds.add(parentRecord.id);
+  } else {
+    vector.style.left = `${x}px`;
+    vector.style.top = `${y}px`;
+    canvas.insertBefore(vector, toolbar);
+  }
+
+  vector.addEventListener("click", (event) => {
+    event.stopPropagation();
+    selectCanvasVector(vector, event.ctrlKey);
+  });
+  vector.addEventListener("dragstart", (event) => {
+    event.stopPropagation();
+    setLayerDragData(event, "vector", vectorId);
+  });
+
+  vectorRecords.push(record);
+  applyLayerSizing("vector", record);
+  renderTree();
+  if (options.select !== false) selectCanvasVector(vector);
+  return record;
 }
 
 function createCanvasText(parentRecord, x, y, options = {}) {
@@ -1721,6 +1993,26 @@ function duplicateTextRecord(sourceRecord, parentRecord, offsetRoot = false) {
   return duplicateRecord;
 }
 
+function duplicateVectorRecord(sourceRecord, parentRecord, offsetRoot = false) {
+  const source = sourceRecord.element;
+  const x = Number.parseFloat(source.style.left || "0") + (offsetRoot ? 16 : 0);
+  const y = Number.parseFloat(source.style.top || "0") + (offsetRoot ? 16 : 0);
+  const duplicateRecord = createCanvasVector({
+    source: sourceRecord.svgSource,
+    width: Number(source.dataset.width || "24"),
+    height: Number(source.dataset.height || "24"),
+    name: sourceRecord.name,
+  }, x, y, parentRecord, { recordHistory: false, select: false });
+  if (!duplicateRecord) return;
+
+  const duplicate = duplicateRecord.element;
+  copyElementDataset(source, duplicate, ["vectorId"]);
+  duplicate.setAttribute("style", source.getAttribute("style") || "");
+  duplicate.style.left = parentRecord ? "" : `${x}px`;
+  duplicate.style.top = parentRecord ? "" : `${y}px`;
+  return duplicateRecord;
+}
+
 function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false) {
   const source = sourceRecord.element;
   const x = Number.parseFloat(source.style.left || "0") + (offsetRoot ? 16 : 0);
@@ -1736,7 +2028,8 @@ function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false) {
 
   getLayerChildren(sourceRecord.id).forEach((childLayer) => {
     if (childLayer.type === "frame") duplicateFrameRecord(childLayer.record, duplicateRecord);
-    else duplicateTextRecord(childLayer.record, duplicateRecord);
+    else if (childLayer.type === "text") duplicateTextRecord(childLayer.record, duplicateRecord);
+    else duplicateVectorRecord(childLayer.record, duplicateRecord);
   });
   return duplicateRecord;
 }
@@ -1744,7 +2037,8 @@ function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false) {
 function duplicateSelectedLayer() {
   const selectedFrameRecord = getSelectedFrameRecord();
   const selectedTextRecord = getSelectedTextRecord();
-  if (!selectedFrameRecord && !selectedTextRecord) return;
+  const selectedVectorRecord = getSelectedVectorRecord();
+  if (!selectedFrameRecord && !selectedTextRecord && !selectedVectorRecord) return;
 
   recordHistory();
   isBatchingHistory = true;
@@ -1769,21 +2063,40 @@ function duplicateSelectedLayer() {
       return;
     }
 
-    const parentRecord = selectedTextRecord.parentFrameId === null
+    if (selectedTextRecord) {
+      const parentRecord = selectedTextRecord.parentFrameId === null
+        ? null
+        : getFrameRecord(selectedTextRecord.parentFrameId);
+      const duplicateRecord = duplicateTextRecord(
+        selectedTextRecord,
+        parentRecord,
+        selectedTextRecord.parentFrameId === null,
+      );
+      if (!duplicateRecord) return;
+      moveLayerRelative(
+        { type: "text", id: duplicateRecord.id },
+        { type: "text", id: selectedTextRecord.id },
+        "after",
+      );
+      selectCanvasText(duplicateRecord.element);
+      return;
+    }
+
+    const parentRecord = selectedVectorRecord.parentFrameId === null
       ? null
-      : getFrameRecord(selectedTextRecord.parentFrameId);
-    const duplicateRecord = duplicateTextRecord(
-      selectedTextRecord,
+      : getFrameRecord(selectedVectorRecord.parentFrameId);
+    const duplicateRecord = duplicateVectorRecord(
+      selectedVectorRecord,
       parentRecord,
-      selectedTextRecord.parentFrameId === null,
+      selectedVectorRecord.parentFrameId === null,
     );
     if (!duplicateRecord) return;
     moveLayerRelative(
-      { type: "text", id: duplicateRecord.id },
-      { type: "text", id: selectedTextRecord.id },
+      { type: "vector", id: duplicateRecord.id },
+      { type: "vector", id: selectedVectorRecord.id },
       "after",
     );
-    selectCanvasText(duplicateRecord.element);
+    selectCanvasVector(duplicateRecord.element);
   } finally {
     isBatchingHistory = false;
   }
@@ -1810,6 +2123,29 @@ toolButtons.forEach((button) => {
   button.addEventListener("click", () => {
     selectTool(button.getAttribute("data-tool") || "select");
   });
+});
+
+vectorImportButton?.addEventListener("click", () => {
+  if (vectorFileInput instanceof HTMLInputElement) vectorFileInput.click();
+});
+
+vectorFileInput?.addEventListener("change", async () => {
+  if (!(vectorFileInput instanceof HTMLInputElement) || !(canvas instanceof HTMLElement)) return;
+  const file = vectorFileInput.files?.[0];
+  vectorFileInput.value = "";
+  if (!file) return;
+
+  try {
+    const sanitized = sanitizeSvgText(await file.text());
+    const canvasBounds = canvas.getBoundingClientRect();
+    const x = Math.max(0, Math.round((canvasBounds.width - sanitized.width) / 2));
+    const y = Math.max(0, Math.round((canvasBounds.height - sanitized.height) / 2));
+    const name = file.name.replace(/\.svg$/i, "").trim() || `Vector ${nextVectorId}`;
+    createCanvasVector({ ...sanitized, name }, x, y);
+    selectTool("select");
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "Unable to import the selected SVG.");
+  }
 });
 
 treeView?.addEventListener("dragover", (event) => {
@@ -1958,16 +2294,23 @@ document.addEventListener("keydown", (event) => {
   recordHistory();
   const frameIdsToDelete = new Set();
   const textIdsToDelete = new Set();
+  const vectorIdsToDelete = new Set();
   selectedLayerKeys.forEach((key) => {
     const [type, rawId] = key.split(":");
     const id = Number(rawId);
     if (type === "frame") {
       collectFrameAndDescendantIds(id).forEach((frameId) => frameIdsToDelete.add(frameId));
     } else if (type === "text") textIdsToDelete.add(id);
+    else if (type === "vector") vectorIdsToDelete.add(id);
   });
   textRecords.forEach((record) => {
     if (record.parentFrameId !== null && frameIdsToDelete.has(record.parentFrameId)) {
       textIdsToDelete.add(record.id);
+    }
+  });
+  vectorRecords.forEach((record) => {
+    if (record.parentFrameId !== null && frameIdsToDelete.has(record.parentFrameId)) {
+      vectorIdsToDelete.add(record.id);
     }
   });
 
@@ -1977,12 +2320,17 @@ document.addEventListener("keydown", (event) => {
   textRecords.forEach((record) => {
     if (textIdsToDelete.has(record.id)) record.element.remove();
   });
+  vectorRecords.forEach((record) => {
+    if (vectorIdsToDelete.has(record.id)) record.element.remove();
+  });
   frameRecords = frameRecords.filter((record) => !frameIdsToDelete.has(record.id));
   textRecords = textRecords.filter((record) => !textIdsToDelete.has(record.id));
+  vectorRecords = vectorRecords.filter((record) => !vectorIdsToDelete.has(record.id));
   frameIdsToDelete.forEach((frameId) => expandedFrameIds.delete(frameId));
   selectedLayerKeys.clear();
   selectedCanvasFrame = null;
   selectedCanvasText = null;
+  selectedCanvasVector = null;
   syncElementSelectionStyles();
   renderTree();
 });
@@ -2136,6 +2484,23 @@ textAlignmentOptions.forEach((option) => {
     syncInspectorToSelectedText();
     requestAnimationFrame(syncResizeOverlay);
   });
+});
+
+vectorSizeInputs.forEach((input) => {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("input", () => {
+    const record = getSelectedVectorRecord();
+    const dimension = input.dataset.vectorSize;
+    const value = Number(input.value);
+    if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value) || value < 0) return;
+    if (Number(record.element.dataset[dimension] || "24") !== value) recordHistory();
+    record.element.dataset[`${dimension}Mode`] = "fixed";
+    record.element.dataset[dimension] = String(value);
+    applyLayerSizing("vector", record);
+    requestAnimationFrame(syncResizeOverlay);
+  });
+  input.addEventListener("blur", syncInspectorToSelectedVector);
 });
 
 function getSizeInputContext(input) {
@@ -2506,8 +2871,8 @@ function getExportSizingStyle(type, record) {
     return isRoot ? "100%" : "auto";
   };
   return {
-    width: dimensionValue("width", widthMode, type === "frame" ? "100" : "0"),
-    height: dimensionValue("height", heightMode, type === "frame" ? "100" : "0"),
+    width: dimensionValue("width", widthMode, type === "frame" ? "100" : type === "vector" ? "24" : "0"),
+    height: dimensionValue("height", heightMode, type === "frame" ? "100" : type === "vector" ? "24" : "0"),
     flex: isRoot ? undefined : mainMode === "fill" ? "1 1 0" : "0 0 auto",
     alignSelf: !isRoot && crossMode === "fill" ? "stretch" : undefined,
     minWidth: !isRoot && mainDimension === "width" && widthMode === "fill" ? 0 : undefined,
@@ -2606,6 +2971,84 @@ function getExportTextStyle(record) {
   };
 }
 
+function getExportVectorStyle(record) {
+  return getExportSizingStyle("vector", record);
+}
+
+function toReactSvgAttributeName(name) {
+  const lowerName = name.toLowerCase();
+  const exactNames = {
+    class: "className",
+    tabindex: "tabIndex",
+    viewbox: "viewBox",
+    preserveaspectratio: "preserveAspectRatio",
+    gradientunits: "gradientUnits",
+    gradienttransform: "gradientTransform",
+    markerwidth: "markerWidth",
+    markerheight: "markerHeight",
+    refx: "refX",
+    refy: "refY",
+    textlength: "textLength",
+    lengthadjust: "lengthAdjust",
+    patternunits: "patternUnits",
+    patterncontentunits: "patternContentUnits",
+    patterntransform: "patternTransform",
+    "xlink:href": "xlinkHref",
+    "xml:space": "xmlSpace",
+    "xmlns:xlink": "xmlnsXlink",
+  };
+  if (exactNames[lowerName]) return exactNames[lowerName];
+  if (lowerName.startsWith("data-") || lowerName.startsWith("aria-")) return lowerName;
+  return name.replace(/[-:]([a-z])/g, (_, character) => character.toUpperCase());
+}
+
+function parseSvgStyle(styleValue) {
+  return styleValue.split(";").reduce((style, declaration) => {
+    const separatorIndex = declaration.indexOf(":");
+    if (separatorIndex < 0) return style;
+    const property = declaration.slice(0, separatorIndex).trim();
+    const value = declaration.slice(separatorIndex + 1).trim();
+    if (!property || !value || property.startsWith("--")) return style;
+    const reactProperty = property.replace(/-([a-z])/g, (_, character) => character.toUpperCase());
+    style[reactProperty] = value;
+    return style;
+  }, {});
+}
+
+function serializeSvgElementToJsx(element, depth, rootStyle = null) {
+  const indent = "  ".repeat(depth);
+  const attributes = [];
+  let inlineStyle = {};
+
+  Array.from(element.attributes).forEach((attribute) => {
+    if (attribute.name.toLowerCase() === "style") {
+      inlineStyle = parseSvgStyle(attribute.value);
+      return;
+    }
+    attributes.push(` ${toReactSvgAttributeName(attribute.name)}=${JSON.stringify(attribute.value)}`);
+  });
+  const combinedStyle = rootStyle ? { ...inlineStyle, ...rootStyle } : inlineStyle;
+  if (Object.keys(combinedStyle).length > 0) attributes.push(` style={${formatReactStyle(combinedStyle)}}`);
+
+  const children = Array.from(element.childNodes).flatMap((node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      return [serializeSvgElementToJsx(node, depth + 1)];
+    }
+    if (node.nodeType === Node.TEXT_NODE && (node.textContent || "").trim().length > 0) {
+      return [`${"  ".repeat(depth + 1)}{${JSON.stringify(node.textContent)}}`];
+    }
+    return [];
+  });
+  const tagName = element.tagName;
+  if (children.length === 0) return `${indent}<${tagName}${attributes.join("")} />`;
+  return `${indent}<${tagName}${attributes.join("")}>\n${children.join("\n")}\n${indent}</${tagName}>`;
+}
+
+function renderExportVector(record, depth) {
+  const parsed = new DOMParser().parseFromString(record.svgSource, "image/svg+xml");
+  return serializeSvgElementToJsx(parsed.documentElement, depth, getExportVectorStyle(record));
+}
+
 function getExportComponentProps() {
   const usedNames = new Set();
   return componentProps.flatMap((prop, index) => {
@@ -2638,6 +3081,7 @@ function getExportComponentProps() {
 
 function renderExportLayer(layer, depth, exportProps) {
   const indent = "  ".repeat(depth);
+  if (layer.type === "vector") return renderExportVector(layer.record, depth);
   if (layer.type === "text") {
     const value = layer.record.element.textContent || "";
     const stringProp = exportProps.find((prop) => prop.targetTextId === layer.record.id && prop.property === "textContent");
