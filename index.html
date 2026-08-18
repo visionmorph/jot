@@ -60,6 +60,10 @@
           <button class="tool-button" type="button" aria-label="Text" aria-pressed="false" data-tool="text">
             <svg class="tool-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 4H27V6H5V4Z" fill="currentColor" /><path d="M15 6H17V28H15V6Z" fill="currentColor" /></svg>
           </button>
+          <button class="tool-button" type="button" aria-label="Import SVG" data-vector-import>
+            <span class="vector-tool-icon" aria-hidden="true"></span>
+          </button>
+          <input type="file" accept=".svg,image/svg+xml" data-vector-file-input hidden />
         </div>
         </section>
 
@@ -352,6 +356,30 @@
           <div class="inspector-field">
             <label class="inspector-label" for="text-color-picker">Color</label>
             <input class="canvas-color-picker" id="text-color-picker" type="color" value="#ffffff" />
+          </div>
+        </section>
+
+        <section class="sidebar-panel vector-panel" aria-labelledby="vector-heading" data-vector-inspector hidden>
+          <div class="panel-heading-wrap">
+            <h2 class="panel-heading" id="vector-heading">Vector</h2>
+          </div>
+
+          <div class="inspector-divider" aria-hidden="true"></div>
+
+          <h3 class="inspector-section-title">Layout</h3>
+
+          <div class="inspector-field layer-size-field">
+            <span class="inspector-label" id="vector-size-label">Size</span>
+            <div class="layer-size-row" role="group" aria-labelledby="vector-size-label">
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">w</span>
+                <input aria-label="Vector width" data-vector-size="width" type="number" min="0" step="1" value="24" />
+              </label>
+              <label class="prefixed-number-control">
+                <span class="number-control-prefix" aria-hidden="true">h</span>
+                <input aria-label="Vector height" data-vector-size="height" type="number" min="0" step="1" value="24" />
+              </label>
+            </div>
           </div>
         </section>
         </aside>
