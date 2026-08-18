@@ -577,14 +577,6 @@ input {
   color: currentColor;
 }
 
-.vector-layer-icon {
-  display: block;
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid currentColor;
-  transform: rotate(45deg);
-}
-
 .branch-toggle {
   margin: 0;
   padding: 0;
@@ -928,13 +920,6 @@ input {
   height: 20px;
   flex: 0 0 20px;
   color: currentColor;
-}
-
-.vector-tool-icon {
-  width: 13px;
-  height: 13px;
-  border: 1.5px solid currentColor;
-  transform: rotate(45deg);
 }
 
 .page-panel {
