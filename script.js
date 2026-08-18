@@ -2500,7 +2500,9 @@ function getExportSizingStyle(type, record) {
   const crossMode = mainDimension === "width" ? heightMode : widthMode;
   const dimensionValue = (dimension, mode, fallback) => {
     if (mode === "fixed") return `${element.dataset[dimension] || fallback}px`;
-    if (mode === "hug") return "max-content";
+    if (mode === "hug") {
+      return dimension === "width" && type === "text" && isRoot ? "max-content" : undefined;
+    }
     return isRoot ? "100%" : "auto";
   };
   return {
@@ -2513,32 +2515,75 @@ function getExportSizingStyle(type, record) {
   };
 }
 
+function toExportCssLength(value) {
+  return value === 0 ? 0 : `${value}px`;
+}
+
+function getExportPaddingStyle(element) {
+  const top = Number(element.dataset.paddingTop || "10");
+  const right = Number(element.dataset.paddingRight || "10");
+  const bottom = Number(element.dataset.paddingBottom || "10");
+  const left = Number(element.dataset.paddingLeft || "10");
+  const values = [top, right, bottom, left];
+  if (values.every((value) => value === values[0])) {
+    return { padding: toExportCssLength(values[0]) };
+  }
+  if (top === bottom && right === left) {
+    return { padding: `${toExportCssLength(top)} ${toExportCssLength(right)}` };
+  }
+  if (right === left) {
+    return { padding: `${toExportCssLength(top)} ${toExportCssLength(right)} ${toExportCssLength(bottom)}` };
+  }
+  return {
+    paddingTop: toExportCssLength(top),
+    paddingRight: toExportCssLength(right),
+    paddingBottom: toExportCssLength(bottom),
+    paddingLeft: toExportCssLength(left),
+  };
+}
+
+function getExportTextAlignmentStyle(record) {
+  const element = record.element;
+  const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
+  const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
+  const heightMode = getLayerDimensionMode(element, "height", "hug");
+  return {
+    display: record.parentFrameId === null ? "inline-block" : undefined,
+    alignContent: heightMode !== "hug" && vertical !== "top"
+      ? (vertical === "center" ? "center" : "end")
+      : undefined,
+    textAlign: horizontal === "center" ? "center" : horizontal === "right" ? "right" : "left",
+  };
+}
+
 function getExportFrameStyle(record) {
   const element = record.element;
+  const isRoot = record.parentId === null;
   const isAutoGap = element.dataset.gapMode === "auto";
   const direction = element.dataset.direction || "horizontal";
+  const widthMode = getLayerDimensionMode(element, "width", "fixed");
+  const heightMode = getLayerDimensionMode(element, "height", "fixed");
+  const isButton = normalizeFrameHtmlTag(element.dataset.htmlTag || "div") === "button";
+  const hasExplicitDimensions = widthMode !== "hug" || heightMode !== "hug";
   const gap = element.dataset.gap || "10";
   const radius = element.dataset.radius || "0";
   const alignment = getFrameAlignmentValues(element);
   const outlineBoxShadow = getFrameOutlineBoxShadow(element);
   return {
-    display: "flex",
+    display: isRoot && widthMode === "hug" ? "inline-flex" : "flex",
     flexDirection: direction === "vertical" ? "column" : undefined,
     alignItems: alignment.alignItems,
     ...getExportSizingStyle("frame", record),
-    paddingLeft: `${element.dataset.paddingLeft || "10"}px`,
-    paddingTop: `${element.dataset.paddingTop || "10"}px`,
-    paddingRight: `${element.dataset.paddingRight || "10"}px`,
-    paddingBottom: `${element.dataset.paddingBottom || "10"}px`,
+    ...getExportPaddingStyle(element),
     gap: isAutoGap || isZeroCssValue(`${gap}px`) ? undefined : `${gap}px`,
     justifyContent: isAutoGap || alignment.justifyContent !== "flex-start"
       ? (isAutoGap ? "space-between" : alignment.justifyContent)
       : undefined,
-    border: "0",
+    border: isButton ? 0 : undefined,
     borderRadius: isZeroCssValue(`${radius}px`) ? undefined : `${radius}px`,
-    backgroundColor: element.dataset.frameColor || "transparent",
+    backgroundColor: element.dataset.frameColor || (isButton ? "transparent" : undefined),
     boxShadow: outlineBoxShadow || undefined,
-    boxSizing: "border-box",
+    boxSizing: hasExplicitDimensions ? "border-box" : undefined,
   };
 }
 
@@ -2557,7 +2602,7 @@ function getExportTextStyle(record) {
     letterSpacing: isZeroCssValue(letterSpacing) ? undefined : letterSpacing,
     whiteSpace: "pre-wrap",
     overflowWrap: widthMode === "hug" ? undefined : "anywhere",
-    ...getTextAlignmentValues(element),
+    ...getExportTextAlignmentStyle(record),
   };
 }
 
