@@ -23,6 +23,10 @@
   box-sizing: border-box;
 }
 
+select {
+  color-scheme: dark;
+}
+
 html,
 body {
   width: 100%;
@@ -119,7 +123,7 @@ input {
   padding: 4px 16px;
   gap: 8px;
   border: 0;
-  border-radius: 2px;
+  border-radius: 4px;
   background: var(--layer-01);
   color: var(--text-primary);
   font-size: 14px;
@@ -218,7 +222,7 @@ input {
   margin: 0;
   padding: 4px 8px;
   border: 1px solid var(--border-subtle-01);
-  border-radius: 2px;
+  border-radius: 4px;
   outline: 0;
   background: var(--layer-01);
   color: var(--text-primary);
@@ -283,6 +287,13 @@ input {
   transform: translateX(16px);
 }
 
+.prop-empty-value {
+  color: var(--text-disabled);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
 .prop-remove-button {
   position: relative;
   width: 24px;
@@ -290,7 +301,7 @@ input {
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 2px;
+  border-radius: 4px;
   background: transparent;
   color: var(--icon-secondary);
   cursor: pointer;
@@ -438,7 +449,7 @@ input {
   margin: auto 0 0;
   padding: 4px 16px;
   border: 0;
-  border-radius: 2px;
+  border-radius: 4px;
   background: var(--layer-01);
   color: var(--text-primary);
   font-size: 14px;
@@ -556,6 +567,14 @@ input {
   height: 16px;
   flex: 0 0 16px;
   color: var(--icon-secondary);
+}
+
+.layer-type-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: currentColor;
 }
 
 .branch-toggle {
@@ -749,6 +768,8 @@ input {
   border: 1px solid #992CFF;
   background: var(--icon-on-color);
   pointer-events: auto;
+  touch-action: none;
+  user-select: none;
 }
 
 .resize-handle--nw,
@@ -860,20 +881,11 @@ input {
   outline-offset: -1px;
 }
 
-.cursor-icon {
-  display: block;
+.tool-icon {
   width: 20px;
   height: 20px;
-  background: currentColor;
-  clip-path: polygon(20% 8%, 20% 87%, 41% 68%, 53% 94%, 68% 87%, 56% 62%, 83% 62%);
-}
-
-.toolbar-text-icon {
+  flex: 0 0 20px;
   color: currentColor;
-  font-size: 20px;
-  font-weight: 400;
-  line-height: 24px;
-  letter-spacing: 0;
 }
 
 .page-panel {
@@ -968,7 +980,7 @@ input {
   margin: 0;
   padding: 1px 12px;
   border: 0;
-  border-radius: 2px;
+  border-radius: 4px;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
@@ -1102,12 +1114,19 @@ input {
 .frame-alignment-grid[data-direction="vertical"] .alignment-lines {
   flex-direction: row;
   align-items: flex-start;
-  width: 26px;
+  width: 10px;
   height: 16px;
 }
 
 .frame-alignment-grid[data-direction="vertical"] .alignment-lines > span {
-  transform: rotate(90deg);
+  width: 4px;
+  height: 16px;
+  flex: 0 0 4px;
+}
+
+.frame-alignment-grid[data-direction="vertical"] .alignment-lines > span:last-child {
+  width: 4px;
+  height: 8px;
 }
 
 .frame-alignment-grid[data-direction="vertical"] [data-frame-alignment^="center"] .alignment-lines {
@@ -1206,7 +1225,7 @@ input {
   padding: 4px 8px;
   gap: 4px;
   border: 1px solid var(--border-subtle-01);
-  border-radius: 2px;
+  border-radius: 4px;
   background: var(--layer-01);
 }
 
@@ -1285,7 +1304,7 @@ input {
   padding: 4px 8px;
   gap: 8px;
   border: 1px solid var(--border-subtle-01);
-  border-radius: 2px;
+  border-radius: 4px;
   background: var(--layer-01);
   color: var(--text-primary);
   font-size: 14px;
@@ -1326,7 +1345,7 @@ input {
   margin: 0;
   padding: 0;
   border: 1px solid var(--border-subtle-00);
-  border-radius: 2px;
+  border-radius: 4px;
   background: var(--layer-01);
 }
 
