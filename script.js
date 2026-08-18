@@ -14,6 +14,7 @@ const sizeSelect = document.querySelector("#text-size");
 const lineHeightInput = document.querySelector("#text-line-height");
 const letterSpacingInput = document.querySelector("#text-letter-spacing");
 const textColorPicker = document.querySelector("#text-color-picker");
+const vectorColorPicker = document.querySelector("#vector-color-picker");
 const leftSidebar = document.querySelector(".left-sidebar");
 const componentsPanel = document.querySelector(".components-panel");
 const sidebarDivider = document.querySelector(".sidebar-divider");
@@ -611,6 +612,7 @@ function restoreWorkspaceState(snapshot) {
     entry.record.name = entry.name;
     entry.record.svgSource = entry.svgSource;
     restoreElementState(entry.record.element, entry.dataset, entry.style);
+    entry.record.element.replaceChildren(createCanvasSvg(entry.record.svgSource));
     return entry.record;
   });
 
@@ -948,6 +950,69 @@ function syncInspectorToSelectedFrame() {
   }
 }
 
+function isSolidSvgPaint(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || normalized === "none" || normalized === "transparent" || normalized.includes("url(")) return false;
+  const rgbaValues = normalized.match(/[\d.]+/g);
+  return !(normalized.startsWith("rgba") && rgbaValues?.length >= 4 && Number(rgbaValues[3]) === 0);
+}
+
+function cssColorToHex(value) {
+  const normalized = String(value || "").trim();
+  const hexMatch = normalized.match(/^#([\da-f]{3}|[\da-f]{6})$/i);
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    return `#${hex.length === 3 ? [...hex].map((character) => character.repeat(2)).join("") : hex}`.toLowerCase();
+  }
+  const colorValues = normalized.match(/[\d.]+/g);
+  if (!colorValues || colorValues.length < 3) return null;
+  const [red, green, blue] = colorValues.slice(0, 3).map((channel) => Math.max(0, Math.min(255, Math.round(Number(channel)))));
+  return `#${[red, green, blue].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function getVectorPaintElements(svg) {
+  const paintableTags = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan", "use"]);
+  return Array.from(svg.querySelectorAll("*")).filter((element) => paintableTags.has(element.localName.toLowerCase()));
+}
+
+function getVectorRenderedColor(record) {
+  const svg = record.element.querySelector("svg");
+  if (!(svg instanceof SVGElement)) return "#000000";
+  for (const element of getVectorPaintElements(svg)) {
+    const styles = getComputedStyle(element);
+    const paint = isSolidSvgPaint(styles.fill) ? styles.fill : isSolidSvgPaint(styles.stroke) ? styles.stroke : null;
+    const color = paint ? cssColorToHex(paint) : null;
+    if (color) return color;
+  }
+  return "#000000";
+}
+
+function applyVectorColor(record, color) {
+  const canvasSvg = record.element.querySelector("svg");
+  if (!(canvasSvg instanceof SVGElement)) return;
+  const sourceDocument = new DOMParser().parseFromString(record.svgSource, "image/svg+xml");
+  const sourceSvg = sourceDocument.documentElement;
+  const canvasPaintElements = getVectorPaintElements(canvasSvg);
+  const sourcePaintElements = getVectorPaintElements(sourceSvg);
+
+  canvasPaintElements.forEach((canvasElement, index) => {
+    const sourceElement = sourcePaintElements[index];
+    if (!(sourceElement instanceof SVGElement)) return;
+    const styles = getComputedStyle(canvasElement);
+    if (isSolidSvgPaint(styles.fill)) {
+      canvasElement.style.fill = color;
+      sourceElement.style.fill = color;
+    }
+    if (isSolidSvgPaint(styles.stroke)) {
+      canvasElement.style.stroke = color;
+      sourceElement.style.stroke = color;
+    }
+  });
+
+  record.svgSource = new XMLSerializer().serializeToString(sourceSvg);
+  record.element.dataset.vectorColor = color;
+}
+
 function syncInspectorToSelectedVector() {
   const record = getSelectedVectorRecord();
   if (!record) return;
@@ -958,6 +1023,11 @@ function syncInspectorToSelectedVector() {
     if (dimension !== "width" && dimension !== "height") return;
     input.value = record.element.dataset[dimension] || String(Math.round(bounds[dimension]));
   });
+  if (vectorColorPicker instanceof HTMLInputElement) {
+    const color = record.element.dataset.vectorColor || getVectorRenderedColor(record);
+    record.element.dataset.vectorColor = color;
+    vectorColorPicker.value = color;
+  }
 }
 
 function clearLayerSelection() {
@@ -1003,10 +1073,20 @@ function createSquareIcon() {
 
 function createLayerTypeIcon(type) {
   if (type === "vector") {
-    const icon = document.createElement("span");
-    icon.className = "vector-layer-icon";
-    icon.setAttribute("aria-hidden", "true");
-    return icon;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const transparentRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    svg.setAttribute("class", "layer-type-icon");
+    svg.setAttribute("viewBox", "0 0 32 32");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    path.setAttribute("d", "M28,9H14V6H6v8H9V28h2V14h3V11H28ZM12,12H8V8h4Z");
+    path.setAttribute("fill", "currentColor");
+    transparentRect.setAttribute("width", "32");
+    transparentRect.setAttribute("height", "32");
+    transparentRect.setAttribute("fill", "none");
+    svg.append(path, transparentRect);
+    return svg;
   }
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("class", "layer-type-icon");
@@ -1748,6 +1828,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
   });
 
   vectorRecords.push(record);
+  vector.dataset.vectorColor = getVectorRenderedColor(record);
   applyLayerSizing("vector", record);
   renderTree();
   if (options.select !== false) selectCanvasVector(vector);
@@ -2511,6 +2592,13 @@ vectorSizeInputs.forEach((input) => {
     requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", syncInspectorToSelectedVector);
+});
+
+vectorColorPicker?.addEventListener("input", () => {
+  const record = getSelectedVectorRecord();
+  if (!record || !(vectorColorPicker instanceof HTMLInputElement)) return;
+  if ((record.element.dataset.vectorColor || getVectorRenderedColor(record)) !== vectorColorPicker.value) recordHistory();
+  applyVectorColor(record, vectorColorPicker.value);
 });
 
 function getSizeInputContext(input) {
