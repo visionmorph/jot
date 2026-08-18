@@ -207,6 +207,12 @@ resizeOverlay.addEventListener("pointerdown", (event) => {
 
   event.preventDefault();
   event.stopPropagation();
+  if (layer.type === "text") {
+    element.contentEditable = "false";
+    element.draggable = false;
+    layer.record.isNew = false;
+    element.classList.remove("is-new-empty");
+  }
   const canvasBounds = canvas instanceof HTMLElement ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
   const bounds = element.getBoundingClientRect();
   resizeInteraction = {
@@ -233,6 +239,7 @@ resizeOverlay.addEventListener("pointerup", (event) => {
   if (!(event.target instanceof HTMLButtonElement) || !event.target.hasPointerCapture(event.pointerId)) return;
   applyResizePointerPosition(event.clientX, event.clientY);
   event.target.releasePointerCapture(event.pointerId);
+  if (resizeInteraction?.layer.type === "text") resizeInteraction.element.draggable = true;
   resizeInteraction = null;
   syncResizeOverlay();
 });
@@ -241,6 +248,7 @@ resizeOverlay.addEventListener("pointercancel", (event) => {
   if (event.target instanceof HTMLButtonElement && event.target.hasPointerCapture(event.pointerId)) {
     event.target.releasePointerCapture(event.pointerId);
   }
+  if (resizeInteraction?.layer.type === "text") resizeInteraction.element.draggable = true;
   resizeInteraction = null;
   syncResizeOverlay();
 });
@@ -900,10 +908,26 @@ function createIconCell(content) {
 }
 
 function createSquareIcon() {
-  const square = document.createElement("span");
-  square.className = "square-icon square-icon--small";
-  square.setAttribute("aria-hidden", "true");
-  return square;
+  return createLayerTypeIcon("frame");
+}
+
+function createLayerTypeIcon(type) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("class", "layer-type-icon");
+  svg.setAttribute("viewBox", "0 0 32 32");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("aria-hidden", "true");
+
+  const paths = type === "frame"
+    ? ["M24 26V28H8V26H24ZM26 24V8C26 6.89543 25.1046 6 24 6H8C6.89543 6 6 6.89543 6 8V24C6 25.1046 6.89543 26 8 26V28C5.79086 28 4 26.2091 4 24V8C4 5.79086 5.79086 4 8 4H24C26.2091 4 28 5.79086 28 8V24C28 26.2091 26.2091 28 24 28V26C25.1046 26 26 25.1046 26 24Z"]
+    : ["M5 4H27V6H5V4Z", "M15 6H17V28H15V6Z"];
+  paths.forEach((pathData) => {
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", pathData);
+    path.setAttribute("fill", "currentColor");
+    svg.append(path);
+  });
+  return svg;
 }
 
 function updateInspector() {
@@ -1014,7 +1038,6 @@ function renderTextTreeNode(record, depth) {
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
-  const textIcon = document.createElement("span");
   const label = document.createElement("span");
 
   item.className = "dynamic-tree-item";
@@ -1055,10 +1078,7 @@ function renderTextTreeNode(record, depth) {
   });
 
   iconGroup.className = "branch-icon-group";
-  textIcon.className = "text-layer-icon";
-  textIcon.textContent = "T";
-  textIcon.setAttribute("aria-hidden", "true");
-  iconGroup.append(textIcon);
+  iconGroup.append(createIconCell(createLayerTypeIcon("text")));
   label.className = "tree-node-label";
   label.textContent = (record.element.textContent ?? "").length > 0
     ? record.element.textContent
@@ -1126,7 +1146,8 @@ function renderComponentProps() {
     nameInput.value = prop.name;
     nameInput.setAttribute("aria-label", "Prop name");
     nameInput.addEventListener("change", () => {
-      const name = nameInput.value.trim() || "disabled";
+      const fallbackName = prop.type === "string" ? "label" : prop.type === "action" ? "onClick" : "disabled";
+      const name = nameInput.value.trim() || fallbackName;
       if (name === prop.name) return;
       recordHistory();
       prop.name = name;
@@ -1136,52 +1157,130 @@ function renderComponentProps() {
 
     const typeCell = createCell();
     typeCell.append(createPropSelect(
-      [{ value: "boolean", label: "Boolean" }],
-      "boolean",
+      [
+        { value: "boolean", label: "Boolean" },
+        { value: "string", label: "String" },
+        { value: "action", label: "Action" },
+      ],
+      prop.type,
       "Prop type",
-      () => {},
+      (value) => {
+        if (value === prop.type) return;
+        recordHistory();
+        if (value === "string") {
+          const target = textRecords[0];
+          prop.name = "label";
+          prop.type = "string";
+          prop.defaultValue = target?.element.textContent ?? "";
+          prop.targetFrameId = null;
+          prop.targetTextId = target?.id ?? null;
+          prop.property = "textContent";
+        } else if (value === "action") {
+          const target = compatibleTargets[0];
+          prop.name = "onClick";
+          prop.type = "action";
+          prop.defaultValue = "";
+          prop.targetFrameId = target?.id ?? null;
+          prop.targetTextId = null;
+          prop.property = "onClick";
+        } else {
+          const target = compatibleTargets[0];
+          prop.name = "disabled";
+          prop.type = "boolean";
+          prop.defaultValue = false;
+          prop.targetFrameId = target?.id ?? null;
+          prop.targetTextId = null;
+          prop.property = "disabled";
+        }
+        renderComponentProps();
+      },
     ));
 
     const defaultCell = createCell();
-    const defaultToggle = document.createElement("button");
-    defaultToggle.className = "prop-toggle";
-    defaultToggle.type = "button";
-    defaultToggle.setAttribute("role", "switch");
-    defaultToggle.setAttribute("aria-label", `Default value: ${prop.defaultValue ? "true" : "false"}`);
-    defaultToggle.setAttribute("aria-checked", String(prop.defaultValue));
-    defaultToggle.addEventListener("click", () => {
-      recordHistory();
-      prop.defaultValue = !prop.defaultValue;
-      renderComponentProps();
-    });
-    defaultCell.append(defaultToggle);
+    if (prop.type === "boolean") {
+      const defaultToggle = document.createElement("button");
+      defaultToggle.className = "prop-toggle";
+      defaultToggle.type = "button";
+      defaultToggle.setAttribute("role", "switch");
+      defaultToggle.setAttribute("aria-label", `Default value: ${prop.defaultValue ? "true" : "false"}`);
+      defaultToggle.setAttribute("aria-checked", String(Boolean(prop.defaultValue)));
+      defaultToggle.addEventListener("click", () => {
+        recordHistory();
+        prop.defaultValue = !Boolean(prop.defaultValue);
+        renderComponentProps();
+      });
+      defaultCell.append(defaultToggle);
+    } else if (prop.type === "string") {
+      const defaultInput = document.createElement("input");
+      let hasRecordedHistory = false;
+      defaultInput.className = "prop-control";
+      defaultInput.type = "text";
+      defaultInput.value = String(prop.defaultValue);
+      defaultInput.setAttribute("aria-label", "Default string value");
+      defaultInput.addEventListener("input", () => {
+        if (!hasRecordedHistory) {
+          recordHistory();
+          hasRecordedHistory = true;
+        }
+        prop.defaultValue = defaultInput.value;
+        const target = getTextRecord(prop.targetTextId);
+        if (target) target.element.textContent = defaultInput.value;
+      });
+      defaultInput.addEventListener("change", renderTree);
+      defaultCell.append(defaultInput);
+    } else {
+      const emptyValue = document.createElement("span");
+      emptyValue.className = "prop-empty-value";
+      emptyValue.textContent = "—";
+      emptyValue.setAttribute("aria-label", "No default value");
+      defaultCell.append(emptyValue);
+    }
 
     const targetCell = createCell();
-    const hasCurrentTarget = compatibleTargets.some((record) => record.id === prop.targetFrameId);
-    const targetOptions = compatibleTargets.length > 0
+    const isStringProp = prop.type === "string";
+    const propTargets = isStringProp ? textRecords : compatibleTargets;
+    const currentTargetId = isStringProp ? prop.targetTextId : prop.targetFrameId;
+    const hasCurrentTarget = propTargets.some((record) => record.id === currentTargetId);
+    const targetOptions = propTargets.length > 0
       ? [
           { value: "", label: "Select layer", disabled: true },
-          ...compatibleTargets.map((record) => ({ value: String(record.id), label: `Frame ${record.id}` })),
+          ...propTargets.map((record) => ({
+            value: String(record.id),
+            label: isStringProp
+              ? `Text ${record.id}: ${record.element.textContent || "Text"}`
+              : `Frame ${record.id}`,
+          })),
         ]
-      : [{ value: "", label: "No button target", disabled: true }];
+      : [{ value: "", label: isStringProp ? "No text target" : "No button target", disabled: true }];
     targetCell.append(createPropSelect(
       targetOptions,
-      hasCurrentTarget ? String(prop.targetFrameId) : "",
+      hasCurrentTarget ? String(currentTargetId) : "",
       "Target layer",
       (value) => {
-        const targetFrameId = Number(value);
-        if (!Number.isInteger(targetFrameId) || targetFrameId === prop.targetFrameId) return;
+        const targetId = Number(value);
+        if (!Number.isInteger(targetId) || targetId === currentTargetId) return;
         recordHistory();
-        prop.targetFrameId = targetFrameId;
+        if (isStringProp) {
+          const target = getTextRecord(targetId);
+          prop.targetTextId = targetId;
+          prop.targetFrameId = null;
+          prop.defaultValue = target?.element.textContent ?? "";
+        } else {
+          prop.targetFrameId = targetId;
+          prop.targetTextId = null;
+        }
         renderComponentProps();
       },
-      compatibleTargets.length === 0,
+      propTargets.length === 0,
     ));
 
     const propertyCell = createCell();
     propertyCell.append(createPropSelect(
-      [{ value: "disabled", label: "disabled" }],
-      "disabled",
+      [{
+        value: prop.property,
+        label: prop.property === "textContent" ? "Text content" : prop.property,
+      }],
+      prop.property,
       "Target property",
       () => {},
       !hasCurrentTarget,
@@ -1218,6 +1317,7 @@ function addDisabledProp() {
     type: "boolean",
     defaultValue: false,
     targetFrameId: target?.id ?? null,
+    targetTextId: null,
     property: "disabled",
   });
   nextComponentPropId += 1;
@@ -1361,6 +1461,7 @@ function showTreeDropIndicator(node, position) {
 
 function startEditingText(textElement, selectText = true) {
   if (selectText) selectCanvasText(textElement);
+  textElement.draggable = false;
   textElement.contentEditable = "true";
   textElement.focus();
 
@@ -1393,6 +1494,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   nextLayerOrder += 1;
 
   text.className = "canvas-text is-new-empty";
+  text.draggable = true;
   text.dataset.textId = String(textId);
   text.contentEditable = "false";
   text.spellcheck = false;
@@ -1434,6 +1536,11 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   });
   text.addEventListener("input", () => {
     const hasContent = (text.textContent ?? "").length > 0;
+    componentProps.forEach((prop) => {
+      if (prop.type === "string" && prop.targetTextId === record.id) {
+        prop.defaultValue = text.textContent ?? "";
+      }
+    });
     text.classList.toggle("is-new-empty", record.isNew && !hasContent);
     const textKey = getLayerKey("text", record.id);
     if (record.isNew && hasContent && !selectedLayerKeys.has(textKey)) {
@@ -1458,6 +1565,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
     record.isNew = false;
     text.classList.remove("is-new-empty");
     text.contentEditable = "false";
+    text.draggable = true;
     if (wasNewText) {
       selectTool("select");
       suppressNextTextCreation = true;
@@ -1467,8 +1575,12 @@ function createCanvasText(parentRecord, x, y, options = {}) {
     }
   });
   text.addEventListener("dragstart", (event) => {
-    event.preventDefault();
+    if (text.isContentEditable) {
+      event.preventDefault();
+      return;
+    }
     event.stopPropagation();
+    setLayerDragData(event, "text", textId);
   });
 
   textRecords.push(record);
@@ -1717,13 +1829,13 @@ treeView?.addEventListener("drop", (event) => {
 });
 
 canvas?.addEventListener("dragover", (event) => {
-  if (event.target !== canvas) return;
+  if (event.target !== canvas && event.target !== canvasRootStack) return;
   event.preventDefault();
   event.dataTransfer.dropEffect = "move";
 });
 
 canvas?.addEventListener("drop", (event) => {
-  if (!(canvas instanceof HTMLElement) || event.target !== canvas) return;
+  if (!(canvas instanceof HTMLElement) || (event.target !== canvas && event.target !== canvasRootStack)) return;
   event.preventDefault();
   const draggedLayer = getLayerDragData(event);
   if (!draggedLayer) return;
@@ -2452,14 +2564,19 @@ function getExportTextStyle(record) {
 function getExportComponentProps() {
   const usedNames = new Set();
   return componentProps.flatMap((prop, index) => {
-    const target = getFrameRecord(prop.targetFrameId);
-    if (
-      prop.type !== "boolean"
-      || prop.property !== "disabled"
-      || !target
-      || target.parentId !== null
-      || normalizeFrameHtmlTag(target.element.dataset.htmlTag || "div") !== "button"
-    ) return [];
+    const targetFrame = getFrameRecord(prop.targetFrameId);
+    const targetText = getTextRecord(prop.targetTextId);
+    const hasCompatibleButtonTarget = Boolean(
+      targetFrame
+      && targetFrame.parentId === null
+      && normalizeFrameHtmlTag(targetFrame.element.dataset.htmlTag || "div") === "button",
+    );
+    const isValid = prop.type === "boolean"
+      ? prop.property === "disabled" && hasCompatibleButtonTarget
+      : prop.type === "string"
+        ? prop.property === "textContent" && Boolean(targetText)
+        : prop.property === "onClick" && hasCompatibleButtonTarget;
+    if (!isValid) return [];
 
     let exportName = prop.name.trim().replace(/[^a-zA-Z0-9_$]/g, "");
     if (!/^[a-zA-Z_$]/.test(exportName)) exportName = `prop${index + 1}`;
@@ -2478,15 +2595,18 @@ function renderExportLayer(layer, depth, exportProps) {
   const indent = "  ".repeat(depth);
   if (layer.type === "text") {
     const value = layer.record.element.textContent || "";
-    return `${indent}<span style={${formatReactStyle(getExportTextStyle(layer.record))}}>{${JSON.stringify(value)}}</span>`;
+    const stringProp = exportProps.find((prop) => prop.targetTextId === layer.record.id && prop.property === "textContent");
+    const content = stringProp ? stringProp.exportName : JSON.stringify(value);
+    return `${indent}<span style={${formatReactStyle(getExportTextStyle(layer.record))}}>{${content}}</span>`;
   }
 
   const children = getLayerChildren(layer.record.id);
   const style = formatReactStyle(getExportFrameStyle(layer.record));
   const htmlTag = normalizeFrameHtmlTag(layer.record.element.dataset.htmlTag || "div");
   const disabledProp = exportProps.find((prop) => prop.targetFrameId === layer.record.id && prop.property === "disabled");
+  const onClickProp = exportProps.find((prop) => prop.targetFrameId === layer.record.id && prop.property === "onClick");
   const attributes = htmlTag === "button"
-    ? ` type="button"${disabledProp ? ` disabled={${disabledProp.exportName}}` : ""}`
+    ? ` type="button"${disabledProp ? ` disabled={${disabledProp.exportName}}` : ""}${onClickProp ? ` onClick={${onClickProp.exportName}}` : ""}`
     : "";
   if (children.length === 0) return `${indent}<${htmlTag}${attributes} style={${style}} />`;
   const childMarkup = children.map((child) => renderExportLayer(child, depth + 1, exportProps)).join("\n");
@@ -2502,7 +2622,9 @@ function createReactComponentSource(componentName) {
       ? renderExportLayer(rootLayers[0], 2, exportProps)
       : `    <>\n${rootLayers.map((layer) => renderExportLayer(layer, 3, exportProps)).join("\n")}\n    </>`;
   const parameters = exportProps.length > 0
-    ? `{ ${exportProps.map((prop) => `${prop.exportName} = ${prop.defaultValue}`).join(", ")} }`
+    ? `{ ${exportProps.map((prop) => prop.type === "action"
+      ? prop.exportName
+      : `${prop.exportName} = ${JSON.stringify(prop.defaultValue)}`).join(", ")} }`
     : "";
 
   return `import React from "react";\n\nexport default function ${componentName}(${parameters}) {\n  return (\n${componentMarkup}\n  );\n}\n`;
@@ -2511,10 +2633,13 @@ function createReactComponentSource(componentName) {
 function createStorySource(componentName) {
   const exportProps = getExportComponentProps();
   const argTypes = exportProps.length > 0
-    ? `\n  argTypes: {\n${exportProps.map((prop) => `    ${prop.exportName}: { control: "boolean" },`).join("\n")}\n  },`
+    ? `\n  argTypes: {\n${exportProps.map((prop) => prop.type === "action"
+      ? `    ${prop.exportName}: { action: "clicked" },`
+      : `    ${prop.exportName}: { control: "${prop.type === "string" ? "text" : "boolean"}" },`).join("\n")}\n  },`
     : "";
-  const defaultArgs = exportProps.length > 0
-    ? `{\n  args: {\n${exportProps.map((prop) => `    ${prop.exportName}: ${prop.defaultValue},`).join("\n")}\n  },\n}`
+  const propsWithDefaults = exportProps.filter((prop) => prop.type !== "action");
+  const defaultArgs = propsWithDefaults.length > 0
+    ? `{\n  args: {\n${propsWithDefaults.map((prop) => `    ${prop.exportName}: ${JSON.stringify(prop.defaultValue)},`).join("\n")}\n  },\n}`
     : "{}";
   return `import ${componentName} from "./${componentName}";\n\nconst meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${argTypes}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};\n`;
 }
