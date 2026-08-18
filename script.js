@@ -2678,9 +2678,12 @@ function createReactComponentSource(componentName) {
 function createStorySource(componentName) {
   const exportProps = getExportComponentProps();
   const actionProps = exportProps.filter((prop) => prop.type === "action");
-  const actionImport = actionProps.length > 0 ? `import { fn } from "storybook/test";\n` : "";
-  const metaArgs = actionProps.length > 0
-    ? `\n  args: {\n${actionProps.map((prop) => `    ${prop.exportName}: fn(),`).join("\n")}\n  },`
+  const actionImport = actionProps.length > 0 ? `import { action } from "storybook/actions";\n` : "";
+  const actionDeclarations = actionProps.length > 0
+    ? `${actionProps.map((prop) => `const ${prop.exportName}Action = action("${prop.property === "onClick" ? "clicked" : prop.exportName}");`).join("\n")}\n\n`
+    : "";
+  const storyRender = actionProps.length > 0
+    ? `\n  render: (args) => (\n    <${componentName}\n      {...args}\n${actionProps.map((prop) => `      ${prop.exportName}={() => ${prop.exportName}Action()}`).join("\n")}\n    />\n  ),`
     : "";
   const argTypes = exportProps.length > 0
     ? `\n  argTypes: {\n${exportProps.map((prop) => prop.type === "action"
@@ -2691,7 +2694,7 @@ function createStorySource(componentName) {
   const defaultArgs = propsWithDefaults.length > 0
     ? `{\n  args: {\n${propsWithDefaults.map((prop) => `    ${prop.exportName}: ${JSON.stringify(prop.defaultValue)},`).join("\n")}\n  },\n}`
     : "{}";
-  return `${actionImport}import ${componentName} from "./${componentName}";\n\nconst meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${metaArgs}${argTypes}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};\n`;
+  return `${actionImport}import ${componentName} from "./${componentName}";\n\n${actionDeclarations}const meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${argTypes}${storyRender}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};\n`;
 }
 
 function downloadExportFile(fileName, source) {
