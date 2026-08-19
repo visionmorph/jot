@@ -1331,6 +1331,43 @@ function getCompatibleDisabledTargets() {
     && normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div") === "button");
 }
 
+function getAllTargetableLayers() {
+  return [
+    ...frameRecords.map((record) => ({ type: "frame", record })),
+    ...textRecords.map((record) => ({ type: "text", record })),
+    ...vectorRecords.map((record) => ({ type: "vector", record })),
+  ];
+}
+
+function getVisibilityTargetLabel(type, record) {
+  if (type === "frame") return `Frame ${record.id}`;
+  if (type === "text") return `Text ${record.id}: ${record.element.textContent || "Text"}`;
+  return `Vector ${record.id}: ${record.name || "Vector"}`;
+}
+
+function setBooleanPropProperty(prop, property) {
+  if (property === prop.property) return;
+  recordHistory();
+  if (property === "visibility") {
+    const target = getAllTargetableLayers()[0];
+    prop.name = "visible";
+    prop.property = "visibility";
+    prop.defaultValue = true;
+    prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
+    prop.targetTextId = target?.type === "text" ? target.record.id : null;
+    prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
+  } else {
+    const target = getCompatibleDisabledTargets()[0];
+    prop.name = "disabled";
+    prop.property = "disabled";
+    prop.defaultValue = false;
+    prop.targetFrameId = target?.id ?? null;
+    prop.targetTextId = null;
+    prop.targetVectorId = null;
+  }
+  renderComponentProps();
+}
+
 function createPropSelect(options, value, ariaLabel, onChange, disabled = false) {
   const wrap = document.createElement("div");
   const select = document.createElement("select");
@@ -1377,7 +1414,11 @@ function renderComponentProps() {
     nameInput.value = prop.name;
     nameInput.setAttribute("aria-label", "Prop name");
     nameInput.addEventListener("change", () => {
-      const fallbackName = prop.type === "string" ? "label" : prop.type === "action" ? "onClick" : "disabled";
+      const fallbackName = prop.type === "string"
+        ? "label"
+        : prop.type === "action"
+          ? "onClick"
+          : prop.property === "visibility" ? "visible" : "disabled";
       const name = nameInput.value.trim() || fallbackName;
       if (name === prop.name) return;
       recordHistory();
@@ -1405,6 +1446,7 @@ function renderComponentProps() {
           prop.defaultValue = target?.element.textContent ?? "";
           prop.targetFrameId = null;
           prop.targetTextId = target?.id ?? null;
+          prop.targetVectorId = null;
           prop.property = "textContent";
         } else if (value === "action") {
           const target = compatibleTargets[0];
@@ -1413,6 +1455,7 @@ function renderComponentProps() {
           prop.defaultValue = "";
           prop.targetFrameId = target?.id ?? null;
           prop.targetTextId = null;
+          prop.targetVectorId = null;
           prop.property = "onClick";
         } else {
           const target = compatibleTargets[0];
@@ -1421,6 +1464,7 @@ function renderComponentProps() {
           prop.defaultValue = false;
           prop.targetFrameId = target?.id ?? null;
           prop.targetTextId = null;
+          prop.targetVectorId = null;
           prop.property = "disabled";
         }
         renderComponentProps();
@@ -1469,53 +1513,112 @@ function renderComponentProps() {
 
     const targetCell = createCell();
     const isStringProp = prop.type === "string";
-    const propTargets = isStringProp ? textRecords : compatibleTargets;
-    const currentTargetId = isStringProp ? prop.targetTextId : prop.targetFrameId;
-    const hasCurrentTarget = propTargets.some((record) => record.id === currentTargetId);
-    const targetOptions = propTargets.length > 0
-      ? [
-          { value: "", label: "Select layer", disabled: true },
-          ...propTargets.map((record) => ({
-            value: String(record.id),
-            label: isStringProp
-              ? `Text ${record.id}: ${record.element.textContent || "Text"}`
-              : `Frame ${record.id}`,
-          })),
-        ]
-      : [{ value: "", label: isStringProp ? "No text target" : "No button target", disabled: true }];
+    const isVisibilityProp = prop.type === "boolean" && prop.property === "visibility";
+    let targetOptions;
+    let currentValue;
+    let hasCurrentTarget;
+    let targetsEmpty;
+
+    if (isStringProp) {
+      hasCurrentTarget = textRecords.some((record) => record.id === prop.targetTextId);
+      currentValue = hasCurrentTarget ? String(prop.targetTextId) : "";
+      targetsEmpty = textRecords.length === 0;
+      targetOptions = targetsEmpty
+        ? [{ value: "", label: "No text target", disabled: true }]
+        : [
+            { value: "", label: "Select layer", disabled: true },
+            ...textRecords.map((record) => ({
+              value: String(record.id),
+              label: `Text ${record.id}: ${record.element.textContent || "Text"}`,
+            })),
+          ];
+    } else if (isVisibilityProp) {
+      const allLayers = getAllTargetableLayers();
+      const encodedTarget = prop.targetFrameId != null
+        ? `frame:${prop.targetFrameId}`
+        : prop.targetTextId != null
+          ? `text:${prop.targetTextId}`
+          : prop.targetVectorId != null
+            ? `vector:${prop.targetVectorId}`
+            : "";
+      hasCurrentTarget = allLayers.some((layer) => `${layer.type}:${layer.record.id}` === encodedTarget);
+      currentValue = hasCurrentTarget ? encodedTarget : "";
+      targetsEmpty = allLayers.length === 0;
+      targetOptions = targetsEmpty
+        ? [{ value: "", label: "No layer target", disabled: true }]
+        : [
+            { value: "", label: "Select layer", disabled: true },
+            ...allLayers.map((layer) => ({
+              value: `${layer.type}:${layer.record.id}`,
+              label: getVisibilityTargetLabel(layer.type, layer.record),
+            })),
+          ];
+    } else {
+      hasCurrentTarget = compatibleTargets.some((record) => record.id === prop.targetFrameId);
+      currentValue = hasCurrentTarget ? String(prop.targetFrameId) : "";
+      targetsEmpty = compatibleTargets.length === 0;
+      targetOptions = targetsEmpty
+        ? [{ value: "", label: "No button target", disabled: true }]
+        : [
+            { value: "", label: "Select layer", disabled: true },
+            ...compatibleTargets.map((record) => ({ value: String(record.id), label: `Frame ${record.id}` })),
+          ];
+    }
+
     targetCell.append(createPropSelect(
       targetOptions,
-      hasCurrentTarget ? String(currentTargetId) : "",
+      currentValue,
       "Target layer",
       (value) => {
-        const targetId = Number(value);
-        if (!Number.isInteger(targetId) || targetId === currentTargetId) return;
+        if (!value || value === currentValue) return;
         recordHistory();
         if (isStringProp) {
+          const targetId = Number(value);
           const target = getTextRecord(targetId);
           prop.targetTextId = targetId;
           prop.targetFrameId = null;
+          prop.targetVectorId = null;
           prop.defaultValue = target?.element.textContent ?? "";
+        } else if (isVisibilityProp) {
+          const [type, rawId] = value.split(":");
+          const targetId = Number(rawId);
+          prop.targetFrameId = type === "frame" ? targetId : null;
+          prop.targetTextId = type === "text" ? targetId : null;
+          prop.targetVectorId = type === "vector" ? targetId : null;
         } else {
+          const targetId = Number(value);
           prop.targetFrameId = targetId;
           prop.targetTextId = null;
+          prop.targetVectorId = null;
         }
         renderComponentProps();
       },
-      propTargets.length === 0,
+      targetsEmpty,
     ));
 
     const propertyCell = createCell();
-    propertyCell.append(createPropSelect(
-      [{
-        value: prop.property,
-        label: prop.property === "textContent" ? "Text content" : prop.property,
-      }],
-      prop.property,
-      "Target property",
-      () => {},
-      !hasCurrentTarget,
-    ));
+    if (prop.type === "boolean") {
+      propertyCell.append(createPropSelect(
+        [
+          { value: "disabled", label: "Disabled" },
+          { value: "visibility", label: "Visibility" },
+        ],
+        prop.property,
+        "Target property",
+        (value) => setBooleanPropProperty(prop, value),
+      ));
+    } else {
+      propertyCell.append(createPropSelect(
+        [{
+          value: prop.property,
+          label: prop.property === "textContent" ? "Text content" : prop.property,
+        }],
+        prop.property,
+        "Target property",
+        () => {},
+        !hasCurrentTarget,
+      ));
+    }
 
     const actionCell = createCell(true);
     const removeButton = document.createElement("button");
@@ -1549,6 +1652,7 @@ function addDisabledProp() {
     defaultValue: false,
     targetFrameId: target?.id ?? null,
     targetTextId: null,
+    targetVectorId: null,
     property: "disabled",
   });
   nextComponentPropId += 1;
@@ -2941,10 +3045,10 @@ function toReactComponentName(value) {
   return /^\d/.test(name) ? `Component${name}` : name;
 }
 
-function formatReactStyle(style) {
+function formatReactStyle(style, rawProperties = null) {
   const properties = Object.entries(style)
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .map(([property, value]) => `${property}: ${JSON.stringify(value)}`);
+    .map(([property, value]) => `${property}: ${rawProperties?.has(property) ? value : JSON.stringify(value)}`);
   return `{ ${properties.join(", ")} }`;
 }
 
@@ -3113,7 +3217,7 @@ function parseSvgStyle(styleValue) {
   }, {});
 }
 
-function serializeSvgElementToJsx(element, depth, rootStyle = null) {
+function serializeSvgElementToJsx(element, depth, rootStyle = null, rawProperties = null) {
   const indent = "  ".repeat(depth);
   const attributes = [];
   let inlineStyle = {};
@@ -3126,7 +3230,7 @@ function serializeSvgElementToJsx(element, depth, rootStyle = null) {
     attributes.push(` ${toReactSvgAttributeName(attribute.name)}=${JSON.stringify(attribute.value)}`);
   });
   const combinedStyle = rootStyle ? { ...inlineStyle, ...rootStyle } : inlineStyle;
-  if (Object.keys(combinedStyle).length > 0) attributes.push(` style={${formatReactStyle(combinedStyle)}}`);
+  if (Object.keys(combinedStyle).length > 0) attributes.push(` style={${formatReactStyle(combinedStyle, rawProperties)}}`);
 
   const children = Array.from(element.childNodes).flatMap((node) => {
     if (node.nodeType === Node.ELEMENT_NODE) {
@@ -3143,9 +3247,29 @@ function serializeSvgElementToJsx(element, depth, rootStyle = null) {
   return `${indent}<${tagName}${attributes.join("")}>\n${children.join("\n")}\n${indent}</${tagName}>`;
 }
 
-function renderExportVector(record, depth) {
+function findVisibilityProp(exportProps, type, id) {
+  return exportProps.find((prop) => prop.type === "boolean" && prop.property === "visibility" && (
+    (type === "frame" && prop.targetFrameId === id)
+    || (type === "text" && prop.targetTextId === id)
+    || (type === "vector" && prop.targetVectorId === id)
+  ));
+}
+
+function withVisibilityStyle(styleObject, visibilityProp) {
+  if (!visibilityProp) return { style: styleObject, rawProperties: null };
+  const originalDisplay = styleObject.display;
+  const trueBranch = originalDisplay === undefined ? "undefined" : JSON.stringify(originalDisplay);
+  return {
+    style: { ...styleObject, display: `${visibilityProp.exportName} ? ${trueBranch} : "none"` },
+    rawProperties: new Set(["display"]),
+  };
+}
+
+function renderExportVector(record, depth, exportProps) {
   const parsed = new DOMParser().parseFromString(record.svgSource, "image/svg+xml");
-  return serializeSvgElementToJsx(parsed.documentElement, depth, getExportVectorStyle(record));
+  const visibilityProp = findVisibilityProp(exportProps, "vector", record.id);
+  const { style, rawProperties } = withVisibilityStyle(getExportVectorStyle(record), visibilityProp);
+  return serializeSvgElementToJsx(parsed.documentElement, depth, style, rawProperties);
 }
 
 function getExportComponentProps() {
@@ -3153,13 +3277,16 @@ function getExportComponentProps() {
   return componentProps.flatMap((prop, index) => {
     const targetFrame = getFrameRecord(prop.targetFrameId);
     const targetText = getTextRecord(prop.targetTextId);
+    const targetVector = getVectorRecord(prop.targetVectorId);
     const hasCompatibleButtonTarget = Boolean(
       targetFrame
       && targetFrame.parentId === null
       && normalizeFrameHtmlTag(targetFrame.element.dataset.htmlTag || "div") === "button",
     );
     const isValid = prop.type === "boolean"
-      ? prop.property === "disabled" && hasCompatibleButtonTarget
+      ? prop.property === "disabled"
+        ? hasCompatibleButtonTarget
+        : prop.property === "visibility" && Boolean(targetFrame || targetText || targetVector)
       : prop.type === "string"
         ? prop.property === "textContent" && Boolean(targetText)
         : prop.property === "onClick" && hasCompatibleButtonTarget;
@@ -3180,16 +3307,20 @@ function getExportComponentProps() {
 
 function renderExportLayer(layer, depth, exportProps) {
   const indent = "  ".repeat(depth);
-  if (layer.type === "vector") return renderExportVector(layer.record, depth);
+  if (layer.type === "vector") return renderExportVector(layer.record, depth, exportProps);
   if (layer.type === "text") {
     const value = layer.record.element.textContent || "";
     const stringProp = exportProps.find((prop) => prop.targetTextId === layer.record.id && prop.property === "textContent");
     const content = stringProp ? stringProp.exportName : JSON.stringify(value);
-    return `${indent}<span style={${formatReactStyle(getExportTextStyle(layer.record))}}>{${content}}</span>`;
+    const textVisibilityProp = findVisibilityProp(exportProps, "text", layer.record.id);
+    const { style: textStyleObject, rawProperties: textRawProperties } = withVisibilityStyle(getExportTextStyle(layer.record), textVisibilityProp);
+    return `${indent}<span style={${formatReactStyle(textStyleObject, textRawProperties)}}>{${content}}</span>`;
   }
 
   const children = getLayerChildren(layer.record.id);
-  const style = formatReactStyle(getExportFrameStyle(layer.record));
+  const frameVisibilityProp = findVisibilityProp(exportProps, "frame", layer.record.id);
+  const { style: frameStyleObject, rawProperties: frameRawProperties } = withVisibilityStyle(getExportFrameStyle(layer.record), frameVisibilityProp);
+  const style = formatReactStyle(frameStyleObject, frameRawProperties);
   const htmlTag = normalizeFrameHtmlTag(layer.record.element.dataset.htmlTag || "div");
   const disabledProp = exportProps.find((prop) => prop.targetFrameId === layer.record.id && prop.property === "disabled");
   const onClickProp = exportProps.find((prop) => prop.targetFrameId === layer.record.id && prop.property === "onClick");
