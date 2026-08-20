@@ -70,6 +70,8 @@ const frameOutlinePositionSelect = document.querySelector("#frame-outline-positi
 
 const frameOutlineWeightInput = document.querySelector("#frame-outline-weight");
 
+const frameOutlineControls = document.querySelector("[data-frame-outline-controls]");
+
 const frameGapInput = document.querySelector("#frame-gap");
 
 const frameGapCombobox = document.querySelector("[data-gap-combobox]");

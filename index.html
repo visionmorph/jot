@@ -82,7 +82,6 @@
               <div class="inspector-section-divider" aria-hidden="true"></div>
               <div class="paint-section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
-                <button class="paint-section-action" type="button" aria-label="Remove page fill" data-color-action><span class="subtract-icon" aria-hidden="true"></span></button>
               </div>
             </div>
             <div class="custom-color-control" data-color-control="canvas">
@@ -107,9 +106,10 @@
             <h2 class="panel-heading" id="frame-heading">Frame</h2>
           </div>
 
-          <div class="inspector-divider" aria-hidden="true"></div>
+          <div class="inspector-section-group">
+            <div class="inspector-divider" aria-hidden="true"></div>
 
-          <h3 class="inspector-section-title">Layout</h3>
+            <h3 class="inspector-section-title">Layout</h3>
 
           <div class="frame-direction-field">
             <span class="inspector-label" id="frame-direction-label">Direction</span>
@@ -213,6 +213,7 @@
               </label>
             </div>
           </div>
+          </div>
 
           <div class="inspector-section-group paint-section" data-paint-section>
             <div class="paint-section-heading">
@@ -262,7 +263,7 @@
             </div>
           </div>
 
-          <div class="frame-outline-row">
+          <div class="frame-outline-row" data-frame-outline-controls hidden>
             <div class="inspector-field">
               <label class="inspector-label" for="frame-outline-position">Position</label>
               <div class="inspector-select-wrap">
@@ -280,14 +281,17 @@
             </div>
           </div>
 
-          <div class="inspector-field">
-            <label class="inspector-label" for="frame-html-tag">HTML tag</label>
-            <div class="inspector-select-wrap">
-              <select class="inspector-control inspector-select" id="frame-html-tag">
-                <option value="div" selected>div</option>
-                <option value="button">button</option>
-              </select>
-              <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+          <div class="inspector-section-group">
+            <h3 class="inspector-section-title">Accessibility</h3>
+            <div class="inspector-field">
+              <label class="inspector-label" for="frame-html-tag">HTML tag</label>
+              <div class="inspector-select-wrap">
+                <select class="inspector-control inspector-select" id="frame-html-tag">
+                  <option value="div" selected>div</option>
+                  <option value="button">button</option>
+                </select>
+                <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+              </div>
             </div>
           </div>
         </section>

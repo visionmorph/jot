@@ -971,7 +971,8 @@ input {
 .frame-direction-toggle {
   display: flex;
   width: 100%;
-  padding: 2px 3px;
+  height: 24px;
+  padding: 2px;
   gap: 0;
   border: 1px solid var(--border-subtle-01);
   border-radius: 4px;
@@ -981,9 +982,9 @@ input {
 .frame-direction-option {
   width: 100%;
   margin: 0;
-  padding: 1px 12px;
+  padding: 2px 6px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 2px;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
@@ -1245,7 +1246,7 @@ input {
   width: 100%;
   margin: 0;
   padding: 0;
-  gap: 8px;
+  gap: 12px;
 }
 
 .paint-section-heading {
@@ -1254,7 +1255,7 @@ input {
   width: 100%;
   margin: 0;
   padding: 0;
-  gap: 0;
+  gap: 8px;
 }
 
 .paint-section-title-row {
@@ -1278,6 +1279,10 @@ input {
   display: flex;
   width: 100%;
   gap: 8px;
+}
+
+.frame-outline-row[hidden] {
+  display: none;
 }
 
 .inspector-divider {
@@ -1606,7 +1611,7 @@ input {
 
 .custom-color-opacity input {
   width: 24px;
-  text-align: right;
+  text-align: left;
 }
 
 .custom-color-divider {

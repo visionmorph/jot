@@ -68,6 +68,9 @@ function syncCustomColorControl(picker, color, opacity = 100) {
   }
   control.classList.toggle("is-empty", isEmpty);
   control.hidden = isEmpty;
+  if (control.dataset.colorControl === "frame-outline" && frameOutlineControls instanceof HTMLElement) {
+    frameOutlineControls.hidden = isEmpty;
+  }
   if (actionButton instanceof HTMLButtonElement) {
     const propertyLabel = propertyLabels[control.dataset.colorControl] || "color";
     actionButton.setAttribute("aria-label", `${isEmpty ? "Add" : "Remove"} ${propertyLabel}`);
@@ -413,6 +416,19 @@ function applyVectorColor(record, color) {
 
   record.svgSource = new XMLSerializer().serializeToString(sourceSvg);
   record.element.dataset.vectorColor = color;
+}
+
+function removeVectorColor(record) {
+  const source = record.originalSvgSource || record.svgSource;
+  const sourceDocument = new DOMParser().parseFromString(source, "image/svg+xml");
+  const sourceSvg = sourceDocument.documentElement;
+  getVectorPaintElements(sourceSvg).forEach((element) => {
+    element.style.fill = "none";
+    element.style.stroke = "none";
+  });
+  record.svgSource = new XMLSerializer().serializeToString(sourceSvg);
+  record.element.replaceChildren(createCanvasSvg(record.svgSource));
+  record.element.dataset.vectorColor = "";
 }
 
 function syncInspectorToSelectedVector() {
@@ -880,14 +896,13 @@ function applyCustomColorValue(control, color, opacity) {
   } else if (state.property === "vector") {
     state.record.element.dataset.vectorColorOpacity = String(normalizedOpacity);
     if (normalizedColor) {
+      const source = state.record.originalSvgSource || state.record.svgSource;
+      state.record.svgSource = source;
+      state.record.element.replaceChildren(createCanvasSvg(source));
       applyVectorColor(state.record, renderedColor);
       state.record.element.dataset.vectorColor = normalizedColor;
     } else {
-      const source = state.record.originalSvgSource || state.record.svgSource;
-      state.record.originalSvgSource = source;
-      state.record.svgSource = source;
-      state.record.element.replaceChildren(createCanvasSvg(source));
-      state.record.element.dataset.vectorColor = "";
+      removeVectorColor(state.record);
     }
   }
 
