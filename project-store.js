@@ -60,6 +60,14 @@ const sizeModeComboboxes = Array.from(document.querySelectorAll("[data-size-comb
 
 const framePaddingInputs = Array.from(document.querySelectorAll("[data-frame-padding]"));
 
+const framePaddingAxisInputs = Array.from(document.querySelectorAll("[data-frame-padding-axis]"));
+
+const framePaddingModeToggle = document.querySelector("[data-padding-mode-toggle]");
+
+const framePaddingSides = document.querySelector("[data-padding-sides]");
+
+const framePaddingAxes = document.querySelector("[data-padding-axes]");
+
 const frameRadiusInput = document.querySelector("#frame-radius");
 
 const frameColorPicker = document.querySelector("#frame-color-picker");

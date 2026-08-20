@@ -1,5 +1,6 @@
 :root {
   --text-primary: #ffffff;
+  --icon-primary: #f4f4f4;
   --icon-secondary: #c1c7cd;
   --icon-on-color: #ffffff;
   --background: #121619;
@@ -24,7 +25,8 @@
   box-sizing: border-box;
 }
 
-select {
+select,
+.inspector-combobox-menu {
   color-scheme: dark;
 }
 
@@ -1349,6 +1351,57 @@ input {
 
 .frame-padding-field {
   width: 247px;
+  gap: 4px;
+}
+
+.frame-alignment-padding-stack {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  gap: 4px;
+}
+
+.frame-padding-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 24px;
+  gap: 0;
+}
+
+.padding-mode-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--icon-secondary);
+  cursor: pointer;
+}
+
+.padding-mode-toggle:hover {
+  background: var(--layer-hover-01);
+}
+
+.padding-mode-toggle[aria-pressed="true"] {
+  background: var(--background-selected);
+  color: var(--icon-primary);
+}
+
+.padding-mode-toggle[aria-pressed="true"]:hover {
+  background: var(--background-selected-hover);
+}
+
+.padding-mode-toggle:focus-visible {
+  outline: 1px solid var(--icon-on-color);
+  outline-offset: -1px;
 }
 
 .frame-padding-grid {
@@ -1356,6 +1409,23 @@ input {
   grid-template-columns: repeat(2, 119.5px);
   width: 247px;
   gap: 8px;
+}
+
+.frame-padding-axis-row {
+  display: flex;
+  width: 247px;
+  gap: 8px;
+}
+
+.frame-padding-axis-row .prefixed-number-control {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.frame-padding-grid[hidden],
+.frame-padding-axis-row[hidden] {
+  display: none;
 }
 
 .layer-size-field,

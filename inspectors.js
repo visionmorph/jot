@@ -299,6 +299,23 @@ function syncInspectorToSelectedText() {
   syncSelectedTextSizeInputs();
 }
 
+function syncFramePaddingAxisInputs(element) {
+  framePaddingAxisInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const sides = input.dataset.framePaddingAxis === "y" ? ["top", "bottom"] : ["left", "right"];
+    const values = sides.map((side) => Number(element.dataset[`padding${side[0].toUpperCase()}${side.slice(1)}`] || "10"));
+    input.value = values[0] === values[1] ? String(values[0]) : "";
+  });
+}
+
+function setFramePaddingControlMode(isIndividual) {
+  if (framePaddingModeToggle instanceof HTMLButtonElement) {
+    framePaddingModeToggle.setAttribute("aria-pressed", String(isIndividual));
+  }
+  if (framePaddingSides instanceof HTMLElement) framePaddingSides.hidden = !isIndividual;
+  if (framePaddingAxes instanceof HTMLElement) framePaddingAxes.hidden = isIndividual;
+}
+
 function syncInspectorToSelectedFrame() {
   const record = getSelectedFrameRecord();
   if (!record) return;
@@ -337,6 +354,7 @@ function syncInspectorToSelectedFrame() {
     if (!side) return;
     input.value = element.dataset[`padding${side[0].toUpperCase()}${side.slice(1)}`] || "10";
   });
+  syncFramePaddingAxisInputs(element);
 
   if (frameRadiusInput instanceof HTMLInputElement) {
     frameRadiusInput.value = element.dataset.radius || "0";
@@ -1416,8 +1434,42 @@ framePaddingInputs.forEach((input) => {
     if (Number(record.element.dataset[propertyName] || "10") !== value) recordHistory();
     record.element.dataset[propertyName] = String(value);
     record.element.style[propertyName] = `${value}px`;
+    syncFramePaddingAxisInputs(record.element);
   });
   input.addEventListener("blur", syncInspectorToSelectedFrame);
+});
+
+framePaddingAxisInputs.forEach((input) => {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("input", () => {
+    const record = getSelectedFrameRecord();
+    const axis = input.dataset.framePaddingAxis;
+    const value = Number(input.value);
+    if (!record || (axis !== "x" && axis !== "y") || input.value.trim() === "" || !Number.isFinite(value) || value < 0) return;
+    const sides = axis === "x" ? ["left", "right"] : ["top", "bottom"];
+    const hasChange = sides.some((side) => {
+      const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+      return Number(record.element.dataset[propertyName] || "10") !== value;
+    });
+    if (hasChange) recordHistory();
+    sides.forEach((side) => {
+      const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+      record.element.dataset[propertyName] = String(value);
+      record.element.style[propertyName] = `${value}px`;
+      const sideInput = framePaddingInputs.find((candidate) => candidate.dataset.framePadding === side);
+      if (sideInput instanceof HTMLInputElement) sideInput.value = String(value);
+    });
+  });
+  input.addEventListener("blur", syncInspectorToSelectedFrame);
+});
+
+framePaddingModeToggle?.addEventListener("click", () => {
+  if (!(framePaddingModeToggle instanceof HTMLButtonElement)) return;
+  const isIndividual = framePaddingModeToggle.getAttribute("aria-pressed") !== "true";
+  setFramePaddingControlMode(isIndividual);
+  const record = getSelectedFrameRecord();
+  if (record) syncFramePaddingAxisInputs(record.element);
 });
 
 frameRadiusInput?.addEventListener("focus", () => {
