@@ -138,8 +138,7 @@ input {
 }
 
 .add-prop-button:focus-visible,
-.prop-remove-button:focus-visible,
-.prop-toggle:focus-visible {
+.prop-remove-button:focus-visible {
   outline: 1px solid var(--icon-on-color);
   outline-offset: -1px;
 }
@@ -198,6 +197,7 @@ input {
 }
 
 .props-property-row {
+  height: 40px;
   border-bottom: 1px solid var(--border-subtle-00);
 }
 
@@ -252,39 +252,6 @@ input {
 .prop-control:disabled {
   color: var(--text-disabled);
   cursor: not-allowed;
-}
-
-.prop-toggle {
-  position: relative;
-  width: 32px;
-  height: 16px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: var(--layer-selected-01);
-  cursor: pointer;
-}
-
-.prop-toggle::after {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--icon-secondary);
-  content: "";
-  transition: transform 120ms ease;
-}
-
-.prop-toggle[aria-checked="true"] {
-  background: var(--background-active);
-}
-
-.prop-toggle[aria-checked="true"]::after {
-  background: var(--icon-on-color);
-  transform: translateX(16px);
 }
 
 .prop-empty-value {
@@ -1170,6 +1137,80 @@ input {
 }
 
 .frame-alignment-grid[data-direction="vertical"] [data-frame-alignment^="bottom"] .alignment-lines {
+  align-items: flex-end;
+}
+
+.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-lines {
+  justify-content: space-between;
+  width: 16px;
+  height: 16px;
+  gap: 0;
+}
+
+.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-lines::before {
+  display: block;
+  order: 2;
+  border-radius: 2px;
+  background: var(--background-brand);
+  content: "";
+}
+
+.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-lines > span:first-child {
+  order: 1;
+}
+
+.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-lines > span:last-child {
+  order: 3;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-lines {
+  flex-direction: column;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-lines > span {
+  width: 12px;
+  height: 4px;
+  flex: 0 0 4px;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-lines::before {
+  width: 6px;
+  height: 4px;
+  flex: 0 0 4px;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] [data-frame-alignment$="-center"] .alignment-lines,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] [data-frame-alignment="center"] .alignment-lines {
+  align-items: center;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] [data-frame-alignment$="-right"] .alignment-lines {
+  align-items: flex-end;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-lines {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-lines > span {
+  width: 4px;
+  height: 12px;
+  flex: 0 0 4px;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-lines::before {
+  width: 4px;
+  height: 6px;
+  flex: 0 0 4px;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] [data-frame-alignment^="center"] .alignment-lines,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] [data-frame-alignment="center"] .alignment-lines {
+  align-items: center;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] [data-frame-alignment^="bottom"] .alignment-lines {
   align-items: flex-end;
 }
 
