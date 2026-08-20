@@ -1170,6 +1170,19 @@ input {
   width: 6px;
 }
 
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment$="-left"] {
+  justify-content: flex-start;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment$="-center"],
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment="center"] {
+  justify-content: center;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment$="-right"] {
+  justify-content: flex-end;
+}
+
 .inspector-section-divider {
   width: 100%;
   height: 1px;
