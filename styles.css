@@ -891,8 +891,7 @@ input {
   transform: translateX(-50%);
 }
 
-.tooltip:hover > .tooltip-content,
-.tooltip:focus-within > .tooltip-content {
+.tooltip:hover > .tooltip-content {
   display: flex;
 }
 
