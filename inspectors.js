@@ -23,6 +23,11 @@ function getFrameAlignmentValues(element) {
     : { alignItems: toFlexValue(vertical), justifyContent: toFlexValue(horizontal) };
 }
 
+function syncFrameAlignmentDistribution(element) {
+  if (!(frameAlignmentGrid instanceof HTMLElement)) return;
+  frameAlignmentGrid.dataset.spaceBetween = String(element.dataset.gapMode === "auto");
+}
+
 function getTextAlignmentValues(element) {
   const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
   const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
@@ -209,6 +214,7 @@ function syncInspectorToSelectedFrame() {
   if (frameAlignmentGrid instanceof HTMLElement) {
     frameAlignmentGrid.dataset.direction = element.dataset.direction === "vertical" ? "vertical" : "horizontal";
   }
+  syncFrameAlignmentDistribution(element);
   frameAlignmentOptions.forEach((option) => {
     const isSelected = option.getAttribute("data-frame-alignment") === normalizeFrameAlignment(element.dataset.alignment || "top-left");
     option.classList.toggle("is-selected", isSelected);
@@ -507,16 +513,24 @@ function renderComponentProps() {
 
     const defaultCell = createCell();
     if (prop.type === "boolean") {
-      const defaultToggle = document.createElement("button");
-      defaultToggle.className = "prop-toggle";
-      defaultToggle.type = "button";
-      defaultToggle.setAttribute("role", "switch");
-      defaultToggle.setAttribute("aria-label", `Default value: ${prop.defaultValue ? "true" : "false"}`);
-      defaultToggle.setAttribute("aria-checked", String(Boolean(prop.defaultValue)));
-      defaultToggle.addEventListener("click", () => {
-        recordHistory();
-        prop.defaultValue = !Boolean(prop.defaultValue);
-        renderComponentProps();
+      const defaultToggle = document.createElement("div");
+      defaultToggle.className = "frame-direction-toggle prop-boolean-toggle";
+      defaultToggle.setAttribute("role", "group");
+      defaultToggle.setAttribute("aria-label", "Default Boolean value");
+      [false, true].forEach((value) => {
+        const option = document.createElement("button");
+        const isSelected = Boolean(prop.defaultValue) === value;
+        option.className = `frame-direction-option${isSelected ? " is-selected" : ""}`;
+        option.type = "button";
+        option.textContent = value ? "True" : "False";
+        option.setAttribute("aria-pressed", String(isSelected));
+        option.addEventListener("click", () => {
+          if (Boolean(prop.defaultValue) === value) return;
+          recordHistory();
+          prop.defaultValue = value;
+          renderComponentProps();
+        });
+        defaultToggle.append(option);
       });
       defaultCell.append(defaultToggle);
     } else if (prop.type === "string") {
@@ -1076,14 +1090,37 @@ frameDirectionOptions.forEach((option) => {
 });
 
 frameAlignmentOptions.forEach((option) => {
-  option.addEventListener("click", () => {
+  let wasSelectedAtFirstClick = false;
+  option.addEventListener("click", (event) => {
     const record = getSelectedFrameRecord();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
+    if (event.detail === 1) {
+      wasSelectedAtFirstClick = Boolean(
+        record && normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment,
+      );
+    }
     if (!record || normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment) return;
     recordHistory();
     record.element.dataset.alignment = alignment;
     applyFrameAlignment(record.element);
     syncInspectorToSelectedFrame();
+  });
+  option.addEventListener("dblclick", (event) => {
+    const record = getSelectedFrameRecord();
+    const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
+    if (
+      !record
+      || !wasSelectedAtFirstClick
+      || normalizeFrameAlignment(record.element.dataset.alignment || "top-left") !== alignment
+    ) return;
+    event.preventDefault();
+    recordHistory();
+    const enableSpaceBetween = record.element.dataset.gapMode !== "auto";
+    record.element.dataset.gapMode = enableSpaceBetween ? "auto" : "fixed";
+    record.element.style.gap = enableSpaceBetween ? "0px" : `${record.element.dataset.gap || "10"}px`;
+    applyFrameAlignment(record.element);
+    syncInspectorToSelectedFrame();
+    wasSelectedAtFirstClick = false;
   });
 });
 
@@ -1141,6 +1178,7 @@ function applyFrameGapValue(normalize = true) {
     record.element.dataset.gapMode = "auto";
     record.element.style.gap = "0px";
     applyFrameAlignment(record.element);
+    syncFrameAlignmentDistribution(record.element);
     if (normalize) frameGapInput.value = "Auto";
     return true;
   }
@@ -1155,6 +1193,7 @@ function applyFrameGapValue(normalize = true) {
   record.element.dataset.gap = String(gap);
   record.element.style.gap = `${gap}px`;
   applyFrameAlignment(record.element);
+  syncFrameAlignmentDistribution(record.element);
   if (normalize) frameGapInput.value = `${gap}px`;
   return true;
 }
