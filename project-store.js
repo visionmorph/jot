@@ -195,7 +195,7 @@ function getVectorRecord(vectorId) {
 
 function getLayerDimensionMode(element, dimension, fallback = "fixed") {
   const mode = element.dataset[`${dimension}Mode`];
-  return mode === "hug" || mode === "fill" ? mode : fallback;
+  return mode === "fixed" || mode === "hug" || mode === "fill" ? mode : fallback;
 }
 
 function getLayerSizingContext(type, record) {

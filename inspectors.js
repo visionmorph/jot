@@ -48,16 +48,33 @@ function syncCustomColorControl(picker, color, opacity = 100) {
   const hexInput = control.querySelector("[data-color-hex]");
   const opacityInput = control.querySelector("[data-color-opacity]");
   const swatch = control.querySelector("[data-color-swatch]");
+  const section = control.closest("[data-paint-section]");
+  const actionButton = section?.querySelector("[data-color-action]");
+  const actionIcon = actionButton?.querySelector(".subtract-icon, .plus-icon");
+  const propertyLabels = {
+    canvas: "page fill",
+    "frame-background": "frame fill",
+    "frame-outline": "frame border",
+    text: "text fill",
+    vector: "vector fill",
+  };
+  const isEmpty = !normalizedColor;
 
   picker.value = normalizedColor || "#000000";
   if (hexInput instanceof HTMLInputElement) hexInput.value = normalizedColor.slice(1);
   if (opacityInput instanceof HTMLInputElement) opacityInput.value = String(normalizedOpacity);
   if (swatch instanceof HTMLElement) {
-    swatch.style.backgroundColor = normalizedColor
-      ? getColorWithOpacity(normalizedColor, normalizedOpacity)
-      : "transparent";
+    swatch.style.backgroundColor = normalizedColor || "transparent";
   }
-  control.classList.toggle("is-empty", !normalizedColor);
+  control.classList.toggle("is-empty", isEmpty);
+  control.hidden = isEmpty;
+  if (actionButton instanceof HTMLButtonElement) {
+    const propertyLabel = propertyLabels[control.dataset.colorControl] || "color";
+    actionButton.setAttribute("aria-label", `${isEmpty ? "Add" : "Remove"} ${propertyLabel}`);
+  }
+  if (actionIcon instanceof HTMLElement) {
+    actionIcon.className = isEmpty ? "plus-icon" : "subtract-icon";
+  }
 }
 
 function getFrameAlignmentValues(element) {
@@ -836,6 +853,7 @@ function applyCustomColorValue(control, color, opacity) {
   if (!state || !(state.picker instanceof HTMLInputElement)) return false;
   const normalizedColor = normalizeHexColor(color);
   const normalizedOpacity = normalizeColorOpacity(opacity);
+  if (normalizedColor) control.dataset.lastColor = normalizedColor;
   if (state.color === normalizedColor && state.opacity === normalizedOpacity) {
     syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
     return true;
@@ -882,7 +900,8 @@ colorControls.forEach((control) => {
   const picker = control.querySelector("input[type='color']");
   const hexInput = control.querySelector("[data-color-hex]");
   const opacityInput = control.querySelector("[data-color-opacity]");
-  const removeButton = control.querySelector("[data-color-remove]");
+  const section = control.closest("[data-paint-section]");
+  const actionButton = section?.querySelector("[data-color-action]");
 
   picker?.addEventListener("input", () => {
     if (!(picker instanceof HTMLInputElement)) return;
@@ -894,6 +913,17 @@ colorControls.forEach((control) => {
   hexInput?.addEventListener("focus", () => {
     if (hexInput instanceof HTMLInputElement) hexInput.select();
   });
+  const commitHexInput = () => {
+    if (!(hexInput instanceof HTMLInputElement)) return;
+    const state = getCustomColorState(control);
+    if (!state || !(state.picker instanceof HTMLInputElement)) return;
+    const color = normalizeHexColor(hexInput.value);
+    if (color) {
+      applyCustomColorValue(control, color, state.opacity);
+      return;
+    }
+    syncCustomColorControl(state.picker, state.color, state.opacity);
+  };
   hexInput?.addEventListener("input", () => {
     if (!(hexInput instanceof HTMLInputElement)) return;
     if (!/^[\da-f]{6}$/i.test(hexInput.value.trim())) return;
@@ -901,12 +931,13 @@ colorControls.forEach((control) => {
     const state = getCustomColorState(control);
     if (color && state) applyCustomColorValue(control, color, state.opacity);
   });
-  hexInput?.addEventListener("blur", () => {
-    const state = getCustomColorState(control);
-    if (state && state.picker instanceof HTMLInputElement) {
-      syncCustomColorControl(state.picker, state.color, state.opacity);
-    }
+  hexInput?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    commitHexInput();
+    if (hexInput instanceof HTMLInputElement) hexInput.select();
   });
+  hexInput?.addEventListener("blur", commitHexInput);
 
   opacityInput?.addEventListener("focus", () => {
     if (opacityInput instanceof HTMLInputElement) opacityInput.select();
@@ -932,9 +963,24 @@ colorControls.forEach((control) => {
     }
   });
 
-  removeButton?.addEventListener("click", () => {
+  actionButton?.addEventListener("click", () => {
     const state = getCustomColorState(control);
-    if (state) applyCustomColorValue(control, "", state.opacity);
+    if (!state) return;
+    if (state.color) {
+      applyCustomColorValue(control, "", state.opacity);
+      return;
+    }
+    const fallbackColors = {
+      canvas: "#121619",
+      "frame-background": "#000000",
+      "frame-outline": "#000000",
+      text: "#FFFFFF",
+      vector: "#000000",
+    };
+    const nextColor = normalizeHexColor(control.dataset.lastColor)
+      || fallbackColors[control.dataset.colorControl]
+      || "#000000";
+    applyCustomColorValue(control, nextColor, state.opacity);
   });
 });
 

@@ -1248,6 +1248,32 @@ input {
   gap: 8px;
 }
 
+.paint-section-heading {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.paint-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 24px;
+  flex: 0 0 24px;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.paint-section-title-row .inspector-section-title {
+  width: auto;
+  flex: 1 1 auto;
+}
+
 .frame-outline-row {
   display: flex;
   width: 100%;
@@ -1493,6 +1519,10 @@ input {
   overflow: hidden;
 }
 
+.custom-color-control[hidden] {
+  display: none;
+}
+
 .custom-color-value {
   display: flex;
   align-items: center;
@@ -1586,7 +1616,7 @@ input {
   background: var(--border-subtle-01);
 }
 
-.custom-color-remove {
+.paint-section-action {
   position: relative;
   display: flex;
   align-items: center;
@@ -1597,15 +1627,20 @@ input {
   margin: 0;
   padding: 4px;
   border: 0;
-  border-radius: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--icon-secondary);
   cursor: pointer;
 }
 
-.custom-color-remove:hover {
+.paint-section-action:hover {
   background: var(--layer-hover-01);
   color: var(--icon-on-color);
+}
+
+.paint-section-action:focus-visible {
+  outline: 1px solid var(--icon-on-color);
+  outline-offset: -1px;
 }
 
 .subtract-icon {
