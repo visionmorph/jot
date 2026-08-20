@@ -1,0 +1,1210 @@
+/* Page and layer inspectors, typography controls, component props, and property editing. */
+
+function normalizeFrameHtmlTag(value) {
+  return value.trim().toLowerCase() === "button" ? "button" : "div";
+}
+
+function normalizeFrameAlignment(value) {
+  const alignments = [
+    "top-left", "top-center", "top-right",
+    "center-left", "center", "center-right",
+    "bottom-left", "bottom-center", "bottom-right",
+  ];
+  return alignments.includes(value) ? value : "top-left";
+}
+
+function getFrameAlignmentValues(element) {
+  const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
+  const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
+  const toFlexValue = (value) => value === "center" ? "center" : value === "right" || value === "bottom" ? "flex-end" : "flex-start";
+  const direction = element.dataset.direction === "vertical" ? "vertical" : "horizontal";
+  return direction === "vertical"
+    ? { alignItems: toFlexValue(horizontal), justifyContent: toFlexValue(vertical) }
+    : { alignItems: toFlexValue(vertical), justifyContent: toFlexValue(horizontal) };
+}
+
+function getTextAlignmentValues(element) {
+  const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
+  const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
+  return {
+    display: "block",
+    alignContent: vertical === "center" ? "center" : vertical === "bottom" ? "end" : "start",
+    textAlign: horizontal === "center" ? "center" : horizontal === "right" ? "right" : "left",
+  };
+}
+
+function getFrameOutlineBoxShadow(element) {
+  const color = element.dataset.outlineColor || "";
+  const weight = Math.max(0, Number(element.dataset.outlineWeight || "1"));
+  if (!color || !Number.isFinite(weight) || weight === 0) return "";
+  const position = ["inside", "outside", "center"].includes(element.dataset.outlinePosition)
+    ? element.dataset.outlinePosition
+    : "inside";
+  if (position === "outside") return `0 0 0 ${weight}px ${color}`;
+  if (position === "center") {
+    const halfWeight = weight / 2;
+    return `0 0 0 ${halfWeight}px ${color}, inset 0 0 0 ${halfWeight}px ${color}`;
+  }
+  return `inset 0 0 0 ${weight}px ${color}`;
+}
+
+function resizeLeftSidebarPanels(clientY) {
+  if (
+    !(leftSidebar instanceof HTMLElement) ||
+    !(componentsPanel instanceof HTMLElement) ||
+    !(sidebarDivider instanceof HTMLElement)
+  ) return;
+
+  const bounds = leftSidebar.getBoundingClientRect();
+  const nextHeight = Math.min(bounds.height, Math.max(0, clientY - bounds.top));
+  const percentage = bounds.height > 0 ? Math.round((nextHeight / bounds.height) * 100) : 50;
+  componentsPanel.style.height = `${nextHeight}px`;
+  sidebarDivider.setAttribute("aria-valuenow", String(percentage));
+}
+
+sidebarDivider?.addEventListener("pointerdown", (event) => {
+  if (!(sidebarDivider instanceof HTMLElement) || event.button !== 0) return;
+  event.preventDefault();
+  sidebarDivider.setPointerCapture(event.pointerId);
+  resizeLeftSidebarPanels(event.clientY);
+});
+
+sidebarDivider?.addEventListener("pointermove", (event) => {
+  if (!(sidebarDivider instanceof HTMLElement) || !sidebarDivider.hasPointerCapture(event.pointerId)) return;
+  resizeLeftSidebarPanels(event.clientY);
+});
+
+sidebarDivider?.addEventListener("pointerup", (event) => {
+  if (!(sidebarDivider instanceof HTMLElement) || !sidebarDivider.hasPointerCapture(event.pointerId)) return;
+  resizeLeftSidebarPanels(event.clientY);
+  sidebarDivider.releasePointerCapture(event.pointerId);
+});
+
+sidebarDivider?.addEventListener("pointercancel", (event) => {
+  if (sidebarDivider instanceof HTMLElement && sidebarDivider.hasPointerCapture(event.pointerId)) {
+    sidebarDivider.releasePointerCapture(event.pointerId);
+  }
+});
+
+function getFontRecord(family) {
+  return fontCatalog.find((font) => font.family === family)
+    ?? FALLBACK_FONT_CATALOG.find((font) => font.family === family);
+}
+
+function getFontFallback(category) {
+  if (/serif/i.test(category) && !/sans/i.test(category)) return "serif";
+  if (/mono/i.test(category)) return "monospace";
+  if (/handwriting/i.test(category)) return "cursive";
+  return "sans-serif";
+}
+
+function loadGoogleFont(family, weight) {
+  const key = `${family}:${weight}`;
+  if (loadedGoogleFonts.has(key)) return;
+
+  const link = document.createElement("link");
+  const encodedFamily = encodeURIComponent(family).replace(/%20/g, "+");
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@${weight}&display=swap`;
+  link.dataset.googleFont = key;
+  document.head.append(link);
+  loadedGoogleFonts.add(key);
+}
+
+function populateWeightOptions(family, selectedWeight = DEFAULT_FONT_WEIGHT) {
+  if (!(weightSelect instanceof HTMLSelectElement)) return;
+  const font = getFontRecord(family);
+  const weights = font?.weights?.length ? font.weights : [DEFAULT_FONT_WEIGHT];
+  const resolvedWeight = weights.includes(Number(selectedWeight))
+    ? Number(selectedWeight)
+    : weights.includes(DEFAULT_FONT_WEIGHT)
+      ? DEFAULT_FONT_WEIGHT
+      : weights[0];
+
+  weightSelect.replaceChildren(...weights.map((weight) => {
+    const option = document.createElement("option");
+    option.value = String(weight);
+    option.textContent = WEIGHT_LABELS[weight] ?? String(weight);
+    option.selected = weight === resolvedWeight;
+    return option;
+  }));
+}
+
+function populateFontOptions() {
+  if (!(fontSelect instanceof HTMLSelectElement)) return;
+  const currentFamily = fontSelect.value || DEFAULT_FONT_FAMILY;
+  fontSelect.replaceChildren(...fontCatalog.map((font) => {
+    const option = document.createElement("option");
+    option.value = font.family;
+    option.textContent = font.family;
+    option.selected = font.family === currentFamily;
+    return option;
+  }));
+}
+
+async function loadFontCatalog() {
+  try {
+    const response = await fetch("google-fonts.json");
+    if (!response.ok) throw new Error("Unable to load the font catalog.");
+    const catalog = await response.json();
+    if (!Array.isArray(catalog) || catalog.length === 0) throw new Error("The font catalog is empty.");
+    fontCatalog = catalog;
+  } catch {
+    fontCatalog = FALLBACK_FONT_CATALOG;
+  }
+
+  populateFontOptions();
+  populateWeightOptions(fontSelect instanceof HTMLSelectElement ? fontSelect.value : DEFAULT_FONT_FAMILY);
+}
+
+function syncSelectedTextSizeInputs() {
+  const record = getSelectedTextRecord();
+  if (!record) return;
+  const { element } = record;
+  const bounds = element.getBoundingClientRect();
+  textLayerSizeInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const dimension = input.dataset.textLayerSize;
+    if (dimension !== "width" && dimension !== "height") return;
+    const mode = getLayerDimensionMode(element, dimension, "hug");
+    input.value = mode === "fixed"
+      ? element.dataset[dimension] || String(Math.round(bounds[dimension]))
+      : mode === "fill" ? "Fill" : "Hug";
+    const wrapper = input.closest("[data-size-combobox]");
+    if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
+  });
+}
+
+function syncInspectorToSelectedText() {
+  const record = getSelectedTextRecord();
+  if (!record) return;
+
+  const { element } = record;
+  const family = element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
+  const weight = Number(element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
+  if (fontSelect instanceof HTMLSelectElement) fontSelect.value = family;
+  populateWeightOptions(family, weight);
+  if (sizeSelect instanceof HTMLSelectElement) sizeSelect.value = element.dataset.fontSize || "14";
+  if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.value = element.dataset.lineHeight || "Auto";
+  if (letterSpacingInput instanceof HTMLInputElement) letterSpacingInput.value = element.dataset.letterSpacing || "0%";
+  if (textColorPicker instanceof HTMLInputElement) textColorPicker.value = element.dataset.textColor || "#ffffff";
+  textAlignmentOptions.forEach((option) => {
+    const isSelected = option.getAttribute("data-text-alignment") === normalizeFrameAlignment(element.dataset.alignment || "top-left");
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-pressed", String(isSelected));
+  });
+  syncSelectedTextSizeInputs();
+}
+
+function syncInspectorToSelectedFrame() {
+  const record = getSelectedFrameRecord();
+  if (!record) return;
+  const { element } = record;
+
+  frameDirectionOptions.forEach((option) => {
+    const isSelected = option.getAttribute("data-frame-direction") === (element.dataset.direction || "horizontal");
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-pressed", String(isSelected));
+  });
+  if (frameAlignmentGrid instanceof HTMLElement) {
+    frameAlignmentGrid.dataset.direction = element.dataset.direction === "vertical" ? "vertical" : "horizontal";
+  }
+  frameAlignmentOptions.forEach((option) => {
+    const isSelected = option.getAttribute("data-frame-alignment") === normalizeFrameAlignment(element.dataset.alignment || "top-left");
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-pressed", String(isSelected));
+  });
+  if (frameGapInput instanceof HTMLInputElement) {
+    frameGapInput.value = element.dataset.gapMode === "auto"
+      ? "Auto"
+      : `${element.dataset.gap || "10"}px`;
+  }
+
+  frameSizeInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const dimension = input.dataset.frameSize;
+    if (dimension !== "width" && dimension !== "height") return;
+    const mode = getLayerDimensionMode(element, dimension);
+    input.value = mode === "fixed"
+      ? element.dataset[dimension] || "100"
+      : mode === "fill" ? "Fill" : "Hug";
+    const wrapper = input.closest("[data-size-combobox]");
+    if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
+  });
+
+  framePaddingInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const side = input.dataset.framePadding;
+    if (!side) return;
+    input.value = element.dataset[`padding${side[0].toUpperCase()}${side.slice(1)}`] || "10";
+  });
+
+  if (frameRadiusInput instanceof HTMLInputElement) {
+    frameRadiusInput.value = element.dataset.radius || "0";
+  }
+  if (frameColorPicker instanceof HTMLInputElement) {
+    const color = element.dataset.frameColor || "";
+    frameColorPicker.value = color || "#000000";
+    frameColorPicker.classList.toggle("is-transparent", color.length === 0);
+  }
+  if (frameOutlineColorPicker instanceof HTMLInputElement) {
+    const color = element.dataset.outlineColor || "";
+    frameOutlineColorPicker.value = color || "#000000";
+    frameOutlineColorPicker.classList.toggle("is-transparent", color.length === 0);
+  }
+  if (frameOutlinePositionSelect instanceof HTMLSelectElement) {
+    frameOutlinePositionSelect.value = ["inside", "outside", "center"].includes(element.dataset.outlinePosition)
+      ? element.dataset.outlinePosition
+      : "inside";
+  }
+  if (frameOutlineWeightInput instanceof HTMLInputElement) {
+    frameOutlineWeightInput.value = element.dataset.outlineWeight || "1";
+  }
+  if (frameHtmlTagInput instanceof HTMLSelectElement) {
+    frameHtmlTagInput.value = normalizeFrameHtmlTag(element.dataset.htmlTag || "div");
+  }
+}
+
+function isSolidSvgPaint(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || normalized === "none" || normalized === "transparent" || normalized.includes("url(")) return false;
+  const rgbaValues = normalized.match(/[\d.]+/g);
+  return !(normalized.startsWith("rgba") && rgbaValues?.length >= 4 && Number(rgbaValues[3]) === 0);
+}
+
+function cssColorToHex(value) {
+  const normalized = String(value || "").trim();
+  const hexMatch = normalized.match(/^#([\da-f]{3}|[\da-f]{6})$/i);
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    return `#${hex.length === 3 ? [...hex].map((character) => character.repeat(2)).join("") : hex}`.toLowerCase();
+  }
+  const colorValues = normalized.match(/[\d.]+/g);
+  if (!colorValues || colorValues.length < 3) return null;
+  const [red, green, blue] = colorValues.slice(0, 3).map((channel) => Math.max(0, Math.min(255, Math.round(Number(channel)))));
+  return `#${[red, green, blue].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function getVectorPaintElements(svg) {
+  const paintableTags = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "tspan", "use"]);
+  return Array.from(svg.querySelectorAll("*")).filter((element) => paintableTags.has(element.localName.toLowerCase()));
+}
+
+function getVectorRenderedColor(record) {
+  const svg = record.element.querySelector("svg");
+  if (!(svg instanceof SVGElement)) return "#000000";
+  for (const element of getVectorPaintElements(svg)) {
+    const styles = getComputedStyle(element);
+    const paint = isSolidSvgPaint(styles.fill) ? styles.fill : isSolidSvgPaint(styles.stroke) ? styles.stroke : null;
+    const color = paint ? cssColorToHex(paint) : null;
+    if (color) return color;
+  }
+  return "#000000";
+}
+
+function applyVectorColor(record, color) {
+  const canvasSvg = record.element.querySelector("svg");
+  if (!(canvasSvg instanceof SVGElement)) return;
+  const sourceDocument = new DOMParser().parseFromString(record.svgSource, "image/svg+xml");
+  const sourceSvg = sourceDocument.documentElement;
+  const canvasPaintElements = getVectorPaintElements(canvasSvg);
+  const sourcePaintElements = getVectorPaintElements(sourceSvg);
+
+  canvasPaintElements.forEach((canvasElement, index) => {
+    const sourceElement = sourcePaintElements[index];
+    if (!(sourceElement instanceof SVGElement)) return;
+    const styles = getComputedStyle(canvasElement);
+    if (isSolidSvgPaint(styles.fill)) {
+      canvasElement.style.fill = color;
+      sourceElement.style.fill = color;
+    }
+    if (isSolidSvgPaint(styles.stroke)) {
+      canvasElement.style.stroke = color;
+      sourceElement.style.stroke = color;
+    }
+  });
+
+  record.svgSource = new XMLSerializer().serializeToString(sourceSvg);
+  record.element.dataset.vectorColor = color;
+}
+
+function syncInspectorToSelectedVector() {
+  const record = getSelectedVectorRecord();
+  if (!record) return;
+  const bounds = record.element.getBoundingClientRect();
+  vectorSizeInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const dimension = input.dataset.vectorSize;
+    if (dimension !== "width" && dimension !== "height") return;
+    input.value = record.element.dataset[dimension] || String(Math.round(bounds[dimension]));
+  });
+  if (vectorColorPicker instanceof HTMLInputElement) {
+    const color = record.element.dataset.vectorColor || getVectorRenderedColor(record);
+    record.element.dataset.vectorColor = color;
+    vectorColorPicker.value = color;
+  }
+}
+
+function updateInspector() {
+  const isTextSelected = selectedCanvasText !== null;
+  const isFrameSelected = selectedCanvasFrame !== null;
+  const isVectorSelected = selectedCanvasVector !== null;
+  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected || isFrameSelected || isVectorSelected;
+  if (frameInspector instanceof HTMLElement) frameInspector.hidden = !isFrameSelected;
+  if (textInspector instanceof HTMLElement) textInspector.hidden = !isTextSelected;
+  if (vectorInspector instanceof HTMLElement) vectorInspector.hidden = !isVectorSelected;
+  if (isTextSelected) syncInspectorToSelectedText();
+  if (isFrameSelected) syncInspectorToSelectedFrame();
+  if (isVectorSelected) syncInspectorToSelectedVector();
+  requestAnimationFrame(syncResizeOverlay);
+}
+
+function getCompatibleDisabledTargets() {
+  return frameRecords.filter((record) =>
+    record.parentId === null
+    && normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div") === "button");
+}
+
+function getAllTargetableLayers() {
+  return [
+    ...frameRecords.map((record) => ({ type: "frame", record })),
+    ...textRecords.map((record) => ({ type: "text", record })),
+    ...vectorRecords.map((record) => ({ type: "vector", record })),
+  ];
+}
+
+function getVisibilityTargetLabel(type, record) {
+  if (type === "frame") return `Frame ${record.id}`;
+  if (type === "text") return `Text ${record.id}: ${record.element.textContent || "Text"}`;
+  return `Vector ${record.id}: ${record.name || "Vector"}`;
+}
+
+function setBooleanPropProperty(prop, property) {
+  if (property === prop.property) return;
+  recordHistory();
+  if (property === "visibility") {
+    const target = getAllTargetableLayers()[0];
+    prop.name = "visible";
+    prop.property = "visibility";
+    prop.defaultValue = true;
+    prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
+    prop.targetTextId = target?.type === "text" ? target.record.id : null;
+    prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
+  } else {
+    const target = getCompatibleDisabledTargets()[0];
+    prop.name = "disabled";
+    prop.property = "disabled";
+    prop.defaultValue = false;
+    prop.targetFrameId = target?.id ?? null;
+    prop.targetTextId = null;
+    prop.targetVectorId = null;
+  }
+  renderComponentProps();
+}
+
+function createPropSelect(options, value, ariaLabel, onChange, disabled = false) {
+  const wrap = document.createElement("div");
+  const select = document.createElement("select");
+  const chevron = document.createElement("span");
+
+  wrap.className = "prop-select-wrap";
+  select.className = "prop-control prop-select";
+  select.setAttribute("aria-label", ariaLabel);
+  select.disabled = disabled;
+  options.forEach((optionRecord) => {
+    const option = document.createElement("option");
+    option.value = optionRecord.value;
+    option.textContent = optionRecord.label;
+    option.disabled = Boolean(optionRecord.disabled);
+    select.append(option);
+  });
+  select.value = value;
+  select.addEventListener("change", () => onChange(select.value));
+  chevron.className = "chevron inspector-select-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  wrap.append(select, chevron);
+  return wrap;
+}
+
+function renderComponentProps() {
+  if (!(propRowsContainer instanceof HTMLElement)) return;
+  const compatibleTargets = getCompatibleDisabledTargets();
+  const rows = componentProps.map((prop) => {
+    const row = document.createElement("div");
+    row.className = "props-table-row props-property-row";
+    row.setAttribute("role", "row");
+
+    const createCell = (isAction = false) => {
+      const cell = document.createElement("div");
+      cell.className = `props-table-cell${isAction ? " props-table-action-cell" : ""}`;
+      cell.setAttribute("role", "cell");
+      return cell;
+    };
+
+    const nameCell = createCell();
+    const nameInput = document.createElement("input");
+    nameInput.className = "prop-control";
+    nameInput.type = "text";
+    nameInput.value = prop.name;
+    nameInput.setAttribute("aria-label", "Prop name");
+    nameInput.addEventListener("change", () => {
+      const fallbackName = prop.type === "string"
+        ? "label"
+        : prop.type === "action"
+          ? "onClick"
+          : prop.property === "visibility" ? "visible" : "disabled";
+      const name = nameInput.value.trim() || fallbackName;
+      if (name === prop.name) return;
+      recordHistory();
+      prop.name = name;
+      nameInput.value = name;
+    });
+    nameCell.append(nameInput);
+
+    const typeCell = createCell();
+    typeCell.append(createPropSelect(
+      [
+        { value: "boolean", label: "Boolean" },
+        { value: "string", label: "String" },
+        { value: "action", label: "Action" },
+      ],
+      prop.type,
+      "Prop type",
+      (value) => {
+        if (value === prop.type) return;
+        recordHistory();
+        if (value === "string") {
+          const target = textRecords[0];
+          prop.name = "label";
+          prop.type = "string";
+          prop.defaultValue = target?.element.textContent ?? "";
+          prop.targetFrameId = null;
+          prop.targetTextId = target?.id ?? null;
+          prop.targetVectorId = null;
+          prop.property = "textContent";
+        } else if (value === "action") {
+          const target = compatibleTargets[0];
+          prop.name = "onClick";
+          prop.type = "action";
+          prop.defaultValue = "";
+          prop.targetFrameId = target?.id ?? null;
+          prop.targetTextId = null;
+          prop.targetVectorId = null;
+          prop.property = "onClick";
+        } else {
+          const target = compatibleTargets[0];
+          prop.name = "disabled";
+          prop.type = "boolean";
+          prop.defaultValue = false;
+          prop.targetFrameId = target?.id ?? null;
+          prop.targetTextId = null;
+          prop.targetVectorId = null;
+          prop.property = "disabled";
+        }
+        renderComponentProps();
+      },
+    ));
+
+    const defaultCell = createCell();
+    if (prop.type === "boolean") {
+      const defaultToggle = document.createElement("button");
+      defaultToggle.className = "prop-toggle";
+      defaultToggle.type = "button";
+      defaultToggle.setAttribute("role", "switch");
+      defaultToggle.setAttribute("aria-label", `Default value: ${prop.defaultValue ? "true" : "false"}`);
+      defaultToggle.setAttribute("aria-checked", String(Boolean(prop.defaultValue)));
+      defaultToggle.addEventListener("click", () => {
+        recordHistory();
+        prop.defaultValue = !Boolean(prop.defaultValue);
+        renderComponentProps();
+      });
+      defaultCell.append(defaultToggle);
+    } else if (prop.type === "string") {
+      const defaultInput = document.createElement("input");
+      let hasRecordedHistory = false;
+      defaultInput.className = "prop-control";
+      defaultInput.type = "text";
+      defaultInput.value = String(prop.defaultValue);
+      defaultInput.setAttribute("aria-label", "Default string value");
+      defaultInput.addEventListener("input", () => {
+        if (!hasRecordedHistory) {
+          recordHistory();
+          hasRecordedHistory = true;
+        }
+        prop.defaultValue = defaultInput.value;
+        const target = getTextRecord(prop.targetTextId);
+        if (target) target.element.textContent = defaultInput.value;
+      });
+      defaultInput.addEventListener("change", renderTree);
+      defaultCell.append(defaultInput);
+    } else {
+      const emptyValue = document.createElement("span");
+      emptyValue.className = "prop-empty-value";
+      emptyValue.textContent = "—";
+      emptyValue.setAttribute("aria-label", "No default value");
+      defaultCell.append(emptyValue);
+    }
+
+    const targetCell = createCell();
+    const isStringProp = prop.type === "string";
+    const isVisibilityProp = prop.type === "boolean" && prop.property === "visibility";
+    let targetOptions;
+    let currentValue;
+    let hasCurrentTarget;
+    let targetsEmpty;
+
+    if (isStringProp) {
+      hasCurrentTarget = textRecords.some((record) => record.id === prop.targetTextId);
+      currentValue = hasCurrentTarget ? String(prop.targetTextId) : "";
+      targetsEmpty = textRecords.length === 0;
+      targetOptions = targetsEmpty
+        ? [{ value: "", label: "No text target", disabled: true }]
+        : [
+            { value: "", label: "Select layer", disabled: true },
+            ...textRecords.map((record) => ({
+              value: String(record.id),
+              label: `Text ${record.id}: ${record.element.textContent || "Text"}`,
+            })),
+          ];
+    } else if (isVisibilityProp) {
+      const allLayers = getAllTargetableLayers();
+      const encodedTarget = prop.targetFrameId != null
+        ? `frame:${prop.targetFrameId}`
+        : prop.targetTextId != null
+          ? `text:${prop.targetTextId}`
+          : prop.targetVectorId != null
+            ? `vector:${prop.targetVectorId}`
+            : "";
+      hasCurrentTarget = allLayers.some((layer) => `${layer.type}:${layer.record.id}` === encodedTarget);
+      currentValue = hasCurrentTarget ? encodedTarget : "";
+      targetsEmpty = allLayers.length === 0;
+      targetOptions = targetsEmpty
+        ? [{ value: "", label: "No layer target", disabled: true }]
+        : [
+            { value: "", label: "Select layer", disabled: true },
+            ...allLayers.map((layer) => ({
+              value: `${layer.type}:${layer.record.id}`,
+              label: getVisibilityTargetLabel(layer.type, layer.record),
+            })),
+          ];
+    } else {
+      hasCurrentTarget = compatibleTargets.some((record) => record.id === prop.targetFrameId);
+      currentValue = hasCurrentTarget ? String(prop.targetFrameId) : "";
+      targetsEmpty = compatibleTargets.length === 0;
+      targetOptions = targetsEmpty
+        ? [{ value: "", label: "No button target", disabled: true }]
+        : [
+            { value: "", label: "Select layer", disabled: true },
+            ...compatibleTargets.map((record) => ({ value: String(record.id), label: `Frame ${record.id}` })),
+          ];
+    }
+
+    targetCell.append(createPropSelect(
+      targetOptions,
+      currentValue,
+      "Target layer",
+      (value) => {
+        if (!value || value === currentValue) return;
+        recordHistory();
+        if (isStringProp) {
+          const targetId = Number(value);
+          const target = getTextRecord(targetId);
+          prop.targetTextId = targetId;
+          prop.targetFrameId = null;
+          prop.targetVectorId = null;
+          prop.defaultValue = target?.element.textContent ?? "";
+        } else if (isVisibilityProp) {
+          const [type, rawId] = value.split(":");
+          const targetId = Number(rawId);
+          prop.targetFrameId = type === "frame" ? targetId : null;
+          prop.targetTextId = type === "text" ? targetId : null;
+          prop.targetVectorId = type === "vector" ? targetId : null;
+        } else {
+          const targetId = Number(value);
+          prop.targetFrameId = targetId;
+          prop.targetTextId = null;
+          prop.targetVectorId = null;
+        }
+        renderComponentProps();
+      },
+      targetsEmpty,
+    ));
+
+    const propertyCell = createCell();
+    if (prop.type === "boolean") {
+      propertyCell.append(createPropSelect(
+        [
+          { value: "disabled", label: "Disabled" },
+          { value: "visibility", label: "Visibility" },
+        ],
+        prop.property,
+        "Target property",
+        (value) => setBooleanPropProperty(prop, value),
+      ));
+    } else {
+      propertyCell.append(createPropSelect(
+        [{
+          value: prop.property,
+          label: prop.property === "textContent" ? "Text content" : prop.property,
+        }],
+        prop.property,
+        "Target property",
+        () => {},
+        !hasCurrentTarget,
+      ));
+    }
+
+    const actionCell = createCell(true);
+    const removeButton = document.createElement("button");
+    const removeIcon = document.createElement("span");
+    removeButton.className = "prop-remove-button";
+    removeButton.type = "button";
+    removeButton.setAttribute("aria-label", `Remove ${prop.name} prop`);
+    removeIcon.className = "remove-icon";
+    removeIcon.setAttribute("aria-hidden", "true");
+    removeButton.append(removeIcon);
+    removeButton.addEventListener("click", () => {
+      recordHistory();
+      componentProps = componentProps.filter((componentProp) => componentProp.id !== prop.id);
+      renderComponentProps();
+    });
+    actionCell.append(removeButton);
+
+    row.append(nameCell, typeCell, defaultCell, targetCell, propertyCell, actionCell);
+    return row;
+  });
+  propRowsContainer.replaceChildren(...rows);
+}
+
+function addDisabledProp() {
+  recordHistory();
+  const target = getCompatibleDisabledTargets()[0];
+  componentProps.push({
+    id: nextComponentPropId,
+    name: "disabled",
+    type: "boolean",
+    defaultValue: false,
+    targetFrameId: target?.id ?? null,
+    targetTextId: null,
+    targetVectorId: null,
+    property: "disabled",
+  });
+  nextComponentPropId += 1;
+  renderComponentProps();
+}
+
+colorPicker?.addEventListener("input", () => {
+  if (canvas && colorPicker instanceof HTMLInputElement) {
+    if (canvasColorValue !== colorPicker.value) recordHistory();
+    canvasColorValue = colorPicker.value;
+    canvas.style.backgroundColor = colorPicker.value;
+  }
+});
+
+fontSelect?.addEventListener("change", () => {
+  const record = getSelectedTextRecord();
+  if (!record || !(fontSelect instanceof HTMLSelectElement)) return;
+  const family = fontSelect.value;
+  const font = getFontRecord(family);
+  const previousWeight = Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
+  populateWeightOptions(family, previousWeight);
+  const weight = weightSelect instanceof HTMLSelectElement
+    ? Number(weightSelect.value)
+    : DEFAULT_FONT_WEIGHT;
+  if (record.element.dataset.fontFamily !== family || previousWeight !== weight) recordHistory();
+  record.element.dataset.fontFamily = family;
+  record.element.dataset.fontWeight = String(weight);
+  record.element.style.fontFamily = `${JSON.stringify(family)}, ${getFontFallback(font?.category || "Sans Serif")}`;
+  record.element.style.fontWeight = String(weight);
+  loadGoogleFont(family, weight);
+  requestAnimationFrame(syncSelectedTextSizeInputs);
+});
+
+weightSelect?.addEventListener("change", () => {
+  const record = getSelectedTextRecord();
+  if (!record || !(weightSelect instanceof HTMLSelectElement)) return;
+  const family = record.element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
+  const weight = Number(weightSelect.value);
+  if (Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT) !== weight) recordHistory();
+  record.element.dataset.fontWeight = String(weight);
+  record.element.style.fontWeight = String(weight);
+  loadGoogleFont(family, weight);
+  requestAnimationFrame(syncSelectedTextSizeInputs);
+});
+
+sizeSelect?.addEventListener("change", () => {
+  const record = getSelectedTextRecord();
+  if (!record || !(sizeSelect instanceof HTMLSelectElement)) return;
+  if ((record.element.dataset.fontSize || "14") !== sizeSelect.value) recordHistory();
+  record.element.dataset.fontSize = sizeSelect.value;
+  record.element.style.fontSize = `${sizeSelect.value}px`;
+  requestAnimationFrame(syncSelectedTextSizeInputs);
+});
+
+function applyLineHeightValue() {
+  const record = getSelectedTextRecord();
+  if (!record || !(lineHeightInput instanceof HTMLInputElement)) return false;
+  const value = lineHeightInput.value.trim();
+  if (/^auto$/i.test(value)) {
+    if ((record.element.dataset.lineHeight || "Auto") !== "Auto") recordHistory();
+    lineHeightInput.value = "Auto";
+    record.element.dataset.lineHeight = "Auto";
+    record.element.style.lineHeight = "normal";
+    requestAnimationFrame(syncSelectedTextSizeInputs);
+    return true;
+  }
+
+  if (!/^\d+(?:\.\d+)?$/.test(value)) return false;
+  const numberValue = Math.max(0, Number(value));
+  if ((record.element.dataset.lineHeight || "Auto") !== String(numberValue)) recordHistory();
+  lineHeightInput.value = String(numberValue);
+  record.element.dataset.lineHeight = String(numberValue);
+  record.element.style.lineHeight = `${numberValue}px`;
+  requestAnimationFrame(syncSelectedTextSizeInputs);
+  return true;
+}
+
+lineHeightInput?.addEventListener("input", applyLineHeightValue);
+
+lineHeightInput?.addEventListener("blur", () => {
+  if (!applyLineHeightValue()) syncInspectorToSelectedText();
+});
+
+lineHeightInput?.addEventListener("keydown", (event) => {
+  if (!(lineHeightInput instanceof HTMLInputElement)) return;
+  if (event.key === "Enter" && /^a$/i.test(lineHeightInput.value.trim())) {
+    event.preventDefault();
+    lineHeightInput.value = "Auto";
+    applyLineHeightValue();
+    return;
+  }
+  if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  const record = getSelectedTextRecord();
+  if (!record) return;
+  event.preventDefault();
+  const direction = event.key === "ArrowUp" ? 1 : -1;
+  const value = lineHeightInput.value.trim();
+  let base = Number(value);
+  if (/^auto$/i.test(value) || !Number.isFinite(base)) {
+    const styles = getComputedStyle(record.element);
+    base = Number.parseFloat(styles.lineHeight);
+    if (!Number.isFinite(base)) base = Number.parseFloat(styles.fontSize) * 1.2;
+    base = Math.round(base);
+  }
+  lineHeightInput.value = String(Math.max(0, base + direction));
+  applyLineHeightValue();
+});
+
+function applyLetterSpacingValue() {
+  const record = getSelectedTextRecord();
+  if (!record || !(letterSpacingInput instanceof HTMLInputElement)) return false;
+  const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)$/i);
+  if (!match) return false;
+  const value = `${Number(match[1])}${match[2].toLowerCase()}`;
+  if ((record.element.dataset.letterSpacing || "0%") !== value) recordHistory();
+  letterSpacingInput.value = value;
+  record.element.dataset.letterSpacing = value;
+  record.element.style.letterSpacing = match[2].toLowerCase() === "%"
+    ? `${Number(match[1]) / 100}em`
+    : value;
+  requestAnimationFrame(syncSelectedTextSizeInputs);
+  return true;
+}
+
+letterSpacingInput?.addEventListener("input", applyLetterSpacingValue);
+
+letterSpacingInput?.addEventListener("blur", () => {
+  if (!applyLetterSpacingValue()) syncInspectorToSelectedText();
+});
+
+letterSpacingInput?.addEventListener("keydown", (event) => {
+  if (!(letterSpacingInput instanceof HTMLInputElement) || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)$/i);
+  if (!match) return;
+  event.preventDefault();
+  const direction = event.key === "ArrowUp" ? 1 : -1;
+  letterSpacingInput.value = `${Number(match[1]) + direction}${match[2].toLowerCase()}`;
+  applyLetterSpacingValue();
+});
+
+textColorPicker?.addEventListener("input", () => {
+  const record = getSelectedTextRecord();
+  if (!record || !(textColorPicker instanceof HTMLInputElement)) return;
+  if ((record.element.dataset.textColor || "#ffffff") !== textColorPicker.value) recordHistory();
+  record.element.dataset.textColor = textColorPicker.value;
+  record.element.style.color = textColorPicker.value;
+});
+
+textAlignmentOptions.forEach((option) => {
+  option.addEventListener("click", () => {
+    const record = getSelectedTextRecord();
+    const alignment = normalizeFrameAlignment(option.getAttribute("data-text-alignment") || "top-left");
+    if (!record || normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment) return;
+    recordHistory();
+    record.element.dataset.alignment = alignment;
+    applyTextAlignment(record.element);
+    syncInspectorToSelectedText();
+    requestAnimationFrame(syncResizeOverlay);
+  });
+});
+
+vectorSizeInputs.forEach((input) => {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("input", () => {
+    const record = getSelectedVectorRecord();
+    const dimension = input.dataset.vectorSize;
+    const value = Number(input.value);
+    if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value) || value < 0) return;
+    if (Number(record.element.dataset[dimension] || "24") !== value) recordHistory();
+    record.element.dataset[`${dimension}Mode`] = "fixed";
+    record.element.dataset[dimension] = String(value);
+    applyLayerSizing("vector", record);
+    requestAnimationFrame(syncResizeOverlay);
+  });
+  input.addEventListener("blur", syncInspectorToSelectedVector);
+});
+
+vectorColorPicker?.addEventListener("input", () => {
+  const record = getSelectedVectorRecord();
+  if (!record || !(vectorColorPicker instanceof HTMLInputElement)) return;
+  if ((record.element.dataset.vectorColor || getVectorRenderedColor(record)) !== vectorColorPicker.value) recordHistory();
+  applyVectorColor(record, vectorColorPicker.value);
+});
+
+function getSizeInputContext(input) {
+  const frameDimension = input.dataset.frameSize;
+  const textDimension = input.dataset.textLayerSize;
+  if (frameDimension === "width" || frameDimension === "height") {
+    const record = getSelectedFrameRecord();
+    return record ? { type: "frame", record, dimension: frameDimension } : null;
+  }
+  if (textDimension === "width" || textDimension === "height") {
+    const record = getSelectedTextRecord();
+    return record ? { type: "text", record, dimension: textDimension } : null;
+  }
+  return null;
+}
+
+function setSizeComboboxOpen(wrapper, isOpen) {
+  const input = wrapper.querySelector("input");
+  const toggle = wrapper.querySelector("[data-size-toggle]");
+  const menu = wrapper.querySelector("[data-size-menu]");
+  if (!(input instanceof HTMLInputElement) || !(menu instanceof HTMLElement)) return;
+  sizeModeComboboxes.forEach((combobox) => {
+    const otherMenu = combobox.querySelector("[data-size-menu]");
+    const otherInput = combobox.querySelector("input");
+    const otherToggle = combobox.querySelector("[data-size-toggle]");
+    if (otherMenu instanceof HTMLElement) otherMenu.hidden = true;
+    otherInput?.setAttribute("aria-expanded", "false");
+    otherToggle?.setAttribute("aria-expanded", "false");
+  });
+  menu.hidden = !isOpen;
+  input.setAttribute("aria-expanded", String(isOpen));
+  toggle?.setAttribute("aria-expanded", String(isOpen));
+}
+
+function updateSizeOptionSelection(wrapper, mode) {
+  wrapper.querySelectorAll("[data-size-option]").forEach((option) => {
+    option.setAttribute("aria-selected", String(option.getAttribute("data-size-option") === mode));
+  });
+}
+
+function applySizeInputValue(input, rawValue = input.value, normalize = true) {
+  const context = getSizeInputContext(input);
+  if (!context) return false;
+  const { type, record, dimension } = context;
+  const element = record.element;
+  const trimmedValue = rawValue.trim();
+  const requestedMode = /^hug$/i.test(trimmedValue)
+    ? "hug"
+    : /^fill$/i.test(trimmedValue)
+      ? "fill"
+      : /^fixed$/i.test(trimmedValue)
+        ? "fixed"
+        : null;
+  const numberMatch = trimmedValue.match(/^\d+(?:\.\d+)?$/);
+  if (!requestedMode && !numberMatch) return false;
+
+  const currentMode = getLayerDimensionMode(element, dimension, type === "text" ? "hug" : "fixed");
+  const mode = numberMatch ? "fixed" : requestedMode;
+  let fixedValue = Number(element.dataset[dimension]);
+  if (numberMatch) fixedValue = Math.max(0, Number(numberMatch[0]));
+  if (mode === "fixed" && !Number.isFinite(fixedValue)) {
+    fixedValue = Math.round(element.getBoundingClientRect()[dimension]);
+  }
+  const hasChange = currentMode !== mode
+    || (mode === "fixed" && Number(element.dataset[dimension]) !== fixedValue);
+  if (hasChange) recordHistory();
+
+  element.dataset[`${dimension}Mode`] = mode;
+  if (mode === "fixed") element.dataset[dimension] = String(fixedValue);
+  applyLayerSizing(type, record);
+  if (normalize) input.value = mode === "fixed" ? String(fixedValue) : mode === "fill" ? "Fill" : "Hug";
+  const wrapper = input.closest("[data-size-combobox]");
+  if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
+  requestAnimationFrame(syncResizeOverlay);
+  return true;
+}
+
+sizeModeComboboxes.forEach((wrapper) => {
+  const input = wrapper.querySelector("input");
+  const toggle = wrapper.querySelector("[data-size-toggle]");
+  const menu = wrapper.querySelector("[data-size-menu]");
+  if (!(input instanceof HTMLInputElement) || !(menu instanceof HTMLElement)) return;
+
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("input", () => applySizeInputValue(input, input.value, false));
+  input.addEventListener("blur", (event) => {
+    if (event.relatedTarget instanceof Node && wrapper.contains(event.relatedTarget)) return;
+    if (!applySizeInputValue(input)) {
+      if (input.dataset.frameSize) syncInspectorToSelectedFrame();
+      else syncInspectorToSelectedText();
+    }
+    setSizeComboboxOpen(wrapper, false);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSizeComboboxOpen(wrapper, true);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSizeComboboxOpen(wrapper, false);
+      if (input.dataset.frameSize) syncInspectorToSelectedFrame();
+      else syncInspectorToSelectedText();
+      return;
+    }
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    if (!applySizeInputValue(input)) {
+      if (input.dataset.frameSize) syncInspectorToSelectedFrame();
+      else syncInspectorToSelectedText();
+    }
+    setSizeComboboxOpen(wrapper, false);
+  });
+
+  toggle?.addEventListener("click", () => {
+    setSizeComboboxOpen(wrapper, menu.hidden);
+    input.focus();
+  });
+
+  wrapper.querySelectorAll("[data-size-option]").forEach((option) => {
+    option.addEventListener("pointerdown", (event) => event.preventDefault());
+    option.addEventListener("click", () => {
+      const mode = option.getAttribute("data-size-option");
+      if (mode) applySizeInputValue(input, mode);
+      setSizeComboboxOpen(wrapper, false);
+      input.focus();
+    });
+  });
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!(event.target instanceof Node)) return;
+  if (sizeModeComboboxes.some((wrapper) => wrapper.contains(event.target))) return;
+  const firstCombobox = sizeModeComboboxes[0];
+  if (firstCombobox instanceof HTMLElement) setSizeComboboxOpen(firstCombobox, false);
+});
+
+framePaddingInputs.forEach((input) => {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.addEventListener("focus", () => input.select());
+  input.addEventListener("input", () => {
+    const record = getSelectedFrameRecord();
+    const side = input.dataset.framePadding;
+    const value = Number(input.value);
+    if (!record || !side || !Number.isFinite(value) || value < 0) return;
+    const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+    if (Number(record.element.dataset[propertyName] || "10") !== value) recordHistory();
+    record.element.dataset[propertyName] = String(value);
+    record.element.style[propertyName] = `${value}px`;
+  });
+  input.addEventListener("blur", syncInspectorToSelectedFrame);
+});
+
+frameRadiusInput?.addEventListener("focus", () => {
+  if (frameRadiusInput instanceof HTMLInputElement) frameRadiusInput.select();
+});
+
+frameRadiusInput?.addEventListener("input", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameRadiusInput instanceof HTMLInputElement)) return;
+  const value = Number(frameRadiusInput.value);
+  if (!Number.isFinite(value) || value < 0) return;
+  if (Number(record.element.dataset.radius || "0") !== value) recordHistory();
+  record.element.dataset.radius = String(value);
+  record.element.style.borderRadius = `${value}px`;
+});
+
+frameRadiusInput?.addEventListener("blur", syncInspectorToSelectedFrame);
+
+frameColorPicker?.addEventListener("input", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameColorPicker instanceof HTMLInputElement)) return;
+  if ((record.element.dataset.frameColor || "") !== frameColorPicker.value) recordHistory();
+  record.element.dataset.frameColor = frameColorPicker.value;
+  record.element.style.backgroundColor = frameColorPicker.value;
+  frameColorPicker.classList.remove("is-transparent");
+});
+
+frameDirectionOptions.forEach((option) => {
+  option.addEventListener("click", () => {
+    const record = getSelectedFrameRecord();
+    const direction = option.getAttribute("data-frame-direction") === "vertical" ? "vertical" : "horizontal";
+    if (!record || (record.element.dataset.direction || "horizontal") === direction) return;
+    recordHistory();
+    record.element.dataset.direction = direction;
+    record.element.style.flexDirection = direction === "vertical" ? "column" : "row";
+    applyFrameAlignment(record.element);
+    applyAllLayerSizing();
+    syncInspectorToSelectedFrame();
+  });
+});
+
+frameAlignmentOptions.forEach((option) => {
+  option.addEventListener("click", () => {
+    const record = getSelectedFrameRecord();
+    const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
+    if (!record || normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment) return;
+    recordHistory();
+    record.element.dataset.alignment = alignment;
+    applyFrameAlignment(record.element);
+    syncInspectorToSelectedFrame();
+  });
+});
+
+frameOutlineColorPicker?.addEventListener("input", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameOutlineColorPicker instanceof HTMLInputElement)) return;
+  if ((record.element.dataset.outlineColor || "") !== frameOutlineColorPicker.value) recordHistory();
+  record.element.dataset.outlineColor = frameOutlineColorPicker.value;
+  frameOutlineColorPicker.classList.remove("is-transparent");
+  applyFrameOutline(record.element);
+});
+
+frameOutlinePositionSelect?.addEventListener("change", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameOutlinePositionSelect instanceof HTMLSelectElement)) return;
+  const position = ["outside", "center"].includes(frameOutlinePositionSelect.value)
+    ? frameOutlinePositionSelect.value
+    : "inside";
+  if ((record.element.dataset.outlinePosition || "inside") === position) return;
+  recordHistory();
+  record.element.dataset.outlinePosition = position;
+  applyFrameOutline(record.element);
+});
+
+frameOutlineWeightInput?.addEventListener("focus", () => {
+  if (frameOutlineWeightInput instanceof HTMLInputElement) frameOutlineWeightInput.select();
+});
+
+frameOutlineWeightInput?.addEventListener("input", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameOutlineWeightInput instanceof HTMLInputElement)) return;
+  const weight = Number(frameOutlineWeightInput.value);
+  if (!Number.isFinite(weight) || weight < 0) return;
+  if (Number(record.element.dataset.outlineWeight || "1") !== weight) recordHistory();
+  record.element.dataset.outlineWeight = String(weight);
+  applyFrameOutline(record.element);
+});
+
+frameOutlineWeightInput?.addEventListener("blur", syncInspectorToSelectedFrame);
+
+function setFrameGapMenuOpen(isOpen) {
+  if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;
+  frameGapMenu.hidden = !isOpen;
+  frameGapInput.setAttribute("aria-expanded", String(isOpen));
+  frameGapToggle?.setAttribute("aria-expanded", String(isOpen));
+}
+
+function applyFrameGapValue(normalize = true) {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameGapInput instanceof HTMLInputElement)) return false;
+  const value = frameGapInput.value.trim();
+
+  if (/^auto$/i.test(value)) {
+    if (record.element.dataset.gapMode !== "auto") recordHistory();
+    record.element.dataset.gapMode = "auto";
+    record.element.style.gap = "0px";
+    applyFrameAlignment(record.element);
+    if (normalize) frameGapInput.value = "Auto";
+    return true;
+  }
+
+  const match = value.match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
+  if (!match) return false;
+  const gap = Math.max(0, Number(match[1]));
+  if (record.element.dataset.gapMode !== "fixed" || Number(record.element.dataset.gap || "10") !== gap) {
+    recordHistory();
+  }
+  record.element.dataset.gapMode = "fixed";
+  record.element.dataset.gap = String(gap);
+  record.element.style.gap = `${gap}px`;
+  applyFrameAlignment(record.element);
+  if (normalize) frameGapInput.value = `${gap}px`;
+  return true;
+}
+
+frameGapInput?.addEventListener("focus", () => {
+  if (frameGapInput instanceof HTMLInputElement) frameGapInput.select();
+});
+
+frameGapInput?.addEventListener("input", () => applyFrameGapValue(false));
+
+frameGapInput?.addEventListener("blur", (event) => {
+  if (frameGapCombobox instanceof HTMLElement && event.relatedTarget instanceof Node && frameGapCombobox.contains(event.relatedTarget)) return;
+  if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
+  setFrameGapMenuOpen(false);
+});
+
+frameGapInput?.addEventListener("keydown", (event) => {
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    setFrameGapMenuOpen(true);
+    return;
+  }
+  if (event.key === "Escape") {
+    setFrameGapMenuOpen(false);
+    syncInspectorToSelectedFrame();
+    return;
+  }
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
+  setFrameGapMenuOpen(false);
+});
+
+frameGapToggle?.addEventListener("click", () => {
+  if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;
+  const willOpen = frameGapMenu.hidden;
+  setFrameGapMenuOpen(willOpen);
+  frameGapInput.focus();
+});
+
+frameGapAutoOption?.addEventListener("pointerdown", (event) => event.preventDefault());
+
+frameGapAutoOption?.addEventListener("click", () => {
+  if (!(frameGapInput instanceof HTMLInputElement)) return;
+  frameGapInput.value = "Auto";
+  applyFrameGapValue();
+  setFrameGapMenuOpen(false);
+  frameGapInput.focus();
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!(frameGapCombobox instanceof HTMLElement) || !(event.target instanceof Node)) return;
+  if (!frameGapCombobox.contains(event.target)) setFrameGapMenuOpen(false);
+});
+
+frameHtmlTagInput?.addEventListener("change", () => {
+  const record = getSelectedFrameRecord();
+  if (!record || !(frameHtmlTagInput instanceof HTMLSelectElement)) return;
+  const htmlTag = normalizeFrameHtmlTag(frameHtmlTagInput.value);
+  if ((record.element.dataset.htmlTag || "div") !== htmlTag) recordHistory();
+  record.element.dataset.htmlTag = htmlTag;
+  renderComponentProps();
+});
+
+addPropButton?.addEventListener("click", addDisabledProp);
