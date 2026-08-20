@@ -21,7 +21,7 @@ function createIconCell(content) {
 }
 
 function getTreeIndent(depth) {
-  return 4 + Math.max(0, depth - 1) * 20;
+  return Math.max(0, depth - 1) * 20;
 }
 
 function componentHasChildLayers(component) {
@@ -407,8 +407,6 @@ function selectComponentTreeNode(componentId = currentComponent?.id) {
   if (componentId === undefined || componentId === null) return;
   if (currentComponent?.id !== componentId) {
     activateComponent(componentId, { render: false });
-    isComponentExpanded = false;
-    if (currentComponent) currentComponent.expanded = false;
     renderTree();
     return;
   }
