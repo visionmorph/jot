@@ -482,6 +482,10 @@ function getVisibilityTargetLabel(type, record) {
   return getTreeNodeName(type, record);
 }
 
+function getTargetLayerIconType(type, record) {
+  return type === "frame" && record?.isComponent ? "component" : type;
+}
+
 function setBooleanPropProperty(prop, property) {
   if (property === prop.property) return;
   recordHistory();
@@ -526,6 +530,7 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
   const wrap = document.createElement("div");
   const select = document.createElement("select");
   const chevron = document.createElement("span");
+  const selectedOptionRecord = options.find((optionRecord) => String(optionRecord.value) === String(value));
 
   wrap.className = "prop-select-wrap";
   select.className = "prop-control prop-select";
@@ -542,7 +547,18 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
   select.addEventListener("change", () => onChange(select.value));
   chevron.className = "chevron inspector-select-chevron";
   chevron.setAttribute("aria-hidden", "true");
-  wrap.append(select, chevron);
+  wrap.append(select);
+  if (selectedOptionRecord?.iconType) {
+    const selectedValue = document.createElement("span");
+    const selectedLabel = document.createElement("span");
+    selectedValue.className = "prop-target-selected-value";
+    selectedLabel.className = "prop-target-selected-label";
+    selectedLabel.textContent = selectedOptionRecord.label;
+    selectedValue.append(selectedLabel, createLayerTypeIcon(selectedOptionRecord.iconType));
+    select.classList.add("prop-select--has-layer-icon");
+    wrap.append(selectedValue);
+  }
+  wrap.append(chevron);
   bindNativeSelectChevron(select, wrap);
   return wrap;
 }
@@ -693,6 +709,7 @@ function renderComponentProps() {
             ...textRecords.map((record) => ({
               value: String(record.id),
               label: getTreeNodeName("text", record),
+              iconType: "text",
             })),
           ];
     } else if (isVisibilityProp) {
@@ -714,6 +731,7 @@ function renderComponentProps() {
             ...allLayers.map((layer) => ({
               value: `${layer.type}:${layer.record.id}`,
               label: getVisibilityTargetLabel(layer.type, layer.record),
+              iconType: getTargetLayerIconType(layer.type, layer.record),
             })),
           ];
     } else {
@@ -729,6 +747,7 @@ function renderComponentProps() {
               label: record.isComponent
                 ? currentComponent?.name || "Component"
                 : getTreeNodeName("frame", record),
+              iconType: getTargetLayerIconType("frame", record),
             })),
           ];
     }
