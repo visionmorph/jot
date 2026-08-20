@@ -302,6 +302,7 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component) 
 
   content.className = "tree-node-content";
   labelWrapper.className = "tree-node-label-wrap";
+  node.classList.toggle("is-disabled", !isVisible);
 
   if (treeRenameState?.key === key) {
     const input = document.createElement("input");
