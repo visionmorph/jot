@@ -479,9 +479,7 @@ function getAllTargetableLayers() {
 
 function getVisibilityTargetLabel(type, record) {
   if (type === "frame" && record.isComponent) return currentComponent?.name || "Component";
-  if (type === "frame") return `Frame ${record.id}`;
-  if (type === "text") return `Text ${record.id}: ${record.element.textContent || "Text"}`;
-  return `Vector ${record.id}: ${record.name || "Vector"}`;
+  return getTreeNodeName(type, record);
 }
 
 function setBooleanPropProperty(prop, property) {
@@ -694,7 +692,7 @@ function renderComponentProps() {
             { value: "", label: "Select layer", disabled: true },
             ...textRecords.map((record) => ({
               value: String(record.id),
-              label: `Text ${record.id}: ${record.element.textContent || "Text"}`,
+              label: getTreeNodeName("text", record),
             })),
           ];
     } else if (isVisibilityProp) {
@@ -728,7 +726,9 @@ function renderComponentProps() {
             { value: "", label: "Select layer", disabled: true },
             ...compatibleTargets.map((record) => ({
               value: String(record.id),
-              label: record.isComponent ? currentComponent?.name || "Component" : `Frame ${record.id}`,
+              label: record.isComponent
+                ? currentComponent?.name || "Component"
+                : getTreeNodeName("frame", record),
             })),
           ];
     }

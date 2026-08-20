@@ -11,6 +11,16 @@ function expandFramePath(parentFrameId) {
     expandedFrameIds.add(frameId);
     frameId = getFrameRecord(frameId)?.parentId ?? null;
   }
+  syncCurrentComponentExpansionState();
+}
+
+function syncCurrentComponentExpansionState() {
+  if (!currentComponent) return;
+  currentComponent.expanded = isComponentExpanded;
+  currentComponent.expandedFrameIds = [...expandedFrameIds];
+  if (currentComponent.workspace) {
+    currentComponent.workspace.expandedFrameIds = [...expandedFrameIds];
+  }
 }
 
 function createIconCell(content) {
@@ -283,6 +293,7 @@ function renderFrameTreeNode(record, depth) {
       event.stopPropagation();
       if (expandedFrameIds.has(record.id)) expandedFrameIds.delete(record.id);
       else expandedFrameIds.add(record.id);
+      syncCurrentComponentExpansionState();
       renderTree();
     });
     iconGroup.append(branchToggle);
@@ -484,6 +495,7 @@ function renderComponentTreeNode(component) {
         isComponentExpanded = !isComponentExpanded;
         component.expanded = isComponentExpanded;
       }
+      syncCurrentComponentExpansionState();
       renderTree();
     });
     iconGroup.append(branchToggle);

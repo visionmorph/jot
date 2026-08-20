@@ -268,6 +268,7 @@ function createComponentDefinition(name) {
     id,
     name,
     expanded: true,
+    expandedFrameIds: [],
     frameRecord: {
       id: 0,
       parentId: null,
@@ -578,6 +579,7 @@ function saveCurrentComponentWorkspace() {
   if (!currentComponent) return;
   currentComponent.workspace = captureWorkspaceState();
   currentComponent.expanded = isComponentExpanded;
+  currentComponent.expandedFrameIds = [...expandedFrameIds];
   currentComponent.undoHistory = undoHistory;
   currentComponent.redoHistory = redoHistory;
 }
@@ -589,11 +591,17 @@ function activateComponent(componentId, options = {}) {
     saveCurrentComponentWorkspace();
   }
 
+  const savedExpandedFrameIds = Array.isArray(component.expandedFrameIds)
+    ? component.expandedFrameIds
+    : component.workspace?.expandedFrameIds ?? [];
   currentComponent = component;
   isComponentExpanded = component.expanded !== false;
   undoHistory = component.undoHistory ?? [];
   redoHistory = component.redoHistory ?? [];
   restoreWorkspaceState(component.workspace ?? createEmptyWorkspaceState(component.id), { render: false });
+  expandedFrameIds.clear();
+  savedExpandedFrameIds.forEach((frameId) => expandedFrameIds.add(frameId));
+  component.expandedFrameIds = [...expandedFrameIds];
 
   if (options.selectComponent !== false) {
     selectedComponentId = component.id;
