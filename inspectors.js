@@ -19,7 +19,7 @@ function normalizeHexColor(value) {
   const hex = match[1].length === 3
     ? [...match[1]].map((character) => character.repeat(2)).join("")
     : match[1];
-  return `#${hex.toLowerCase()}`;
+  return `#${hex.toUpperCase()}`;
 }
 
 function normalizeColorOpacity(value) {

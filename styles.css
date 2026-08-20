@@ -1239,6 +1239,15 @@ input {
   letter-spacing: 0;
 }
 
+.inspector-section-group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+}
+
 .frame-outline-row {
   display: flex;
   width: 100%;
@@ -1547,16 +1556,17 @@ input {
 
 .custom-color-hex {
   width: 100%;
+  text-transform: uppercase;
 }
 
 .custom-color-opacity {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  width: 48px;
+  justify-content: space-between;
+  width: 64px;
   height: 24px;
   padding: 4px 8px;
-  flex: 0 0 48px;
+  flex: 0 0 64px;
   gap: 0;
   color: var(--text-secondary);
   font-size: 14px;
