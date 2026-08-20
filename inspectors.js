@@ -13,6 +13,53 @@ function normalizeFrameAlignment(value) {
   return alignments.includes(value) ? value : "top-left";
 }
 
+function normalizeHexColor(value) {
+  const match = String(value || "").trim().replace(/^#/, "").match(/^([\da-f]{3}|[\da-f]{6})$/i);
+  if (!match) return "";
+  const hex = match[1].length === 3
+    ? [...match[1]].map((character) => character.repeat(2)).join("")
+    : match[1];
+  return `#${hex.toLowerCase()}`;
+}
+
+function normalizeColorOpacity(value) {
+  const opacity = Number(value);
+  return Number.isFinite(opacity) ? Math.max(0, Math.min(100, opacity)) : 100;
+}
+
+function getColorWithOpacity(color, opacity = 100) {
+  const normalizedColor = normalizeHexColor(color);
+  if (!normalizedColor) return "";
+  const normalizedOpacity = normalizeColorOpacity(opacity);
+  if (normalizedOpacity === 100) return normalizedColor;
+  const red = Number.parseInt(normalizedColor.slice(1, 3), 16);
+  const green = Number.parseInt(normalizedColor.slice(3, 5), 16);
+  const blue = Number.parseInt(normalizedColor.slice(5, 7), 16);
+  const alpha = Number((normalizedOpacity / 100).toFixed(3));
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function syncCustomColorControl(picker, color, opacity = 100) {
+  if (!(picker instanceof HTMLInputElement)) return;
+  const control = picker.closest("[data-color-control]");
+  if (!(control instanceof HTMLElement)) return;
+  const normalizedColor = normalizeHexColor(color);
+  const normalizedOpacity = normalizeColorOpacity(opacity);
+  const hexInput = control.querySelector("[data-color-hex]");
+  const opacityInput = control.querySelector("[data-color-opacity]");
+  const swatch = control.querySelector("[data-color-swatch]");
+
+  picker.value = normalizedColor || "#000000";
+  if (hexInput instanceof HTMLInputElement) hexInput.value = normalizedColor.slice(1);
+  if (opacityInput instanceof HTMLInputElement) opacityInput.value = String(normalizedOpacity);
+  if (swatch instanceof HTMLElement) {
+    swatch.style.backgroundColor = normalizedColor
+      ? getColorWithOpacity(normalizedColor, normalizedOpacity)
+      : "transparent";
+  }
+  control.classList.toggle("is-empty", !normalizedColor);
+}
+
 function getFrameAlignmentValues(element) {
   const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
   const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
@@ -55,7 +102,10 @@ function getTextAlignmentValues(element) {
 }
 
 function getFrameOutlineBoxShadow(element) {
-  const color = element.dataset.outlineColor || "";
+  const color = getColorWithOpacity(
+    element.dataset.outlineColor || "",
+    element.dataset.outlineColorOpacity || "100",
+  );
   const weight = Math.max(0, Number(element.dataset.outlineWeight || "1"));
   if (!color || !Number.isFinite(weight) || weight === 0) return "";
   const position = ["inside", "outside", "center"].includes(element.dataset.outlinePosition)
@@ -208,7 +258,12 @@ function syncInspectorToSelectedText() {
   if (sizeSelect instanceof HTMLSelectElement) sizeSelect.value = element.dataset.fontSize || "14";
   if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.value = element.dataset.lineHeight || "Auto";
   if (letterSpacingInput instanceof HTMLInputElement) letterSpacingInput.value = element.dataset.letterSpacing || "0%";
-  if (textColorPicker instanceof HTMLInputElement) textColorPicker.value = element.dataset.textColor || "#ffffff";
+  if (textColorPicker instanceof HTMLInputElement) {
+    const color = Object.prototype.hasOwnProperty.call(element.dataset, "textColor")
+      ? element.dataset.textColor
+      : "#ffffff";
+    syncCustomColorControl(textColorPicker, color, element.dataset.textColorOpacity || "100");
+  }
   textAlignmentOptions.forEach((option) => {
     const isSelected = option.getAttribute("data-text-alignment") === normalizeFrameAlignment(element.dataset.alignment || "top-left");
     option.classList.toggle("is-selected", isSelected);
@@ -261,13 +316,11 @@ function syncInspectorToSelectedFrame() {
   }
   if (frameColorPicker instanceof HTMLInputElement) {
     const color = element.dataset.frameColor || "";
-    frameColorPicker.value = color || "#000000";
-    frameColorPicker.classList.toggle("is-transparent", color.length === 0);
+    syncCustomColorControl(frameColorPicker, color, element.dataset.frameColorOpacity || "100");
   }
   if (frameOutlineColorPicker instanceof HTMLInputElement) {
     const color = element.dataset.outlineColor || "";
-    frameOutlineColorPicker.value = color || "#000000";
-    frameOutlineColorPicker.classList.toggle("is-transparent", color.length === 0);
+    syncCustomColorControl(frameOutlineColorPicker, color, element.dataset.outlineColorOpacity || "100");
   }
   if (frameOutlinePositionSelect instanceof HTMLSelectElement) {
     frameOutlinePositionSelect.value = ["inside", "outside", "center"].includes(element.dataset.outlinePosition)
@@ -356,9 +409,10 @@ function syncInspectorToSelectedVector() {
     input.value = record.element.dataset[dimension] || String(Math.round(bounds[dimension]));
   });
   if (vectorColorPicker instanceof HTMLInputElement) {
-    const color = record.element.dataset.vectorColor || getVectorRenderedColor(record);
-    record.element.dataset.vectorColor = color;
-    vectorColorPicker.value = color;
+    const hasStoredColor = Object.prototype.hasOwnProperty.call(record.element.dataset, "vectorColor");
+    const color = hasStoredColor ? record.element.dataset.vectorColor : getVectorRenderedColor(record);
+    if (!hasStoredColor) record.element.dataset.vectorColor = color;
+    syncCustomColorControl(vectorColorPicker, color, record.element.dataset.vectorColorOpacity || "100");
   }
 }
 
@@ -373,6 +427,9 @@ function updateInspector() {
   if (isTextSelected) syncInspectorToSelectedText();
   if (isFrameSelected) syncInspectorToSelectedFrame();
   if (isVectorSelected) syncInspectorToSelectedVector();
+  if (!isTextSelected && !isFrameSelected && !isVectorSelected && colorPicker instanceof HTMLInputElement) {
+    syncCustomColorControl(colorPicker, canvasColorValue, canvasColorOpacity);
+  }
   requestAnimationFrame(syncResizeOverlay);
 }
 
@@ -718,13 +775,172 @@ function addDisabledProp() {
   renderComponentProps();
 }
 
-colorPicker?.addEventListener("input", () => {
-  if (canvas && colorPicker instanceof HTMLInputElement) {
-    if (canvasColorValue !== colorPicker.value) recordHistory();
-    canvasColorValue = colorPicker.value;
-    canvas.style.backgroundColor = colorPicker.value;
+function getCustomColorState(control) {
+  const property = control.dataset.colorControl;
+  if (property === "canvas") {
+    return { property, color: canvasColorValue, opacity: canvasColorOpacity, picker: colorPicker };
   }
+  if (property === "text") {
+    const record = getSelectedTextRecord();
+    if (!record) return null;
+    const color = Object.prototype.hasOwnProperty.call(record.element.dataset, "textColor")
+      ? record.element.dataset.textColor
+      : "#ffffff";
+    return {
+      property,
+      record,
+      color,
+      opacity: normalizeColorOpacity(record.element.dataset.textColorOpacity || "100"),
+      picker: textColorPicker,
+    };
+  }
+  if (property === "vector") {
+    const record = getSelectedVectorRecord();
+    if (!record) return null;
+    const color = Object.prototype.hasOwnProperty.call(record.element.dataset, "vectorColor")
+      ? record.element.dataset.vectorColor
+      : getVectorRenderedColor(record);
+    return {
+      property,
+      record,
+      color,
+      opacity: normalizeColorOpacity(record.element.dataset.vectorColorOpacity || "100"),
+      picker: vectorColorPicker,
+    };
+  }
+  const record = getSelectedFrameRecord();
+  if (!record) return null;
+  if (property === "frame-background") {
+    return {
+      property,
+      record,
+      color: record.element.dataset.frameColor || "",
+      opacity: normalizeColorOpacity(record.element.dataset.frameColorOpacity || "100"),
+      picker: frameColorPicker,
+    };
+  }
+  if (property === "frame-outline") {
+    return {
+      property,
+      record,
+      color: record.element.dataset.outlineColor || "",
+      opacity: normalizeColorOpacity(record.element.dataset.outlineColorOpacity || "100"),
+      picker: frameOutlineColorPicker,
+    };
+  }
+  return null;
+}
+
+function applyCustomColorValue(control, color, opacity) {
+  const state = getCustomColorState(control);
+  if (!state || !(state.picker instanceof HTMLInputElement)) return false;
+  const normalizedColor = normalizeHexColor(color);
+  const normalizedOpacity = normalizeColorOpacity(opacity);
+  if (state.color === normalizedColor && state.opacity === normalizedOpacity) {
+    syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
+    return true;
+  }
+
+  recordHistory();
+  const renderedColor = getColorWithOpacity(normalizedColor, normalizedOpacity);
+  if (state.property === "canvas") {
+    canvasColorValue = normalizedColor;
+    canvasColorOpacity = normalizedOpacity;
+    if (canvas instanceof HTMLElement) canvas.style.backgroundColor = renderedColor || "transparent";
+  } else if (state.property === "text") {
+    state.record.element.dataset.textColor = normalizedColor;
+    state.record.element.dataset.textColorOpacity = String(normalizedOpacity);
+    state.record.element.style.color = renderedColor;
+  } else if (state.property === "frame-background") {
+    state.record.element.dataset.frameColor = normalizedColor;
+    state.record.element.dataset.frameColorOpacity = String(normalizedOpacity);
+    state.record.element.style.backgroundColor = renderedColor;
+  } else if (state.property === "frame-outline") {
+    state.record.element.dataset.outlineColor = normalizedColor;
+    state.record.element.dataset.outlineColorOpacity = String(normalizedOpacity);
+    applyFrameOutline(state.record.element);
+  } else if (state.property === "vector") {
+    state.record.element.dataset.vectorColorOpacity = String(normalizedOpacity);
+    if (normalizedColor) {
+      applyVectorColor(state.record, renderedColor);
+      state.record.element.dataset.vectorColor = normalizedColor;
+    } else {
+      const source = state.record.originalSvgSource || state.record.svgSource;
+      state.record.originalSvgSource = source;
+      state.record.svgSource = source;
+      state.record.element.replaceChildren(createCanvasSvg(source));
+      state.record.element.dataset.vectorColor = "";
+    }
+  }
+
+  syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
+  return true;
+}
+
+colorControls.forEach((control) => {
+  if (!(control instanceof HTMLElement)) return;
+  const picker = control.querySelector("input[type='color']");
+  const hexInput = control.querySelector("[data-color-hex]");
+  const opacityInput = control.querySelector("[data-color-opacity]");
+  const removeButton = control.querySelector("[data-color-remove]");
+
+  picker?.addEventListener("input", () => {
+    if (!(picker instanceof HTMLInputElement)) return;
+    const state = getCustomColorState(control);
+    if (!state) return;
+    applyCustomColorValue(control, picker.value, state.opacity);
+  });
+
+  hexInput?.addEventListener("focus", () => {
+    if (hexInput instanceof HTMLInputElement) hexInput.select();
+  });
+  hexInput?.addEventListener("input", () => {
+    if (!(hexInput instanceof HTMLInputElement)) return;
+    if (!/^[\da-f]{6}$/i.test(hexInput.value.trim())) return;
+    const color = normalizeHexColor(hexInput.value);
+    const state = getCustomColorState(control);
+    if (color && state) applyCustomColorValue(control, color, state.opacity);
+  });
+  hexInput?.addEventListener("blur", () => {
+    const state = getCustomColorState(control);
+    if (state && state.picker instanceof HTMLInputElement) {
+      syncCustomColorControl(state.picker, state.color, state.opacity);
+    }
+  });
+
+  opacityInput?.addEventListener("focus", () => {
+    if (opacityInput instanceof HTMLInputElement) opacityInput.select();
+  });
+  opacityInput?.addEventListener("input", () => {
+    if (!(opacityInput instanceof HTMLInputElement) || opacityInput.value.trim() === "") return;
+    const state = getCustomColorState(control);
+    if (!state || !Number.isFinite(Number(opacityInput.value))) return;
+    applyCustomColorValue(control, state.color, opacityInput.value);
+  });
+  opacityInput?.addEventListener("keydown", (event) => {
+    if (!(opacityInput instanceof HTMLInputElement) || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const state = getCustomColorState(control);
+    if (!state) return;
+    const direction = event.key === "ArrowUp" ? 1 : -1;
+    applyCustomColorValue(control, state.color, state.opacity + direction);
+  });
+  opacityInput?.addEventListener("blur", () => {
+    const state = getCustomColorState(control);
+    if (state && state.picker instanceof HTMLInputElement) {
+      syncCustomColorControl(state.picker, state.color, state.opacity);
+    }
+  });
+
+  removeButton?.addEventListener("click", () => {
+    const state = getCustomColorState(control);
+    if (state) applyCustomColorValue(control, "", state.opacity);
+  });
 });
+
+if (colorPicker instanceof HTMLInputElement) {
+  syncCustomColorControl(colorPicker, canvasColorValue, canvasColorOpacity);
+}
 
 fontSelect?.addEventListener("change", () => {
   const record = getSelectedTextRecord();
@@ -864,14 +1080,6 @@ letterSpacingInput?.addEventListener("keydown", (event) => {
   applyLetterSpacingValue();
 });
 
-textColorPicker?.addEventListener("input", () => {
-  const record = getSelectedTextRecord();
-  if (!record || !(textColorPicker instanceof HTMLInputElement)) return;
-  if ((record.element.dataset.textColor || "#ffffff") !== textColorPicker.value) recordHistory();
-  record.element.dataset.textColor = textColorPicker.value;
-  record.element.style.color = textColorPicker.value;
-});
-
 textAlignmentOptions.forEach((option) => {
   option.addEventListener("click", () => {
     const record = getSelectedTextRecord();
@@ -900,13 +1108,6 @@ vectorSizeInputs.forEach((input) => {
     requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", syncInspectorToSelectedVector);
-});
-
-vectorColorPicker?.addEventListener("input", () => {
-  const record = getSelectedVectorRecord();
-  if (!record || !(vectorColorPicker instanceof HTMLInputElement)) return;
-  if ((record.element.dataset.vectorColor || getVectorRenderedColor(record)) !== vectorColorPicker.value) recordHistory();
-  applyVectorColor(record, vectorColorPicker.value);
 });
 
 function getSizeInputContext(input) {
@@ -1077,15 +1278,6 @@ frameRadiusInput?.addEventListener("input", () => {
 
 frameRadiusInput?.addEventListener("blur", syncInspectorToSelectedFrame);
 
-frameColorPicker?.addEventListener("input", () => {
-  const record = getSelectedFrameRecord();
-  if (!record || !(frameColorPicker instanceof HTMLInputElement)) return;
-  if ((record.element.dataset.frameColor || "") !== frameColorPicker.value) recordHistory();
-  record.element.dataset.frameColor = frameColorPicker.value;
-  record.element.style.backgroundColor = frameColorPicker.value;
-  frameColorPicker.classList.remove("is-transparent");
-});
-
 frameDirectionOptions.forEach((option) => {
   option.addEventListener("click", () => {
     const record = getSelectedFrameRecord();
@@ -1131,15 +1323,6 @@ frameAlignmentOptions.forEach((option) => {
     syncInspectorToSelectedFrame();
     wasSelectedAtFirstClick = false;
   });
-});
-
-frameOutlineColorPicker?.addEventListener("input", () => {
-  const record = getSelectedFrameRecord();
-  if (!record || !(frameOutlineColorPicker instanceof HTMLInputElement)) return;
-  if ((record.element.dataset.outlineColor || "") !== frameOutlineColorPicker.value) recordHistory();
-  record.element.dataset.outlineColor = frameOutlineColorPicker.value;
-  frameOutlineColorPicker.classList.remove("is-transparent");
-  applyFrameOutline(record.element);
 });
 
 frameOutlinePositionSelect?.addEventListener("change", () => {

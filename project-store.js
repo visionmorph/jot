@@ -34,6 +34,8 @@ const textColorPicker = document.querySelector("#text-color-picker");
 
 const vectorColorPicker = document.querySelector("#vector-color-picker");
 
+const colorControls = Array.from(document.querySelectorAll("[data-color-control]"));
+
 const leftSidebar = document.querySelector(".left-sidebar");
 
 const componentsPanel = document.querySelector(".components-panel");
@@ -167,6 +169,8 @@ let isBatchingHistory = false;
 
 let canvasColorValue = colorPicker instanceof HTMLInputElement ? colorPicker.value : "#121619";
 
+let canvasColorOpacity = 100;
+
 let resizeInteraction = null;
 
 let observedResizeElement = null;
@@ -285,6 +289,7 @@ function captureWorkspaceState() {
       order: record.order,
       name: record.name,
       svgSource: record.svgSource,
+      originalSvgSource: record.originalSvgSource,
       dataset: { ...record.element.dataset },
       style: record.element.getAttribute("style"),
     })),
@@ -300,6 +305,7 @@ function captureWorkspaceState() {
     componentProps: componentProps.map((prop) => ({ ...prop })),
     nextComponentPropId,
     canvasColor: canvasColorValue,
+    canvasColorOpacity,
     activeTool,
   };
 }
@@ -357,6 +363,7 @@ function restoreWorkspaceState(snapshot) {
     entry.record.order = entry.order;
     entry.record.name = entry.name;
     entry.record.svgSource = entry.svgSource;
+    entry.record.originalSvgSource = entry.originalSvgSource ?? entry.record.originalSvgSource ?? entry.svgSource;
     restoreElementState(entry.record.element, entry.dataset, entry.style);
     entry.record.element.replaceChildren(createCanvasSvg(entry.record.svgSource));
     return entry.record;
@@ -392,9 +399,12 @@ function restoreWorkspaceState(snapshot) {
 
   attachRestoredLayers(null, canvas);
   syncElementSelectionStyles();
-  canvas.style.backgroundColor = snapshot.canvasColor;
-  canvasColorValue = snapshot.canvasColor;
-  if (colorPicker instanceof HTMLInputElement) colorPicker.value = snapshot.canvasColor;
+  canvasColorValue = snapshot.canvasColor ?? "#121619";
+  canvasColorOpacity = Math.max(0, Math.min(100, Number(snapshot.canvasColorOpacity ?? 100)));
+  canvas.style.backgroundColor = canvasColorValue ? getColorWithOpacity(canvasColorValue, canvasColorOpacity) : "transparent";
+  if (colorPicker instanceof HTMLInputElement) {
+    syncCustomColorControl(colorPicker, canvasColorValue, canvasColorOpacity);
+  }
   selectTool(snapshot.activeTool);
   isRestoringHistory = false;
   renderTree();

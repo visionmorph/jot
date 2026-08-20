@@ -113,7 +113,9 @@ function getExportFrameStyle(record) {
       : undefined,
     border: isButton ? 0 : undefined,
     borderRadius: isZeroCssValue(`${radius}px`) ? undefined : `${radius}px`,
-    backgroundColor: element.dataset.frameColor || (isButton ? "transparent" : undefined),
+    backgroundColor: element.dataset.frameColor
+      ? getColorWithOpacity(element.dataset.frameColor, element.dataset.frameColorOpacity || "100")
+      : (isButton ? "transparent" : undefined),
     boxShadow: outlineBoxShadow || undefined,
     boxSizing: hasExplicitDimensions ? "border-box" : undefined,
   };
@@ -126,7 +128,9 @@ function getExportTextStyle(record) {
   const widthMode = getLayerDimensionMode(element, "width", "hug");
   return {
     ...getExportSizingStyle("text", record),
-    color: element.dataset.textColor || "#ffffff",
+    color: element.dataset.textColor
+      ? getColorWithOpacity(element.dataset.textColor, element.dataset.textColorOpacity || "100")
+      : undefined,
     fontFamily: element.style.fontFamily || '"Inter", sans-serif',
     fontSize: `${element.dataset.fontSize || "14"}px`,
     fontWeight: Number(element.dataset.fontWeight || DEFAULT_FONT_WEIGHT),

@@ -77,14 +77,21 @@
           <div class="panel-heading-wrap">
             <h2 class="panel-heading" id="page-heading">Page</h2>
           </div>
-          <div class="color-picker-field">
-            <label class="color-picker-label" for="canvas-color-picker">Color</label>
-            <input
-              class="canvas-color-picker inspector-color-picker--compact"
-              id="canvas-color-picker"
-              type="color"
-              value="#121619"
-            />
+          <div class="custom-color-control" data-color-control="canvas">
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose page color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true" style="background-color: #121619;"></span>
+                <input class="canvas-color-picker" id="canvas-color-picker" type="color" value="#121619" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="121619" aria-label="Page color hex value" data-color-hex />
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <div class="custom-color-opacity">
+              <input type="text" inputmode="decimal" maxlength="3" value="100" aria-label="Page color opacity" data-color-opacity />
+              <span aria-hidden="true">%</span>
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <button class="custom-color-remove" type="button" aria-label="Remove page color" data-color-remove><span class="subtract-icon" aria-hidden="true"></span></button>
           </div>
         </section>
 
@@ -203,17 +210,41 @@
           <div class="inspector-section-divider" aria-hidden="true"></div>
           <h3 class="inspector-section-title">Background</h3>
 
-          <div class="inspector-field">
-            <label class="inspector-label" for="frame-color-picker">Color</label>
-            <input class="canvas-color-picker inspector-color-picker--compact is-transparent" id="frame-color-picker" type="color" value="#000000" />
+          <div class="custom-color-control is-empty" data-color-control="frame-background">
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose frame background color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true"></span>
+                <input class="canvas-color-picker" id="frame-color-picker" type="color" value="#000000" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="" aria-label="Frame background hex value" data-color-hex />
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <div class="custom-color-opacity">
+              <input type="text" inputmode="decimal" maxlength="3" value="100" aria-label="Frame background opacity" data-color-opacity />
+              <span aria-hidden="true">%</span>
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <button class="custom-color-remove" type="button" aria-label="Remove frame background color" data-color-remove><span class="subtract-icon" aria-hidden="true"></span></button>
           </div>
 
           <div class="inspector-section-divider" aria-hidden="true"></div>
           <h3 class="inspector-section-title">Outline</h3>
 
-          <div class="inspector-field">
-            <label class="inspector-label" for="frame-outline-color-picker">Color</label>
-            <input class="canvas-color-picker inspector-color-picker--compact is-transparent" id="frame-outline-color-picker" type="color" value="#000000" />
+          <div class="custom-color-control is-empty" data-color-control="frame-outline">
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose frame outline color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true"></span>
+                <input class="canvas-color-picker" id="frame-outline-color-picker" type="color" value="#000000" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="" aria-label="Frame outline hex value" data-color-hex />
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <div class="custom-color-opacity">
+              <input type="text" inputmode="decimal" maxlength="3" value="100" aria-label="Frame outline opacity" data-color-opacity />
+              <span aria-hidden="true">%</span>
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <button class="custom-color-remove" type="button" aria-label="Remove frame outline color" data-color-remove><span class="subtract-icon" aria-hidden="true"></span></button>
           </div>
 
           <div class="frame-outline-row">
@@ -358,9 +389,21 @@
           </div>
           </div>
 
-          <div class="inspector-field">
-            <label class="inspector-label" for="text-color-picker">Color</label>
-            <input class="canvas-color-picker" id="text-color-picker" type="color" value="#ffffff" />
+          <div class="custom-color-control" data-color-control="text">
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose text color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true" style="background-color: #ffffff;"></span>
+                <input class="canvas-color-picker" id="text-color-picker" type="color" value="#ffffff" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="ffffff" aria-label="Text color hex value" data-color-hex />
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <div class="custom-color-opacity">
+              <input type="text" inputmode="decimal" maxlength="3" value="100" aria-label="Text color opacity" data-color-opacity />
+              <span aria-hidden="true">%</span>
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <button class="custom-color-remove" type="button" aria-label="Remove text color" data-color-remove><span class="subtract-icon" aria-hidden="true"></span></button>
           </div>
         </section>
 
@@ -387,9 +430,21 @@
             </div>
           </div>
 
-          <div class="inspector-field">
-            <label class="inspector-label" for="vector-color-picker">Color</label>
-            <input class="canvas-color-picker inspector-color-picker--compact" id="vector-color-picker" type="color" value="#000000" />
+          <div class="custom-color-control" data-color-control="vector">
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose vector color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true" style="background-color: #000000;"></span>
+                <input class="canvas-color-picker" id="vector-color-picker" type="color" value="#000000" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="000000" aria-label="Vector color hex value" data-color-hex />
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <div class="custom-color-opacity">
+              <input type="text" inputmode="decimal" maxlength="3" value="100" aria-label="Vector color opacity" data-color-opacity />
+              <span aria-hidden="true">%</span>
+            </div>
+            <div class="custom-color-divider" aria-hidden="true"></div>
+            <button class="custom-color-remove" type="button" aria-label="Remove vector color" data-color-remove><span class="subtract-icon" aria-hidden="true"></span></button>
           </div>
         </section>
         </aside>

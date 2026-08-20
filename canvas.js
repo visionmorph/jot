@@ -443,6 +443,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
     order: nextLayerOrder,
     name: svgDefinition.name || `Vector ${vectorId}`,
     svgSource: svgDefinition.source,
+    originalSvgSource: svgDefinition.source,
   };
   nextLayerOrder += 1;
 
@@ -477,6 +478,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
 
   vectorRecords.push(record);
   vector.dataset.vectorColor = getVectorRenderedColor(record);
+  vector.dataset.vectorColorOpacity = "100";
   applyLayerSizing("vector", record);
   renderTree();
   if (options.select !== false) selectCanvasVector(vector);
@@ -517,6 +519,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   text.dataset.lineHeight = "Auto";
   text.dataset.letterSpacing = "0%";
   text.dataset.textColor = "#ffffff";
+  text.dataset.textColorOpacity = "100";
   text.dataset.alignment = "top-left";
   text.dataset.widthMode = "hug";
   text.dataset.heightMode = "hug";
@@ -631,11 +634,13 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.dataset.heightMode = "fixed";
   frame.dataset.radius = "0";
   frame.dataset.frameColor = "";
+  frame.dataset.frameColorOpacity = "100";
   frame.dataset.direction = "horizontal";
   frame.dataset.alignment = "top-left";
   frame.dataset.gap = "10";
   frame.dataset.gapMode = "fixed";
   frame.dataset.outlineColor = "";
+  frame.dataset.outlineColorOpacity = "100";
   frame.dataset.outlinePosition = "inside";
   frame.dataset.outlineWeight = "1";
   frame.dataset.htmlTag = "div";
@@ -745,6 +750,7 @@ function duplicateVectorRecord(sourceRecord, parentRecord, offsetRoot = false) {
   if (!duplicateRecord) return;
 
   const duplicate = duplicateRecord.element;
+  duplicateRecord.originalSvgSource = sourceRecord.originalSvgSource || sourceRecord.svgSource;
   copyElementDataset(source, duplicate, ["vectorId"]);
   duplicate.setAttribute("style", source.getAttribute("style") || "");
   duplicate.style.left = parentRecord ? "" : `${x}px`;
