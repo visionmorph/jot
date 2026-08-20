@@ -50,7 +50,9 @@ function syncCustomColorControl(picker, color, opacity = 100) {
   const swatch = control.querySelector("[data-color-swatch]");
   const section = control.closest("[data-paint-section]");
   const actionButton = section?.querySelector("[data-color-action]");
-  const actionIcon = actionButton?.querySelector(".subtract-icon, .plus-icon");
+  const actionWrapper = actionButton?.closest(".tooltip");
+  const removeButton = control.querySelector("[data-color-remove-action]");
+  const removeWrapper = removeButton?.closest(".tooltip");
   const actionTooltip = actionButton?.closest(".tooltip")?.querySelector("[data-tooltip-content]");
   const propertyLabels = {
     canvas: "page fill",
@@ -74,14 +76,13 @@ function syncCustomColorControl(picker, color, opacity = 100) {
   }
   if (actionButton instanceof HTMLButtonElement) {
     const propertyLabel = propertyLabels[control.dataset.colorControl] || "color";
-    actionButton.setAttribute("aria-label", `${isEmpty ? "Add" : "Remove"} ${propertyLabel}`);
-  }
-  if (actionIcon instanceof HTMLElement) {
-    actionIcon.className = isEmpty ? "plus-icon" : "subtract-icon";
+    actionButton.setAttribute("aria-label", `Add ${propertyLabel}`);
   }
   if (actionTooltip instanceof HTMLElement) {
-    actionTooltip.textContent = isEmpty ? "Add" : "Remove";
+    actionTooltip.textContent = "Add";
   }
+  if (actionWrapper instanceof HTMLElement) actionWrapper.hidden = !isEmpty;
+  if (removeWrapper instanceof HTMLElement) removeWrapper.hidden = isEmpty;
 }
 
 function getFrameAlignmentValues(element) {
@@ -935,6 +936,7 @@ colorControls.forEach((control) => {
   const opacityInput = control.querySelector("[data-color-opacity]");
   const section = control.closest("[data-paint-section]");
   const actionButton = section?.querySelector("[data-color-action]");
+  const removeButton = control.querySelector("[data-color-remove-action]");
 
   picker?.addEventListener("input", () => {
     if (!(picker instanceof HTMLInputElement)) return;
@@ -999,10 +1001,6 @@ colorControls.forEach((control) => {
   actionButton?.addEventListener("click", () => {
     const state = getCustomColorState(control);
     if (!state) return;
-    if (state.color) {
-      applyCustomColorValue(control, "", state.opacity);
-      return;
-    }
     const fallbackColors = {
       canvas: "#121619",
       "frame-background": "#000000",
@@ -1014,6 +1012,11 @@ colorControls.forEach((control) => {
       || fallbackColors[control.dataset.colorControl]
       || "#000000";
     applyCustomColorValue(control, nextColor, state.opacity);
+  });
+
+  removeButton?.addEventListener("click", () => {
+    const state = getCustomColorState(control);
+    if (state?.color) applyCustomColorValue(control, "", state.opacity);
   });
 });
 

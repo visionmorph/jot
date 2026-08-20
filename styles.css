@@ -449,9 +449,8 @@ textarea:focus-visible {
   min-height: 24px;
   width: 100%;
   padding: 0;
-  padding-left: var(--tree-indent, 0);
   gap: 0;
-  border-radius: 2px;
+  border-radius: 4px;
   border: 0;
   background: transparent;
   color: var(--text-secondary);
@@ -472,7 +471,7 @@ textarea:focus-visible {
 }
 
 .tree-node--dynamic {
-  padding-left: var(--tree-indent, 0);
+  padding-left: 0;
 }
 
 .tree-node.is-selected,
@@ -534,12 +533,12 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  width: auto;
-  min-width: 36px;
+  width: 44px;
+  min-width: 44px;
   min-height: 24px;
   flex: 0 0 auto;
   margin: 0;
-  padding: 4px;
+  padding: 4px 0 4px 4px;
   gap: 4px;
 }
 
@@ -550,7 +549,7 @@ textarea:focus-visible {
   height: 24px;
   min-width: 0;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 var(--tree-indent, 0);
   gap: 0;
 }
 
@@ -1784,7 +1783,7 @@ textarea:focus-visible {
   border-radius: 4px;
   background: var(--layer-01);
   box-shadow: inset 0 0 0 1px var(--border-subtle-01);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .custom-color-control[hidden] {
@@ -1934,8 +1933,24 @@ textarea:focus-visible {
 }
 
 .custom-color-opacity input:focus-visible {
+  outline: 0;
+}
+
+.custom-color-opacity:focus-within,
+.custom-color-control:has(.custom-color-value:focus-within) {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
+}
+
+.custom-color-remove-action {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+
+.custom-color-remove-action[hidden],
+.paint-section-title-row > .tooltip[hidden] {
+  display: none;
 }
 
 .custom-color-control.is-empty .custom-color-swatch-fill {
