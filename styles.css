@@ -1145,28 +1145,39 @@ input {
 }
 
 .frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-dot::before {
   display: block;
   border-radius: 2px;
   background: var(--background-brand);
+  content: "";
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-dot {
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-dot::before {
   width: 4px;
   height: 12px;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment$="-center"] .alignment-dot,
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot {
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment$="-center"] .alignment-dot::before,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot::before {
   height: 6px;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-dot {
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-dot::before {
   width: 12px;
   height: 4px;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment^="center"] .alignment-dot,
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot {
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment^="center"] .alignment-dot::before,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot::before {
   width: 6px;
 }
 
