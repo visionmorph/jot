@@ -70,21 +70,37 @@ function syncResizeOverlay() {
   positionResizeOverlay();
 }
 
-function applyResizePointerPosition(clientX, clientY) {
+function applyResizePointerPosition(clientX, clientY, proportional = false) {
   if (!resizeInteraction) return;
   const { element, layer, direction } = resizeInteraction;
   if (!element.isConnected) return;
 
   const deltaX = clientX - resizeInteraction.pointerX;
   const deltaY = clientY - resizeInteraction.pointerY;
-  const changesWidth = direction.includes("e") || direction.includes("w");
-  const changesHeight = direction.includes("n") || direction.includes("s");
-  const nextWidth = changesWidth
+  let changesWidth = direction.includes("e") || direction.includes("w");
+  let changesHeight = direction.includes("n") || direction.includes("s");
+  let nextWidth = changesWidth
     ? Math.max(0, Math.round(resizeInteraction.width + (direction.includes("w") ? -deltaX : deltaX)))
     : resizeInteraction.width;
-  const nextHeight = changesHeight
+  let nextHeight = changesHeight
     ? Math.max(0, Math.round(resizeInteraction.height + (direction.includes("n") ? -deltaY : deltaY)))
     : resizeInteraction.height;
+
+  if (proportional && resizeInteraction.width > 0 && resizeInteraction.height > 0) {
+    const aspectRatio = resizeInteraction.width / resizeInteraction.height;
+    if (changesWidth && changesHeight) {
+      const widthDeltaRatio = Math.abs(nextWidth - resizeInteraction.width) / resizeInteraction.width;
+      const heightDeltaRatio = Math.abs(nextHeight - resizeInteraction.height) / resizeInteraction.height;
+      if (widthDeltaRatio >= heightDeltaRatio) nextHeight = Math.max(0, Math.round(nextWidth / aspectRatio));
+      else nextWidth = Math.max(0, Math.round(nextHeight * aspectRatio));
+    } else if (changesWidth) {
+      changesHeight = true;
+      nextHeight = Math.max(0, Math.round(nextWidth / aspectRatio));
+    } else if (changesHeight) {
+      changesWidth = true;
+      nextWidth = Math.max(0, Math.round(nextHeight * aspectRatio));
+    }
+  }
   const widthChanged = changesWidth && nextWidth !== Number(element.dataset.width || resizeInteraction.width);
   const heightChanged = changesHeight && nextHeight !== Number(element.dataset.height || resizeInteraction.height);
 
@@ -151,12 +167,12 @@ resizeOverlay.addEventListener("pointerdown", (event) => {
 
 resizeOverlay.addEventListener("pointermove", (event) => {
   if (!(event.target instanceof HTMLButtonElement) || !event.target.hasPointerCapture(event.pointerId)) return;
-  applyResizePointerPosition(event.clientX, event.clientY);
+  applyResizePointerPosition(event.clientX, event.clientY, event.shiftKey);
 });
 
 resizeOverlay.addEventListener("pointerup", (event) => {
   if (!(event.target instanceof HTMLButtonElement) || !event.target.hasPointerCapture(event.pointerId)) return;
-  applyResizePointerPosition(event.clientX, event.clientY);
+  applyResizePointerPosition(event.clientX, event.clientY, event.shiftKey);
   event.target.releasePointerCapture(event.pointerId);
   if (resizeInteraction?.layer.type === "text") resizeInteraction.element.draggable = true;
   resizeInteraction = null;
@@ -863,6 +879,159 @@ function duplicateSelectedLayer() {
   }
 }
 
+function getPrimaryLayerDescriptor() {
+  if (selectedComponentId === currentComponent?.id) return { type: "component", record: currentComponent.frameRecord };
+  const frameRecord = getSelectedFrameRecord();
+  if (frameRecord && !frameRecord.isComponent) return { type: "frame", record: frameRecord };
+  const textRecord = getSelectedTextRecord();
+  if (textRecord) return { type: "text", record: textRecord };
+  const vectorRecord = getSelectedVectorRecord();
+  if (vectorRecord) return { type: "vector", record: vectorRecord };
+  return null;
+}
+
+function selectLayerDescriptor(layer) {
+  if (!layer) return false;
+  if (layer.type === "component") {
+    selectComponentTreeNode(currentComponent?.id);
+    return true;
+  }
+  if (layer.type === "frame") selectCanvasFrame(layer.record.element);
+  else if (layer.type === "text") selectCanvasText(layer.record.element);
+  else selectCanvasVector(layer.record.element);
+  return true;
+}
+
+function getSelectedTopLevelLayers() {
+  const selectedFrameIds = new Set();
+  selectedLayerKeys.forEach((key) => {
+    const [type, rawId] = key.split(":");
+    if (type === "frame") selectedFrameIds.add(Number(rawId));
+  });
+  const hasSelectedFrameAncestor = (parentFrameId) => {
+    let ancestorId = parentFrameId;
+    while (ancestorId !== null) {
+      if (selectedFrameIds.has(ancestorId)) return true;
+      ancestorId = getFrameRecord(ancestorId)?.parentId ?? null;
+    }
+    return false;
+  };
+
+  return [...selectedLayerKeys].flatMap((key) => {
+    const [type, rawId] = key.split(":");
+    const id = Number(rawId);
+    const record = type === "frame" ? getFrameRecord(id) : type === "text" ? getTextRecord(id) : getVectorRecord(id);
+    if (!record) return [];
+    const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+    if (hasSelectedFrameAncestor(parentId)) return [];
+    return [{ type, record, parentId }];
+  }).sort((a, b) => a.record.order - b.record.order);
+}
+
+function wrapSelectedLayersInFrame() {
+  if (selectedComponentId !== null || selectedLayerKeys.size === 0 || !currentComponent) return false;
+  const layers = getSelectedTopLevelLayers();
+  if (layers.length === 0) return false;
+  const parentId = layers[0].parentId;
+  if (layers.some((layer) => layer.parentId !== parentId)) return false;
+  const siblings = getLayerChildren(parentId);
+  const insertionIndex = Math.min(...layers.map((layer) => siblings.findIndex(
+    (sibling) => sibling.type === layer.type && sibling.record.id === layer.record.id,
+  )).filter((index) => index >= 0));
+  if (!Number.isFinite(insertionIndex)) return false;
+
+  recordHistory();
+  isBatchingHistory = true;
+  try {
+    const parentRecord = parentId === null ? currentComponent.frameRecord : getFrameRecord(parentId);
+    const wrapper = createCanvasFrame(0, 0, parentRecord, { recordHistory: false, select: false });
+    if (!wrapper) return false;
+    wrapper.element.dataset.widthMode = "hug";
+    wrapper.element.dataset.heightMode = "hug";
+    applyLayerSizing("frame", wrapper);
+    moveLayer({ type: "frame", id: wrapper.id }, parentId, insertionIndex);
+    layers.forEach((layer, index) => moveLayer({ type: layer.type, id: layer.record.id }, wrapper.id, index));
+    expandedFrameIds.add(wrapper.id);
+    selectCanvasFrame(wrapper.element);
+    return true;
+  } finally {
+    isBatchingHistory = false;
+  }
+}
+
+function reorderPrimaryLayer(step = 0, edge = null) {
+  const layer = getPrimaryLayerDescriptor();
+  if (!layer || layer.type === "component") return false;
+  const parentId = layer.type === "frame" ? layer.record.parentId : layer.record.parentFrameId;
+  const siblings = getLayerChildren(parentId);
+  const currentIndex = siblings.findIndex(
+    (sibling) => sibling.type === layer.type && sibling.record.id === layer.record.id,
+  );
+  if (currentIndex < 0) return false;
+  const targetIndex = edge === "back"
+    ? 0
+    : edge === "front"
+      ? siblings.length
+      : Math.max(0, Math.min(siblings.length - 1, currentIndex + step));
+  return moveLayer({ type: layer.type, id: layer.record.id }, parentId, targetIndex);
+}
+
+function selectHierarchyChild() {
+  const layer = getPrimaryLayerDescriptor();
+  if (!layer) return false;
+  const children = layer.type === "component"
+    ? getLayerChildren(null)
+    : layer.type === "frame" ? getLayerChildren(layer.record.id) : [];
+  return selectLayerDescriptor(children[0]);
+}
+
+function selectHierarchyParent() {
+  const layer = getPrimaryLayerDescriptor();
+  if (!layer || layer.type === "component") return false;
+  const parentId = layer.type === "frame" ? layer.record.parentId : layer.record.parentFrameId;
+  if (parentId === null) return selectLayerDescriptor({ type: "component", record: currentComponent.frameRecord });
+  const parentRecord = getFrameRecord(parentId);
+  return parentRecord ? selectLayerDescriptor({ type: "frame", record: parentRecord }) : false;
+}
+
+function selectSiblingLayer(offset) {
+  const layer = getPrimaryLayerDescriptor();
+  if (!layer) return false;
+  if (layer.type === "component") {
+    const currentIndex = components.findIndex((component) => component.id === currentComponent?.id);
+    const nextComponent = components[currentIndex + offset];
+    if (!nextComponent) return false;
+    selectComponentTreeNode(nextComponent.id);
+    return true;
+  }
+  const parentId = layer.type === "frame" ? layer.record.parentId : layer.record.parentFrameId;
+  const siblings = getLayerChildren(parentId);
+  const currentIndex = siblings.findIndex(
+    (sibling) => sibling.type === layer.type && sibling.record.id === layer.record.id,
+  );
+  return selectLayerDescriptor(siblings[currentIndex + offset]);
+}
+
+function setSelectedLayersOpacity(percent) {
+  const normalizedPercent = Math.max(10, Math.min(100, percent));
+  let elements = [];
+  if (selectedComponentId === currentComponent?.id) {
+    elements = [currentComponent.frameRecord.element];
+  } else {
+    elements = getSelectedTopLevelLayers().map((layer) => layer.record.element);
+  }
+  if (elements.length === 0) return false;
+  const hasChanges = elements.some((element) => Number(element.dataset.opacity || "100") !== normalizedPercent);
+  if (!hasChanges) return false;
+  recordHistory();
+  elements.forEach((element) => {
+    element.dataset.opacity = String(normalizedPercent);
+    element.style.opacity = normalizedPercent === 100 ? "" : String(normalizedPercent / 100);
+  });
+  requestAnimationFrame(syncResizeOverlay);
+  return true;
+}
+
 toolButtons.forEach((button) => {
   button.addEventListener("click", () => {
     selectTool(button.getAttribute("data-tool") || "select");
@@ -993,7 +1162,7 @@ canvas?.addEventListener("pointerdown", (event) => {
     pointerId: event.pointerId,
     startX,
     startY,
-    additive: event.ctrlKey || event.metaKey,
+    additive: event.shiftKey || event.ctrlKey || event.metaKey,
     initialKeys: [...selectedLayerKeys],
     initialComponentId: selectedComponentId,
     dragged: false,

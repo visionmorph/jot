@@ -21,6 +21,11 @@ function isZeroCssValue(value) {
   return /^-?0(?:\.0+)?(?:px|em|rem|%)?$/i.test(String(value).trim());
 }
 
+function getExportOpacity(element) {
+  const opacity = Math.max(10, Math.min(100, Number(element.dataset.opacity || "100")));
+  return opacity < 100 ? opacity / 100 : undefined;
+}
+
 function getExportSizingStyle(type, record) {
   const element = record.element;
   const { parentId, parentDirection } = getLayerSizingContext(type, record);
@@ -102,6 +107,7 @@ function getExportFrameStyle(record) {
   const alignment = getFrameAlignmentValues(element);
   const outlineBoxShadow = getFrameOutlineBoxShadow(element);
   return {
+    opacity: getExportOpacity(element),
     display: isRoot && widthMode === "hug" ? "inline-flex" : "flex",
     flexDirection: direction === "vertical" ? "column" : undefined,
     alignItems: alignment.alignItems,
@@ -127,6 +133,7 @@ function getExportTextStyle(record) {
   const letterSpacing = element.style.letterSpacing || "0em";
   const widthMode = getLayerDimensionMode(element, "width", "hug");
   return {
+    opacity: getExportOpacity(element),
     ...getExportSizingStyle("text", record),
     color: element.dataset.textColor
       ? getColorWithOpacity(element.dataset.textColor, element.dataset.textColorOpacity || "100")
@@ -143,7 +150,10 @@ function getExportTextStyle(record) {
 }
 
 function getExportVectorStyle(record) {
-  return getExportSizingStyle("vector", record);
+  return {
+    opacity: getExportOpacity(record.element),
+    ...getExportSizingStyle("vector", record),
+  };
 }
 
 function toReactSvgAttributeName(name) {
