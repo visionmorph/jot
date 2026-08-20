@@ -21,8 +21,7 @@ function createIconCell(content) {
 }
 
 function getTreeIndent(depth) {
-  if (depth <= 1) return 4;
-  return 44 + (depth - 2) * 20;
+  return 4 + Math.max(0, depth - 1) * 20;
 }
 
 function componentHasChildLayers(component) {
