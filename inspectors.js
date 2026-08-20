@@ -26,6 +26,22 @@ function getFrameAlignmentValues(element) {
 function syncFrameAlignmentDistribution(element) {
   if (!(frameAlignmentGrid instanceof HTMLElement)) return;
   frameAlignmentGrid.dataset.spaceBetween = String(element.dataset.gapMode === "auto");
+  frameAlignmentOptions.forEach((option) => {
+    const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
+    const isSelected = isFrameAlignmentOptionSelected(element, alignment);
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-pressed", String(isSelected));
+  });
+}
+
+function isFrameAlignmentOptionSelected(element, alignment) {
+  const selectedAlignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
+  if (element.dataset.gapMode !== "auto") return selectedAlignment === alignment;
+  const selectedAxes = selectedAlignment === "center" ? ["center", "center"] : selectedAlignment.split("-");
+  const optionAxes = alignment === "center" ? ["center", "center"] : alignment.split("-");
+  return element.dataset.direction === "vertical"
+    ? selectedAxes[1] === optionAxes[1]
+    : selectedAxes[0] === optionAxes[0];
 }
 
 function getTextAlignmentValues(element) {
@@ -215,11 +231,6 @@ function syncInspectorToSelectedFrame() {
     frameAlignmentGrid.dataset.direction = element.dataset.direction === "vertical" ? "vertical" : "horizontal";
   }
   syncFrameAlignmentDistribution(element);
-  frameAlignmentOptions.forEach((option) => {
-    const isSelected = option.getAttribute("data-frame-alignment") === normalizeFrameAlignment(element.dataset.alignment || "top-left");
-    option.classList.toggle("is-selected", isSelected);
-    option.setAttribute("aria-pressed", String(isSelected));
-  });
   if (frameGapInput instanceof HTMLInputElement) {
     frameGapInput.value = element.dataset.gapMode === "auto"
       ? "Auto"
@@ -1095,11 +1106,9 @@ frameAlignmentOptions.forEach((option) => {
     const record = getSelectedFrameRecord();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
     if (event.detail === 1) {
-      wasSelectedAtFirstClick = Boolean(
-        record && normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment,
-      );
+      wasSelectedAtFirstClick = Boolean(record && isFrameAlignmentOptionSelected(record.element, alignment));
     }
-    if (!record || normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment) return;
+    if (!record || isFrameAlignmentOptionSelected(record.element, alignment)) return;
     recordHistory();
     record.element.dataset.alignment = alignment;
     applyFrameAlignment(record.element);
@@ -1111,7 +1120,7 @@ frameAlignmentOptions.forEach((option) => {
     if (
       !record
       || !wasSelectedAtFirstClick
-      || normalizeFrameAlignment(record.element.dataset.alignment || "top-left") !== alignment
+      || !isFrameAlignmentOptionSelected(record.element, alignment)
     ) return;
     event.preventDefault();
     recordHistory();
