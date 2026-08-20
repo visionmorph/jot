@@ -34,14 +34,45 @@ function getTreeIndent(depth) {
   return Math.max(0, depth - 1) * 20;
 }
 
-function componentHasChildLayers(component) {
-  if (component.id === currentComponent?.id) return getLayerChildren(null).length > 0;
+function getComponentLayerChildren(component, parentFrameId) {
+  if (component.id === currentComponent?.id) return getLayerChildren(parentFrameId);
   const workspace = component.workspace;
-  return Boolean(
-    workspace?.frames?.some((entry) => entry.parentId === null)
-    || workspace?.texts?.some((entry) => entry.parentFrameId === null)
-    || workspace?.vectors?.some((entry) => entry.parentFrameId === null),
-  );
+  if (!workspace) return [];
+  return [
+    ...(workspace.frames ?? [])
+      .filter((entry) => entry.parentId === parentFrameId)
+      .map((entry) => ({ type: "frame", record: entry.record })),
+    ...(workspace.texts ?? [])
+      .filter((entry) => entry.parentFrameId === parentFrameId)
+      .map((entry) => ({ type: "text", record: entry.record })),
+    ...(workspace.vectors ?? [])
+      .filter((entry) => entry.parentFrameId === parentFrameId)
+      .map((entry) => ({ type: "vector", record: entry.record })),
+  ].sort((a, b) => a.record.order - b.record.order);
+}
+
+function getComponentExpandedFrameIds(component) {
+  if (component.id === currentComponent?.id) return expandedFrameIds;
+  return new Set(component.expandedFrameIds ?? component.workspace?.expandedFrameIds ?? []);
+}
+
+function setComponentFrameExpanded(component, frameId, isExpanded) {
+  if (component.id === currentComponent?.id) {
+    if (isExpanded) expandedFrameIds.add(frameId);
+    else expandedFrameIds.delete(frameId);
+    syncCurrentComponentExpansionState();
+    return;
+  }
+
+  const componentFrameIds = getComponentExpandedFrameIds(component);
+  if (isExpanded) componentFrameIds.add(frameId);
+  else componentFrameIds.delete(frameId);
+  component.expandedFrameIds = [...componentFrameIds];
+  if (component.workspace) component.workspace.expandedFrameIds = [...componentFrameIds];
+}
+
+function componentHasChildLayers(component) {
+  return getComponentLayerChildren(component, null).length > 0;
 }
 
 function createSquareIcon() {
@@ -111,8 +142,8 @@ let treeRenameState = null;
 
 let lastTreeLabelPointer = { key: null, time: 0 };
 
-function getTreeNodeKey(type, id) {
-  return `${type}:${id}`;
+function getTreeNodeKey(type, id, componentId = currentComponent?.id) {
+  return `${componentId ?? "none"}:${type}:${id}`;
 }
 
 function getTreeNodeName(type, record) {
@@ -122,11 +153,23 @@ function getTreeNodeName(type, record) {
   return record.name || `Vector ${record.id}`;
 }
 
-function selectTreeNodeForRename(type, record) {
+function selectComponentLayerTreeNode(component, type, record, additive = false) {
+  const isChangingComponent = component.id !== currentComponent?.id;
+  if (isChangingComponent && !activateComponent(component.id, { render: false })) return;
+  const activeRecord = type === "frame"
+    ? getFrameRecord(record.id)
+    : type === "text"
+      ? getTextRecord(record.id)
+      : getVectorRecord(record.id);
+  if (!activeRecord) return;
+  if (type === "frame") selectCanvasFrame(activeRecord.element, isChangingComponent ? false : additive);
+  else if (type === "text") selectCanvasText(activeRecord.element, isChangingComponent ? false : additive);
+  else selectCanvasVector(activeRecord.element, isChangingComponent ? false : additive);
+}
+
+function selectTreeNodeForRename(type, record, component) {
   if (type === "component") selectComponentTreeNode(record.id);
-  else if (type === "frame") selectCanvasFrame(record.element);
-  else if (type === "text") selectCanvasText(record.element);
-  else selectCanvasVector(record.element);
+  else selectComponentLayerTreeNode(component, type, record);
 }
 
 function applyTreeNodeName(type, record, name) {
@@ -140,24 +183,34 @@ function applyTreeNodeName(type, record, name) {
   record.element.setAttribute("aria-label", name);
 }
 
-function beginTreeNodeRename(type, record) {
+function beginTreeNodeRename(type, record, component) {
   treeRenameState = {
-    key: getTreeNodeKey(type, record.id),
+    key: getTreeNodeKey(type, record.id, component.id),
     originalName: getTreeNodeName(type, record),
   };
-  selectTreeNodeForRename(type, record);
+  selectTreeNodeForRename(type, record, component);
 }
 
-function getTreeLayerElement(type, record) {
-  if (type === "component") return record.id === currentComponent?.id ? canvasRootStack : null;
+function getTreeLayerElement(type, record, component) {
+  if (type === "component") return component.id === currentComponent?.id ? canvasRootStack : null;
   return record.element;
 }
 
-function getTreeLayerVisibility(type, record) {
-  if (type === "component" && record.id !== currentComponent?.id) {
-    return record.workspace?.componentFrame?.dataset?.layerVisibility !== "hidden";
+function getWorkspaceLayerEntry(component, type, recordId) {
+  if (type === "component") return component.workspace?.componentFrame ?? null;
+  const entries = type === "frame"
+    ? component.workspace?.frames
+    : type === "text"
+      ? component.workspace?.texts
+      : component.workspace?.vectors;
+  return entries?.find((entry) => entry.record.id === recordId) ?? null;
+}
+
+function getTreeLayerVisibility(type, record, component) {
+  if (component.id !== currentComponent?.id) {
+    return getWorkspaceLayerEntry(component, type, record.id)?.dataset?.layerVisibility !== "hidden";
   }
-  return isLayerVisible(getTreeLayerElement(type, record));
+  return isLayerVisible(getTreeLayerElement(type, record, component));
 }
 
 function createLayerVisibilityGraphic(isVisible, isTopLevel) {
@@ -215,16 +268,20 @@ function createVectorLayerTreeIcon(record) {
   return svg;
 }
 
-function toggleTreeLayerVisibility(type, record) {
-  const isVisible = getTreeLayerVisibility(type, record);
+function toggleTreeLayerVisibility(type, record, component) {
+  const isVisible = getTreeLayerVisibility(type, record, component);
   const nextVisibility = isVisible ? "hidden" : "visible";
 
-  if (type === "component" && record.id !== currentComponent?.id) {
-    const frameState = record.workspace?.componentFrame ?? getDefaultComponentFrameState();
-    frameState.dataset = { ...frameState.dataset, layerVisibility: nextVisibility };
-    record.workspace.componentFrame = frameState;
+  if (component.id !== currentComponent?.id) {
+    const workspaceEntry = getWorkspaceLayerEntry(component, type, record.id);
+    if (!workspaceEntry) return;
+    workspaceEntry.dataset = { ...workspaceEntry.dataset, layerVisibility: nextVisibility };
+    if (record.element instanceof HTMLElement) {
+      record.element.dataset.layerVisibility = nextVisibility;
+      syncLayerVisibility(record.element);
+    }
   } else {
-    const element = getTreeLayerElement(type, record);
+    const element = getTreeLayerElement(type, record, component);
     if (!(element instanceof HTMLElement)) return;
     recordHistory();
     element.dataset.layerVisibility = nextVisibility;
@@ -234,13 +291,13 @@ function toggleTreeLayerVisibility(type, record) {
   renderTree();
 }
 
-function createTreeNodeContent(node, iconGroup, type, record, depth) {
+function createTreeNodeContent(node, iconGroup, type, record, depth, component) {
   const content = document.createElement("div");
   const labelWrapper = document.createElement("div");
   const visibilityButton = document.createElement("button");
-  const key = getTreeNodeKey(type, record.id);
+  const key = getTreeNodeKey(type, record.id, component.id);
   const name = getTreeNodeName(type, record);
-  const isVisible = getTreeLayerVisibility(type, record);
+  const isVisible = getTreeLayerVisibility(type, record, component);
   const isTopLevel = depth === 1;
 
   content.className = "tree-node-content";
@@ -303,7 +360,7 @@ function createTreeNodeContent(node, iconGroup, type, record, depth) {
     const startRename = (event) => {
       event.preventDefault();
       event.stopPropagation();
-      beginTreeNodeRename(type, record);
+      beginTreeNodeRename(type, record, component);
     };
     labelWrapper.addEventListener("pointerdown", (event) => {
       const now = performance.now();
@@ -326,58 +383,61 @@ function createTreeNodeContent(node, iconGroup, type, record, depth) {
   visibilityButton.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    toggleTreeLayerVisibility(type, record);
+    toggleTreeLayerVisibility(type, record, component);
   });
 
   content.append(iconGroup, labelWrapper, visibilityButton);
   return content;
 }
 
-function renderFrameTreeNode(record, depth) {
-  const childLayers = getLayerChildren(record.id);
+function renderFrameTreeNode(record, depth, component) {
+  const childLayers = getComponentLayerChildren(component, record.id);
   const isBranch = childLayers.length > 0;
-  const isExpanded = expandedFrameIds.has(record.id);
+  const isExpanded = getComponentExpandedFrameIds(component).has(record.id);
+  const isActiveComponent = component.id === currentComponent?.id;
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic";
-  node.draggable = true;
+  node.draggable = isActiveComponent;
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
-  node.setAttribute("aria-selected", String(isLayerSelected("frame", record.id)));
+  node.setAttribute("aria-selected", String(isActiveComponent && isLayerSelected("frame", record.id)));
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
-  if (isLayerSelected("frame", record.id)) node.classList.add("is-selected");
+  if (isActiveComponent && isLayerSelected("frame", record.id)) node.classList.add("is-selected");
   if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
 
-  node.addEventListener("click", (event) => selectCanvasFrame(record.element, event.ctrlKey));
+  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "frame", record, event.ctrlKey));
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
-      selectCanvasFrame(record.element);
+      selectComponentLayerTreeNode(component, "frame", record);
     }
   });
-  node.addEventListener("dragstart", (event) => {
-    event.stopPropagation();
-    setLayerDragData(event, "frame", record.id);
-  });
-  node.addEventListener("dragend", clearTreeDropIndicators);
-  node.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
-    showTreeDropIndicator(node, getTreeDropPosition(event, true));
-  });
-  node.addEventListener("drop", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const draggedLayer = getLayerDragData(event);
-    const position = getTreeDropPosition(event, true);
-    clearTreeDropIndicators();
-    if (draggedLayer) moveLayerRelative(draggedLayer, { type: "frame", id: record.id }, position);
-  });
+  if (isActiveComponent) {
+    node.addEventListener("dragstart", (event) => {
+      event.stopPropagation();
+      setLayerDragData(event, "frame", record.id);
+    });
+    node.addEventListener("dragend", clearTreeDropIndicators);
+    node.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      showTreeDropIndicator(node, getTreeDropPosition(event, true));
+    });
+    node.addEventListener("drop", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const draggedLayer = getLayerDragData(event);
+      const position = getTreeDropPosition(event, true);
+      clearTreeDropIndicators();
+      if (draggedLayer) moveLayerRelative(draggedLayer, { type: "frame", id: record.id }, position);
+    });
+  }
 
   iconGroup.className = "branch-icon-group";
   if (isBranch) {
@@ -393,127 +453,131 @@ function renderFrameTreeNode(record, depth) {
     branchToggle.append(chevron);
     branchToggle.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (expandedFrameIds.has(record.id)) expandedFrameIds.delete(record.id);
-      else expandedFrameIds.add(record.id);
-      syncCurrentComponentExpansionState();
+      setComponentFrameExpanded(component, record.id, !isExpanded);
       renderTree();
     });
     iconGroup.append(branchToggle);
   }
 
   iconGroup.append(createIconCell(createSquareIcon()));
-  node.append(createTreeNodeContent(node, iconGroup, "frame", record, depth));
+  node.append(createTreeNodeContent(node, iconGroup, "frame", record, depth, component));
   item.append(node);
 
   if (isBranch && isExpanded) {
-    childLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, depth + 1)));
+    childLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, depth + 1, component)));
   }
 
   return item;
 }
 
-function renderTextTreeNode(record, depth) {
+function renderTextTreeNode(record, depth, component) {
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
+  const isActiveComponent = component.id === currentComponent?.id;
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic";
-  node.draggable = true;
+  node.draggable = isActiveComponent;
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
-  node.setAttribute("aria-selected", String(isLayerSelected("text", record.id)));
+  node.setAttribute("aria-selected", String(isActiveComponent && isLayerSelected("text", record.id)));
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
-  if (isLayerSelected("text", record.id)) node.classList.add("is-selected");
+  if (isActiveComponent && isLayerSelected("text", record.id)) node.classList.add("is-selected");
 
-  node.addEventListener("click", (event) => selectCanvasText(record.element, event.ctrlKey));
+  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "text", record, event.ctrlKey));
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
-      selectCanvasText(record.element);
+      selectComponentLayerTreeNode(component, "text", record);
     }
   });
-  node.addEventListener("dragstart", (event) => {
-    event.stopPropagation();
-    setLayerDragData(event, "text", record.id);
-  });
-  node.addEventListener("dragend", clearTreeDropIndicators);
-  node.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
-    showTreeDropIndicator(node, getTreeDropPosition(event, false));
-  });
-  node.addEventListener("drop", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const draggedLayer = getLayerDragData(event);
-    const position = getTreeDropPosition(event, false);
-    clearTreeDropIndicators();
-    if (draggedLayer) moveLayerRelative(draggedLayer, { type: "text", id: record.id }, position);
-  });
+  if (isActiveComponent) {
+    node.addEventListener("dragstart", (event) => {
+      event.stopPropagation();
+      setLayerDragData(event, "text", record.id);
+    });
+    node.addEventListener("dragend", clearTreeDropIndicators);
+    node.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      showTreeDropIndicator(node, getTreeDropPosition(event, false));
+    });
+    node.addEventListener("drop", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const draggedLayer = getLayerDragData(event);
+      const position = getTreeDropPosition(event, false);
+      clearTreeDropIndicators();
+      if (draggedLayer) moveLayerRelative(draggedLayer, { type: "text", id: record.id }, position);
+    });
+  }
 
   iconGroup.className = "branch-icon-group";
   iconGroup.append(createIconCell(createLayerTypeIcon("text")));
-  node.append(createTreeNodeContent(node, iconGroup, "text", record, depth));
+  node.append(createTreeNodeContent(node, iconGroup, "text", record, depth, component));
   item.append(node);
   return item;
 }
 
-function renderVectorTreeNode(record, depth) {
+function renderVectorTreeNode(record, depth, component) {
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
+  const isActiveComponent = component.id === currentComponent?.id;
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic";
-  node.draggable = true;
+  node.draggable = isActiveComponent;
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
-  node.setAttribute("aria-selected", String(isLayerSelected("vector", record.id)));
+  node.setAttribute("aria-selected", String(isActiveComponent && isLayerSelected("vector", record.id)));
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
-  if (isLayerSelected("vector", record.id)) node.classList.add("is-selected");
+  if (isActiveComponent && isLayerSelected("vector", record.id)) node.classList.add("is-selected");
 
-  node.addEventListener("click", (event) => selectCanvasVector(record.element, event.ctrlKey));
+  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "vector", record, event.ctrlKey));
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
-      selectCanvasVector(record.element);
+      selectComponentLayerTreeNode(component, "vector", record);
     }
   });
-  node.addEventListener("dragstart", (event) => {
-    event.stopPropagation();
-    setLayerDragData(event, "vector", record.id);
-  });
-  node.addEventListener("dragend", clearTreeDropIndicators);
-  node.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
-    showTreeDropIndicator(node, getTreeDropPosition(event, false));
-  });
-  node.addEventListener("drop", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const draggedLayer = getLayerDragData(event);
-    const position = getTreeDropPosition(event, false);
-    clearTreeDropIndicators();
-    if (draggedLayer) moveLayerRelative(draggedLayer, { type: "vector", id: record.id }, position);
-  });
+  if (isActiveComponent) {
+    node.addEventListener("dragstart", (event) => {
+      event.stopPropagation();
+      setLayerDragData(event, "vector", record.id);
+    });
+    node.addEventListener("dragend", clearTreeDropIndicators);
+    node.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      showTreeDropIndicator(node, getTreeDropPosition(event, false));
+    });
+    node.addEventListener("drop", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const draggedLayer = getLayerDragData(event);
+      const position = getTreeDropPosition(event, false);
+      clearTreeDropIndicators();
+      if (draggedLayer) moveLayerRelative(draggedLayer, { type: "vector", id: record.id }, position);
+    });
+  }
 
   iconGroup.className = "branch-icon-group";
   iconGroup.append(createIconCell(createVectorLayerTreeIcon(record)));
-  node.append(createTreeNodeContent(node, iconGroup, "vector", record, depth));
+  node.append(createTreeNodeContent(node, iconGroup, "vector", record, depth, component));
   item.append(node);
   return item;
 }
 
-function renderLayerTreeNode(layer, depth) {
-  if (layer.type === "frame") return renderFrameTreeNode(layer.record, depth);
-  if (layer.type === "text") return renderTextTreeNode(layer.record, depth);
-  return renderVectorTreeNode(layer.record, depth);
+function renderLayerTreeNode(layer, depth, component) {
+  if (layer.type === "frame") return renderFrameTreeNode(layer.record, depth, component);
+  if (layer.type === "text") return renderTextTreeNode(layer.record, depth, component);
+  return renderVectorTreeNode(layer.record, depth, component);
 }
 
 function selectComponentTreeNode(componentId = currentComponent?.id) {
@@ -541,8 +605,8 @@ function renderComponentTreeNode(component) {
   const chevron = document.createElement("span");
   const isActive = component.id === currentComponent?.id;
   const isBranch = componentHasChildLayers(component);
-  const isExpanded = isBranch && isActive && isComponentExpanded;
-  const rootLayers = isActive ? getLayerChildren(null) : [];
+  const isExpanded = isBranch && (isActive ? isComponentExpanded : component.expanded !== false);
+  const rootLayers = getComponentLayerChildren(component, null);
   const isSelected = selectedComponentId === component.id;
 
   item.className = "dynamic-tree-item";
@@ -589,25 +653,23 @@ function renderComponentTreeNode(component) {
     branchToggle.append(chevron);
     branchToggle.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (!isActive) {
-        activateComponent(component.id, { render: false });
-        isComponentExpanded = true;
-        component.expanded = true;
-      } else {
+      if (isActive) {
         isComponentExpanded = !isComponentExpanded;
         component.expanded = isComponentExpanded;
+        syncCurrentComponentExpansionState();
+      } else {
+        component.expanded = !isExpanded;
       }
-      syncCurrentComponentExpansionState();
       renderTree();
     });
     iconGroup.append(branchToggle);
   }
   iconGroup.append(createIconCell(createLayerTypeIcon("component")));
 
-  node.append(createTreeNodeContent(node, iconGroup, "component", component, 1));
+  node.append(createTreeNodeContent(node, iconGroup, "component", component, 1, component));
   item.append(node);
   if (isExpanded) {
-    rootLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, 2)));
+    rootLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, 2, component)));
   }
   return item;
 }
