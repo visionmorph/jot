@@ -20,6 +20,21 @@ function createIconCell(content) {
   return cell;
 }
 
+function getTreeIndent(depth) {
+  if (depth <= 1) return 4;
+  return 44 + (depth - 2) * 20;
+}
+
+function componentHasChildLayers(component) {
+  if (component.id === currentComponent?.id) return getLayerChildren(null).length > 0;
+  const workspace = component.workspace;
+  return Boolean(
+    workspace?.frames?.some((entry) => entry.parentId === null)
+    || workspace?.texts?.some((entry) => entry.parentFrameId === null)
+    || workspace?.vectors?.some((entry) => entry.parentFrameId === null),
+  );
+}
+
 function createSquareIcon() {
   return createLayerTypeIcon("frame");
 }
@@ -99,7 +114,7 @@ function renderFrameTreeNode(record, depth) {
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
   node.setAttribute("aria-selected", String(isLayerSelected("frame", record.id)));
-  node.style.setProperty("--tree-indent", `${8 + (depth - 1) * 40}px`);
+  node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isLayerSelected("frame", record.id)) node.classList.add("is-selected");
   if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
 
@@ -177,7 +192,7 @@ function renderTextTreeNode(record, depth) {
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
   node.setAttribute("aria-selected", String(isLayerSelected("text", record.id)));
-  node.style.setProperty("--tree-indent", `${8 + (depth - 1) * 40}px`);
+  node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isLayerSelected("text", record.id)) node.classList.add("is-selected");
 
   node.addEventListener("click", (event) => selectCanvasText(record.element, event.ctrlKey));
@@ -231,7 +246,7 @@ function renderVectorTreeNode(record, depth) {
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
   node.setAttribute("aria-selected", String(isLayerSelected("vector", record.id)));
-  node.style.setProperty("--tree-indent", `${8 + (depth - 1) * 40}px`);
+  node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isLayerSelected("vector", record.id)) node.classList.add("is-selected");
 
   node.addEventListener("click", (event) => selectCanvasVector(record.element, event.ctrlKey));
@@ -279,7 +294,10 @@ function renderLayerTreeNode(layer, depth) {
 function selectComponentTreeNode(componentId = currentComponent?.id) {
   if (componentId === undefined || componentId === null) return;
   if (currentComponent?.id !== componentId) {
-    activateComponent(componentId);
+    activateComponent(componentId, { render: false });
+    isComponentExpanded = false;
+    if (currentComponent) currentComponent.expanded = false;
+    renderTree();
     return;
   }
   selectedLayerKeys.clear();
@@ -300,7 +318,8 @@ function renderComponentTreeNode(component) {
   const chevron = document.createElement("span");
   const label = document.createElement("span");
   const isActive = component.id === currentComponent?.id;
-  const isExpanded = isActive && isComponentExpanded;
+  const isBranch = componentHasChildLayers(component);
+  const isExpanded = isBranch && isActive && isComponentExpanded;
   const rootLayers = isActive ? getLayerChildren(null) : [];
   const isSelected = selectedComponentId === component.id;
 
@@ -309,9 +328,9 @@ function renderComponentTreeNode(component) {
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", "1");
-  node.setAttribute("aria-expanded", String(isExpanded));
+  if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
   node.setAttribute("aria-selected", String(isSelected));
-  node.style.setProperty("--tree-indent", "8px");
+  node.style.setProperty("--tree-indent", `${getTreeIndent(1)}px`);
   if (isSelected) node.classList.add("is-selected");
 
   node.addEventListener("click", () => selectComponentTreeNode(component.id));
@@ -338,26 +357,29 @@ function renderComponentTreeNode(component) {
   }
 
   iconGroup.className = "branch-icon-group";
-  branchToggle.className = "icon-cell branch-toggle";
-  branchToggle.type = "button";
-  branchToggle.setAttribute("aria-label", `${isExpanded ? "Collapse" : "Expand"} ${component.name}`);
-  branchToggle.setAttribute("aria-expanded", String(isExpanded));
-  chevron.className = `chevron ${isExpanded ? "chevron--down" : "chevron--right"}`;
-  chevron.setAttribute("aria-hidden", "true");
-  branchToggle.append(chevron);
-  branchToggle.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (!isActive) {
-      activateComponent(component.id);
-      isComponentExpanded = true;
-      component.expanded = true;
-    } else {
-      isComponentExpanded = !isComponentExpanded;
-      component.expanded = isComponentExpanded;
-    }
-    renderTree();
-  });
-  iconGroup.append(branchToggle, createIconCell(createLayerTypeIcon("component")));
+  if (isBranch) {
+    branchToggle.className = "icon-cell branch-toggle";
+    branchToggle.type = "button";
+    branchToggle.setAttribute("aria-label", `${isExpanded ? "Collapse" : "Expand"} ${component.name}`);
+    branchToggle.setAttribute("aria-expanded", String(isExpanded));
+    chevron.className = `chevron ${isExpanded ? "chevron--down" : "chevron--right"}`;
+    chevron.setAttribute("aria-hidden", "true");
+    branchToggle.append(chevron);
+    branchToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (!isActive) {
+        activateComponent(component.id, { render: false });
+        isComponentExpanded = true;
+        component.expanded = true;
+      } else {
+        isComponentExpanded = !isComponentExpanded;
+        component.expanded = isComponentExpanded;
+      }
+      renderTree();
+    });
+    iconGroup.append(branchToggle);
+  }
+  iconGroup.append(createIconCell(createLayerTypeIcon("component")));
 
   label.className = "tree-node-label";
   label.textContent = component.name;
