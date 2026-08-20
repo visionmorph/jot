@@ -24,7 +24,7 @@ function isZeroCssValue(value) {
 function getExportSizingStyle(type, record) {
   const element = record.element;
   const { parentId, parentDirection } = getLayerSizingContext(type, record);
-  const isRoot = parentId === null;
+  const isRoot = Boolean(record.isComponent);
   const widthMode = getLayerDimensionMode(element, "width", type === "text" ? "hug" : "fixed");
   const heightMode = getLayerDimensionMode(element, "height", type === "text" ? "hug" : "fixed");
   const mainDimension = parentDirection === "vertical" ? "height" : "width";
@@ -90,7 +90,7 @@ function getExportTextAlignmentStyle(record) {
 
 function getExportFrameStyle(record) {
   const element = record.element;
-  const isRoot = record.parentId === null;
+  const isRoot = Boolean(record.isComponent);
   const isAutoGap = element.dataset.gapMode === "auto";
   const direction = element.dataset.direction || "horizontal";
   const widthMode = getLayerDimensionMode(element, "width", "fixed");
@@ -286,7 +286,9 @@ function renderExportLayer(layer, depth, exportProps) {
     return `${indent}<span style={${formatReactStyle(textStyleObject, textRawProperties)}}>{${content}}</span>`;
   }
 
-  const children = getLayerChildren(layer.record.id);
+  const children = layer.record.isComponent
+    ? getLayerChildren(null)
+    : getLayerChildren(layer.record.id);
   const frameVisibilityProp = findVisibilityProp(exportProps, "frame", layer.record.id);
   const { style: frameStyleObject, rawProperties: frameRawProperties } = withVisibilityStyle(getExportFrameStyle(layer.record), frameVisibilityProp);
   const style = formatReactStyle(frameStyleObject, frameRawProperties);
@@ -302,13 +304,10 @@ function renderExportLayer(layer, depth, exportProps) {
 }
 
 function createReactComponentSource(componentName) {
-  const rootLayers = getLayerChildren(null);
   const exportProps = getExportComponentProps();
-  const componentMarkup = rootLayers.length === 0
-    ? "    <></>"
-    : rootLayers.length === 1
-      ? renderExportLayer(rootLayers[0], 2, exportProps)
-      : `    <>\n${rootLayers.map((layer) => renderExportLayer(layer, 3, exportProps)).join("\n")}\n    </>`;
+  const componentMarkup = currentComponent?.frameRecord
+    ? renderExportLayer({ type: "frame", record: currentComponent.frameRecord }, 2, exportProps)
+    : "    <></>";
   const parameters = exportProps.length > 0
     ? `{ ${exportProps.map((prop) => prop.type === "action"
       ? prop.exportName
@@ -353,9 +352,22 @@ function downloadExportFile(fileName, source) {
 }
 
 function exportAllComponents() {
-  const componentName = toReactComponentName(currentComponent.name || "Generated Component");
-  downloadExportFile(`${componentName}.jsx`, createReactComponentSource(componentName));
-  downloadExportFile(`${componentName}.stories.jsx`, createStorySource(componentName));
+  if (!currentComponent) return;
+  saveCurrentComponentWorkspace();
+  const originalComponentId = currentComponent.id;
+  const exportFiles = [];
+
+  components.forEach((component) => {
+    activateComponent(component.id, { saveCurrent: false, selectComponent: false, render: false });
+    const componentName = toReactComponentName(component.name || "Generated Component");
+    exportFiles.push(
+      { name: `${componentName}.jsx`, source: createReactComponentSource(componentName) },
+      { name: `${componentName}.stories.jsx`, source: createStorySource(componentName) },
+    );
+  });
+
+  activateComponent(originalComponentId, { saveCurrent: false, selectComponent: false });
+  exportFiles.forEach((file) => downloadExportFile(file.name, file.source));
 }
 
 exportComponentsButton?.addEventListener("click", exportAllComponents);

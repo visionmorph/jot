@@ -64,6 +64,12 @@ document.addEventListener("keydown", (event) => {
     (target instanceof HTMLElement && (target.isContentEditable || Boolean(target.closest(".props-panel"))))
   ) return;
 
+  if (selectedComponentId !== null) {
+    event.preventDefault();
+    deleteSelectedComponent();
+    return;
+  }
+
   if (selectedLayerKeys.size === 0) return;
 
   event.preventDefault();
@@ -110,6 +116,8 @@ document.addEventListener("keydown", (event) => {
   syncElementSelectionStyles();
   renderTree();
 });
+
+initializeComponents();
 
 loadGoogleFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
 

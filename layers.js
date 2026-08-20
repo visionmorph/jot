@@ -2,6 +2,7 @@
 
 function expandFramePath(parentFrameId) {
   isComponentExpanded = true;
+  if (currentComponent) currentComponent.expanded = true;
   const visitedFrameIds = new Set();
   let frameId = parentFrameId;
 
@@ -275,76 +276,94 @@ function renderLayerTreeNode(layer, depth) {
   return renderVectorTreeNode(layer.record, depth);
 }
 
-function selectComponentTreeNode() {
+function selectComponentTreeNode(componentId = currentComponent?.id) {
+  if (componentId === undefined || componentId === null) return;
+  if (currentComponent?.id !== componentId) {
+    activateComponent(componentId);
+    return;
+  }
   selectedLayerKeys.clear();
   clearElementSelection();
+  selectedComponentId = componentId;
   selectedCanvasFrame = null;
   selectedCanvasText = null;
   selectedCanvasVector = null;
+  syncElementSelectionStyles();
   renderTree();
 }
 
-function renderComponentTreeNode() {
+function renderComponentTreeNode(component) {
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
   const branchToggle = document.createElement("button");
   const chevron = document.createElement("span");
   const label = document.createElement("span");
-  const rootLayers = getLayerChildren(null);
-  const isSelected = selectedLayerKeys.size === 0;
+  const isActive = component.id === currentComponent?.id;
+  const isExpanded = isActive && isComponentExpanded;
+  const rootLayers = isActive ? getLayerChildren(null) : [];
+  const isSelected = selectedComponentId === component.id;
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic tree-node--component";
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", "1");
-  node.setAttribute("aria-expanded", String(isComponentExpanded));
+  node.setAttribute("aria-expanded", String(isExpanded));
   node.setAttribute("aria-selected", String(isSelected));
   node.style.setProperty("--tree-indent", "8px");
   if (isSelected) node.classList.add("is-selected");
 
-  node.addEventListener("click", selectComponentTreeNode);
+  node.addEventListener("click", () => selectComponentTreeNode(component.id));
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
-      selectComponentTreeNode();
+      selectComponentTreeNode(component.id);
     }
   });
-  node.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
-    showTreeDropIndicator(node, "inside");
-  });
-  node.addEventListener("drop", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const draggedLayer = getLayerDragData(event);
-    clearTreeDropIndicators();
-    if (draggedLayer) moveLayer(draggedLayer, null, rootLayers.length);
-  });
+  if (isActive) {
+    node.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "move";
+      showTreeDropIndicator(node, "inside");
+    });
+    node.addEventListener("drop", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const draggedLayer = getLayerDragData(event);
+      clearTreeDropIndicators();
+      if (draggedLayer) moveLayer(draggedLayer, null, rootLayers.length);
+    });
+  }
 
   iconGroup.className = "branch-icon-group";
   branchToggle.className = "icon-cell branch-toggle";
   branchToggle.type = "button";
-  branchToggle.setAttribute("aria-label", `${isComponentExpanded ? "Collapse" : "Expand"} ${currentComponent.name}`);
-  branchToggle.setAttribute("aria-expanded", String(isComponentExpanded));
-  chevron.className = `chevron ${isComponentExpanded ? "chevron--down" : "chevron--right"}`;
+  branchToggle.setAttribute("aria-label", `${isExpanded ? "Collapse" : "Expand"} ${component.name}`);
+  branchToggle.setAttribute("aria-expanded", String(isExpanded));
+  chevron.className = `chevron ${isExpanded ? "chevron--down" : "chevron--right"}`;
   chevron.setAttribute("aria-hidden", "true");
   branchToggle.append(chevron);
   branchToggle.addEventListener("click", (event) => {
     event.stopPropagation();
-    isComponentExpanded = !isComponentExpanded;
+    if (!isActive) {
+      activateComponent(component.id);
+      isComponentExpanded = true;
+      component.expanded = true;
+    } else {
+      isComponentExpanded = !isComponentExpanded;
+      component.expanded = isComponentExpanded;
+    }
     renderTree();
   });
   iconGroup.append(branchToggle, createIconCell(createLayerTypeIcon("component")));
 
   label.className = "tree-node-label";
-  label.textContent = currentComponent.name;
+  label.textContent = component.name;
   node.append(iconGroup, label);
   item.append(node);
-  if (isComponentExpanded) {
+  if (isExpanded) {
     rootLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, 2)));
   }
   return item;
@@ -352,10 +371,12 @@ function renderComponentTreeNode() {
 
 function renderTree() {
   if (!treeView) return;
-  treeView.replaceChildren(renderComponentTreeNode());
+  treeView.replaceChildren(...components.map(renderComponentTreeNode));
   updateInspector();
   renderComponentProps();
 }
+
+addComponentButton?.addEventListener("click", addComponent);
 
 function clearTreeDropIndicators() {
   document.querySelectorAll(".tree-node.is-drop-before, .tree-node.is-drop-after, .tree-node.is-drop-inside")

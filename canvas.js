@@ -21,6 +21,7 @@ if (canvas instanceof HTMLElement) {
 }
 
 function getSelectedResizeElement() {
+  if (selectedComponentId === currentComponent?.id) return currentComponent.frameRecord.element;
   return selectedCanvasFrame || selectedCanvasText || selectedCanvasVector;
 }
 
@@ -202,7 +203,7 @@ function applyLayerSizing(type, record) {
   const { parentId, parentDirection } = getLayerSizingContext(type, record);
   const widthMode = getLayerDimensionMode(element, "width", type === "text" ? "hug" : "fixed");
   const heightMode = getLayerDimensionMode(element, "height", type === "text" ? "hug" : "fixed");
-  const isRoot = parentId === null;
+  const isRoot = Boolean(record.isComponent);
   const mainDimension = parentDirection === "vertical" ? "height" : "width";
   const mainMode = mainDimension === "width" ? widthMode : heightMode;
   const crossMode = mainDimension === "width" ? heightMode : widthMode;
@@ -229,6 +230,7 @@ function applyLayerSizing(type, record) {
 }
 
 function applyAllLayerSizing() {
+  if (currentComponent?.frameRecord) applyLayerSizing("frame", currentComponent.frameRecord);
   frameRecords.forEach((record) => applyLayerSizing("frame", record));
   textRecords.forEach((record) => applyLayerSizing("text", record));
   vectorRecords.forEach((record) => applyLayerSizing("vector", record));
@@ -237,6 +239,10 @@ function applyAllLayerSizing() {
 
 function syncElementSelectionStyles() {
   clearElementSelection();
+  if (selectedComponentId === currentComponent?.id && canvasRootStack instanceof HTMLElement) {
+    canvasRootStack.classList.add("is-selected");
+    canvasRootStack.setAttribute("aria-selected", "true");
+  }
   selectedLayerKeys.forEach((key) => {
     const element = getElementForLayerKey(key);
     if (!(element instanceof HTMLElement)) return;
@@ -246,6 +252,10 @@ function syncElementSelectionStyles() {
 }
 
 function clearElementSelection() {
+  if (canvasRootStack instanceof HTMLElement) {
+    canvasRootStack.classList.remove("is-selected");
+    canvasRootStack.setAttribute("aria-selected", "false");
+  }
   frameRecords.forEach((record) => {
     record.element.classList.remove("is-selected");
     record.element.setAttribute("aria-selected", "false");
@@ -314,8 +324,9 @@ function selectCanvasVector(vectorElement, additive = false) {
 }
 
 function clearLayerSelection() {
-  if (selectedLayerKeys.size === 0) return;
+  if (selectedLayerKeys.size === 0 && selectedComponentId === null) return;
   selectedLayerKeys.clear();
+  selectedComponentId = null;
   clearElementSelection();
   selectedCanvasFrame = null;
   selectedCanvasText = null;
@@ -439,7 +450,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
   const height = Math.max(0, Number(svgDefinition.height) || 24);
   const record = {
     id: vectorId,
-    parentFrameId: parentRecord?.id ?? null,
+    parentFrameId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
     element: vector,
     order: nextLayerOrder,
     name: svgDefinition.name || `Vector ${vectorId}`,
@@ -461,11 +472,9 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
 
   if (parentRecord) {
     parentRecord.element.append(vector);
-    expandedFrameIds.add(parentRecord.id);
+    if (!parentRecord.isComponent) expandedFrameIds.add(parentRecord.id);
   } else {
-    vector.style.left = `${x}px`;
-    vector.style.top = `${y}px`;
-    canvas.insertBefore(vector, toolbar);
+    canvasRootStack?.append(vector);
   }
 
   vector.addEventListener("click", (event) => {
@@ -500,7 +509,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   const text = document.createElement("div");
   const record = {
     id: textId,
-    parentFrameId: parentRecord?.id ?? null,
+    parentFrameId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
     element: text,
     order: nextLayerOrder,
     isNew: true,
@@ -535,9 +544,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   if (parentRecord) {
     parentRecord.element.append(text);
   } else {
-    text.style.left = `${x}px`;
-    text.style.top = `${y}px`;
-    canvas.insertBefore(text, toolbar);
+    canvasRootStack?.append(text);
   }
 
   text.addEventListener("click", (event) => {
@@ -614,7 +621,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   const frame = document.createElement("div");
   const record = {
     id: frameId,
-    parentId: parentRecord?.id ?? null,
+    parentId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
     element: frame,
     order: nextLayerOrder,
   };
@@ -698,7 +705,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frameRecords.push(record);
   if (parentRecord) {
     parentRecord.element.append(frame);
-    expandedFrameIds.add(parentRecord.id);
+    if (!parentRecord.isComponent) expandedFrameIds.add(parentRecord.id);
   } else {
     if (canvasRootStack instanceof HTMLElement) canvasRootStack.append(frame);
     else canvas.insertBefore(frame, toolbar);
@@ -781,6 +788,7 @@ function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false) {
 }
 
 function duplicateSelectedLayer() {
+  if (selectedComponentId !== null) return;
   const selectedFrameRecord = getSelectedFrameRecord();
   const selectedTextRecord = getSelectedTextRecord();
   const selectedVectorRecord = getSelectedVectorRecord();
@@ -906,6 +914,7 @@ canvas?.addEventListener("pointerdown", (event) => {
       : null;
   const target = event.target;
   const isCanvasSurface = target === canvas
+    || target === canvasRootStack
     || (target instanceof HTMLElement && target.classList.contains("canvas-frame"));
   if (!activeText || !isCanvasSurface) return;
 
@@ -913,6 +922,30 @@ canvas?.addEventListener("pointerdown", (event) => {
   if ((activeText.textContent ?? "").length > 0) selectCanvasText(activeText);
   selectTool("select");
 }, true);
+
+canvasRootStack?.addEventListener("click", (event) => {
+  if (!(canvasRootStack instanceof HTMLElement) || event.target !== canvasRootStack || !currentComponent) return;
+  event.stopPropagation();
+
+  if (suppressNextCanvasSurfaceClick) {
+    suppressNextCanvasSurfaceClick = false;
+    return;
+  }
+
+  const bounds = canvasRootStack.getBoundingClientRect();
+  const x = event.clientX - bounds.left;
+  const y = event.clientY - bounds.top;
+  if (activeTool === "text") {
+    createCanvasText(currentComponent.frameRecord, x, y);
+    return;
+  }
+  if (activeTool === "frame") {
+    createCanvasFrame(0, 0, currentComponent.frameRecord);
+    selectTool("select");
+    return;
+  }
+  selectComponentTreeNode(currentComponent.id);
+});
 
 canvas?.addEventListener("click", (event) => {
   if (!(canvas instanceof HTMLElement) || event.target !== canvas) return;

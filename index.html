@@ -20,8 +20,14 @@
     <main class="authoring-shell">
       <aside class="left-sidebar" aria-label="Components">
         <section class="sidebar-panel components-tree-panel" aria-labelledby="components-heading">
-          <div class="panel-heading-wrap">
+          <div class="components-heading-row">
             <h1 class="panel-heading" id="components-heading">Components</h1>
+            <span class="tooltip">
+              <button class="components-add-button" type="button" aria-label="Add component" data-add-component>
+                <span class="plus-icon" aria-hidden="true"></span>
+              </button>
+              <span class="tooltip-content" role="tooltip">Add</span>
+            </span>
           </div>
 
           <div class="tree-view" role="tree" aria-label="Components" data-tree-view></div>

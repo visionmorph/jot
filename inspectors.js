@@ -438,7 +438,7 @@ function syncInspectorToSelectedVector() {
 
 function updateInspector() {
   const isTextSelected = selectedCanvasText !== null;
-  const isFrameSelected = selectedCanvasFrame !== null;
+  const isFrameSelected = selectedCanvasFrame !== null || selectedComponentId === currentComponent?.id;
   const isVectorSelected = selectedCanvasVector !== null;
   if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected || isFrameSelected || isVectorSelected;
   if (frameInspector instanceof HTMLElement) frameInspector.hidden = !isFrameSelected;
@@ -454,13 +454,16 @@ function updateInspector() {
 }
 
 function getCompatibleDisabledTargets() {
-  return frameRecords.filter((record) =>
-    record.parentId === null
+  const componentFrame = currentComponent?.frameRecord;
+  return [componentFrame, ...frameRecords].filter((record) =>
+    record
+    && record.parentId === null
     && normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div") === "button");
 }
 
 function getAllTargetableLayers() {
   return [
+    ...(currentComponent?.frameRecord ? [{ type: "frame", record: currentComponent.frameRecord }] : []),
     ...frameRecords.map((record) => ({ type: "frame", record })),
     ...textRecords.map((record) => ({ type: "text", record })),
     ...vectorRecords.map((record) => ({ type: "vector", record })),
@@ -468,6 +471,7 @@ function getAllTargetableLayers() {
 }
 
 function getVisibilityTargetLabel(type, record) {
+  if (type === "frame" && record.isComponent) return currentComponent?.name || "Component";
   if (type === "frame") return `Frame ${record.id}`;
   if (type === "text") return `Text ${record.id}: ${record.element.textContent || "Text"}`;
   return `Vector ${record.id}: ${record.name || "Vector"}`;
@@ -697,7 +701,10 @@ function renderComponentProps() {
         ? [{ value: "", label: "No button target", disabled: true }]
         : [
             { value: "", label: "Select layer", disabled: true },
-            ...compatibleTargets.map((record) => ({ value: String(record.id), label: `Frame ${record.id}` })),
+            ...compatibleTargets.map((record) => ({
+              value: String(record.id),
+              label: record.isComponent ? currentComponent?.name || "Component" : `Frame ${record.id}`,
+            })),
           ];
     }
 

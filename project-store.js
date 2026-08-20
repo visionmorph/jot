@@ -96,6 +96,8 @@ const frameHtmlTagInput = document.querySelector("#frame-html-tag");
 
 const exportComponentsButton = document.querySelector("[data-export-components]");
 
+const addComponentButton = document.querySelector("[data-add-component]");
+
 const addPropButton = document.querySelector("[data-add-prop]");
 
 const propRowsContainer = document.querySelector("[data-prop-rows]");
@@ -137,7 +139,13 @@ const loadedGoogleFonts = new Set();
 
 let activeTool = "select";
 
-const currentComponent = { id: 1, name: "Button" };
+let components = [];
+
+let currentComponent = null;
+
+let nextComponentId = 1;
+
+let selectedComponentId = null;
 
 let isComponentExpanded = true;
 
@@ -173,9 +181,9 @@ let suppressNextCanvasSurfaceClick = false;
 
 const expandedFrameIds = new Set();
 
-const undoHistory = [];
+let undoHistory = [];
 
-const redoHistory = [];
+let redoHistory = [];
 
 const HISTORY_LIMIT = 100;
 
@@ -197,7 +205,94 @@ const selectedLayerResizeObserver = typeof ResizeObserver === "function"
   ? new ResizeObserver(() => requestAnimationFrame(positionResizeOverlay))
   : null;
 
+function getDefaultComponentFrameState() {
+  return {
+    dataset: {
+      canvasRootStack: "",
+      paddingLeft: "10",
+      paddingTop: "10",
+      paddingRight: "10",
+      paddingBottom: "10",
+      width: "100",
+      height: "100",
+      widthMode: "fixed",
+      heightMode: "fixed",
+      radius: "0",
+      frameColor: "",
+      frameColorOpacity: "100",
+      direction: "horizontal",
+      alignment: "top-left",
+      gap: "10",
+      gapMode: "fixed",
+      outlineColor: "",
+      outlineColorOpacity: "100",
+      outlinePosition: "inside",
+      outlineWeight: "1",
+      htmlTag: "div",
+    },
+    style: "width: 100px; height: 100px; padding: 10px; gap: 10px; flex-direction: row; align-items: flex-start; justify-content: flex-start; border-radius: 0px; background-color: transparent; box-sizing: border-box;",
+  };
+}
+
+function createEmptyWorkspaceState(componentId) {
+  return {
+    componentId,
+    componentFrame: getDefaultComponentFrameState(),
+    frames: [],
+    texts: [],
+    vectors: [],
+    selectedCanvasFrame: null,
+    selectedCanvasText: null,
+    selectedCanvasVector: null,
+    selectedComponentId: componentId,
+    selectedLayerKeys: [],
+    expandedFrameIds: [],
+    nextFrameId: 1,
+    nextTextId: 1,
+    nextVectorId: 1,
+    nextLayerOrder: 1,
+    componentProps: [],
+    nextComponentPropId: 1,
+    canvasColor: "#121619",
+    canvasColorOpacity: 100,
+    activeTool: "select",
+  };
+}
+
+function createComponentDefinition(name) {
+  const id = nextComponentId;
+  nextComponentId += 1;
+  return {
+    id,
+    name,
+    expanded: true,
+    frameRecord: {
+      id: 0,
+      parentId: null,
+      element: canvasRootStack,
+      order: 0,
+      isComponent: true,
+    },
+    workspace: createEmptyWorkspaceState(id),
+    undoHistory: [],
+    redoHistory: [],
+  };
+}
+
+function initializeComponents() {
+  if (components.length > 0) return;
+  const component = createComponentDefinition("Button");
+  components.push(component);
+  currentComponent = component;
+  selectedComponentId = component.id;
+  isComponentExpanded = true;
+  restoreWorkspaceState(component.workspace, { render: false });
+  selectedComponentId = component.id;
+  syncElementSelectionStyles();
+}
+
 function getFrameRecord(frameId) {
+  if (frameId === 0 && currentComponent?.frameRecord) return currentComponent.frameRecord;
   return frameRecords.find((record) => record.id === frameId);
 }
 
@@ -216,7 +311,9 @@ function getLayerDimensionMode(element, dimension, fallback = "fixed") {
 
 function getLayerSizingContext(type, record) {
   const parentId = type === "frame" ? record.parentId : record.parentFrameId;
-  const parentRecord = parentId === null ? null : getFrameRecord(parentId);
+  const parentRecord = parentId === null && !record.isComponent
+    ? currentComponent?.frameRecord ?? null
+    : parentId === null ? null : getFrameRecord(parentId);
   const parentDirection = parentRecord?.element.dataset.direction === "vertical" ? "vertical" : "horizontal";
   return { parentId, parentDirection };
 }
@@ -270,6 +367,7 @@ function isLayerSelected(type, id) {
 function setPrimarySelectionFromKey(key) {
   const [type, rawId] = key?.split(":") ?? [];
   const id = Number(rawId);
+  selectedComponentId = null;
   selectedCanvasFrame = type === "frame" ? getFrameRecord(id)?.element ?? null : null;
   selectedCanvasText = type === "text" ? getTextRecord(id)?.element ?? null : null;
   selectedCanvasVector = type === "vector" ? getVectorRecord(id)?.element ?? null : null;
@@ -282,6 +380,13 @@ function setPrimarySelectionToLatest() {
 
 function captureWorkspaceState() {
   return {
+    componentId: currentComponent?.id ?? null,
+    componentFrame: canvasRootStack instanceof HTMLElement
+      ? {
+          dataset: { ...canvasRootStack.dataset },
+          style: canvasRootStack.getAttribute("style"),
+        }
+      : getDefaultComponentFrameState(),
     frames: frameRecords.map((record) => ({
       record,
       parentId: record.parentId,
@@ -312,6 +417,7 @@ function captureWorkspaceState() {
     selectedCanvasFrame,
     selectedCanvasText,
     selectedCanvasVector,
+    selectedComponentId,
     selectedLayerKeys: [...selectedLayerKeys],
     expandedFrameIds: [...expandedFrameIds],
     nextFrameId,
@@ -337,15 +443,14 @@ function restoreElementState(element, dataset, style) {
 
 function attachRestoredLayers(parentFrameId, parentElement) {
   getLayerChildren(parentFrameId).forEach((layer) => {
-    if (parentElement === canvas && layer.type === "frame" && canvasRootStack instanceof HTMLElement) {
+    if (parentFrameId === null && canvasRootStack instanceof HTMLElement) {
       canvasRootStack.append(layer.record.element);
-    } else if (parentElement === canvas) canvas.insertBefore(layer.record.element, toolbar);
-    else parentElement.append(layer.record.element);
+    } else parentElement.append(layer.record.element);
     if (layer.type === "frame") attachRestoredLayers(layer.record.id, layer.record.element);
   });
 }
 
-function restoreWorkspaceState(snapshot) {
+function restoreWorkspaceState(snapshot, options = {}) {
   if (!(canvas instanceof HTMLElement)) return;
   isRestoringHistory = true;
 
@@ -358,6 +463,13 @@ function restoreWorkspaceState(snapshot) {
     ...(snapshot.vectors ?? []).map((entry) => entry.record.element),
   ]);
   allElements.forEach((element) => element.remove());
+
+  if (canvasRootStack instanceof HTMLElement) {
+    const componentFrameState = snapshot.componentFrame ?? getDefaultComponentFrameState();
+    restoreElementState(canvasRootStack, componentFrameState.dataset, componentFrameState.style);
+    canvasRootStack.setAttribute("aria-label", currentComponent?.name || "Component");
+    canvasRootStack.setAttribute("aria-selected", "false");
+  }
 
   frameRecords = snapshot.frames.map((entry) => {
     entry.record.parentId = entry.parentId;
@@ -396,6 +508,9 @@ function restoreWorkspaceState(snapshot) {
   selectedCanvasFrame = snapshot.selectedCanvasFrame;
   selectedCanvasText = snapshot.selectedCanvasText;
   selectedCanvasVector = snapshot.selectedCanvasVector ?? null;
+  selectedComponentId = snapshot.selectedComponentId === currentComponent?.id
+    ? snapshot.selectedComponentId
+    : null;
   selectedLayerKeys.clear();
   (snapshot.selectedLayerKeys ?? []).forEach((key) => selectedLayerKeys.add(key));
   if (selectedLayerKeys.size === 0) {
@@ -423,7 +538,7 @@ function restoreWorkspaceState(snapshot) {
   }
   selectTool(snapshot.activeTool);
   isRestoringHistory = false;
-  renderTree();
+  if (options.render !== false) renderTree();
 }
 
 function recordHistory() {
@@ -447,6 +562,60 @@ function redoWorkspaceChange() {
   restoreWorkspaceState(snapshot);
 }
 
+function saveCurrentComponentWorkspace() {
+  if (!currentComponent) return;
+  currentComponent.workspace = captureWorkspaceState();
+  currentComponent.expanded = isComponentExpanded;
+  currentComponent.undoHistory = undoHistory;
+  currentComponent.redoHistory = redoHistory;
+}
+
+function activateComponent(componentId, options = {}) {
+  const component = components.find((entry) => entry.id === componentId);
+  if (!component) return false;
+  if (currentComponent && currentComponent.id !== component.id && options.saveCurrent !== false) {
+    saveCurrentComponentWorkspace();
+  }
+
+  currentComponent = component;
+  isComponentExpanded = component.expanded !== false;
+  undoHistory = component.undoHistory ?? [];
+  redoHistory = component.redoHistory ?? [];
+  restoreWorkspaceState(component.workspace ?? createEmptyWorkspaceState(component.id), { render: false });
+
+  if (options.selectComponent !== false) {
+    selectedComponentId = component.id;
+    selectedLayerKeys.clear();
+    selectedCanvasFrame = null;
+    selectedCanvasText = null;
+    selectedCanvasVector = null;
+    syncElementSelectionStyles();
+  }
+  if (options.render !== false) renderTree();
+  return true;
+}
+
+function addComponent() {
+  saveCurrentComponentWorkspace();
+  const component = createComponentDefinition(`Component ${nextComponentId}`);
+  components.push(component);
+  activateComponent(component.id, { saveCurrent: false });
+  return component;
+}
+
+function deleteSelectedComponent() {
+  if (selectedComponentId === null || components.length <= 1) return false;
+  const componentIndex = components.findIndex((component) => component.id === selectedComponentId);
+  if (componentIndex < 0) return false;
+
+  components.splice(componentIndex, 1);
+  const nextComponent = components[Math.min(componentIndex, components.length - 1)];
+  currentComponent = null;
+  selectedComponentId = null;
+  activateComponent(nextComponent.id, { saveCurrent: false });
+  return true;
+}
+
 function getSelectedTextRecord() {
   return selectedCanvasText
     ? textRecords.find((record) => record.element === selectedCanvasText)
@@ -454,6 +623,7 @@ function getSelectedTextRecord() {
 }
 
 function getSelectedFrameRecord() {
+  if (selectedComponentId === currentComponent?.id) return currentComponent.frameRecord;
   return selectedCanvasFrame
     ? frameRecords.find((record) => record.element === selectedCanvasFrame)
     : undefined;
@@ -502,13 +672,10 @@ function normalizeSiblingOrder(parentFrameId) {
 }
 
 function syncLayerDomOrder(parentFrameId) {
-  const parentElement = parentFrameId === null ? canvas : getFrameRecord(parentFrameId)?.element;
+  const parentElement = parentFrameId === null ? canvasRootStack : getFrameRecord(parentFrameId)?.element;
   if (!(parentElement instanceof HTMLElement)) return;
   getLayerChildren(parentFrameId).forEach((layer) => {
-    if (parentFrameId === null && layer.type === "frame" && canvasRootStack instanceof HTMLElement) {
-      canvasRootStack.append(layer.record.element);
-    } else if (parentFrameId === null) canvas.insertBefore(layer.record.element, toolbar);
-    else parentElement.append(layer.record.element);
+    parentElement.append(layer.record.element);
   });
 }
 
