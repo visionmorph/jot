@@ -2,6 +2,7 @@
   --text-primary: #ffffff;
   --icon-primary: #f4f4f4;
   --icon-secondary: #c1c7cd;
+  --icon-disabled: rgba(244, 244, 244, 0.25);
   --icon-on-color: #ffffff;
   --background: #121619;
   --layer-01: #21272a;
@@ -617,6 +618,25 @@ textarea:focus-visible {
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+}
+
+.tree-node.is-disabled {
+  color: var(--text-disabled);
+}
+
+.tree-node.is-disabled .icon-cell,
+.tree-node.is-disabled .text-layer-icon,
+.tree-node.is-disabled .layer-visibility-button {
+  color: var(--icon-disabled);
+}
+
+.tree-node.is-disabled .tree-node-rename-input {
+  color: var(--text-disabled);
+}
+
+.tree-node.is-disabled .layer-visibility-button:hover,
+.tree-node.is-disabled .layer-visibility-button:focus-visible {
+  color: var(--icon-on-color);
 }
 
 .tree-node.is-renaming .branch-icon-group {
