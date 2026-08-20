@@ -353,12 +353,9 @@ function downloadExportFile(fileName, source) {
 }
 
 function exportAllComponents() {
-  const componentItems = Array.from(document.querySelectorAll(".contained-list-item"));
-  componentItems.forEach((item) => {
-    const componentName = toReactComponentName(item.textContent || "Generated Component");
-    downloadExportFile(`${componentName}.jsx`, createReactComponentSource(componentName));
-    downloadExportFile(`${componentName}.stories.jsx`, createStorySource(componentName));
-  });
+  const componentName = toReactComponentName(currentComponent.name || "Generated Component");
+  downloadExportFile(`${componentName}.jsx`, createReactComponentSource(componentName));
+  downloadExportFile(`${componentName}.stories.jsx`, createStorySource(componentName));
 }
 
 exportComponentsButton?.addEventListener("click", exportAllComponents);

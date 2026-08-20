@@ -18,37 +18,15 @@
   </head>
   <body>
     <main class="authoring-shell">
-      <aside class="left-sidebar" aria-label="Component and layer navigation">
-        <section class="sidebar-panel components-panel" aria-labelledby="components-heading">
+      <aside class="left-sidebar" aria-label="Components">
+        <section class="sidebar-panel components-tree-panel" aria-labelledby="components-heading">
           <div class="panel-heading-wrap">
             <h1 class="panel-heading" id="components-heading">Components</h1>
           </div>
 
-          <div class="contained-list" role="list">
-            <div class="contained-list-item is-selected" role="listitem" aria-current="true">
-              Button
-            </div>
-          </div>
+          <div class="tree-view" role="tree" aria-label="Components" data-tree-view></div>
 
           <button class="export-button" type="button" data-export-components>Export</button>
-        </section>
-
-        <div
-          class="sidebar-divider"
-          role="separator"
-          aria-label="Resize Components and Layers panels"
-          aria-orientation="horizontal"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow="50"
-        ></div>
-
-        <section class="sidebar-panel layers-panel" aria-labelledby="layers-heading">
-          <div class="panel-heading-wrap">
-            <h2 class="panel-heading" id="layers-heading">Layers</h2>
-          </div>
-
-          <div class="tree-view" role="tree" aria-label="Layers" data-tree-view></div>
         </section>
       </aside>
 

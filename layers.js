@@ -1,6 +1,7 @@
 /* Layers tree rendering, selection reveal, hierarchy drag-and-drop, and node icons. */
 
 function expandFramePath(parentFrameId) {
+  isComponentExpanded = true;
   const visitedFrameIds = new Set();
   let frameId = parentFrameId;
 
@@ -23,6 +24,18 @@ function createSquareIcon() {
 }
 
 function createLayerTypeIcon(type) {
+  if (type === "component") {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    svg.setAttribute("class", "layer-type-icon");
+    svg.setAttribute("viewBox", "0 0 32 32");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    path.setAttribute("d", "M14.5868 3.27128C15.3678 2.49027 16.6338 2.49034 17.4149 3.27128L28.7294 14.5848C29.5101 15.3657 29.51 16.6318 28.7294 17.4129L17.4149 28.7273L17.2635 28.864C16.5304 29.4622 15.4724 29.462 14.7391 28.864L14.5868 28.7273L3.2733 17.4129C2.54129 16.6807 2.49523 15.5226 3.13561 14.7371L3.2733 14.5848L14.5868 3.27128Z");
+    path.setAttribute("fill", "currentColor");
+    svg.append(path);
+    return svg;
+  }
   if (type === "vector") {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
@@ -262,10 +275,84 @@ function renderLayerTreeNode(layer, depth) {
   return renderVectorTreeNode(layer.record, depth);
 }
 
+function selectComponentTreeNode() {
+  selectedLayerKeys.clear();
+  clearElementSelection();
+  selectedCanvasFrame = null;
+  selectedCanvasText = null;
+  selectedCanvasVector = null;
+  renderTree();
+}
+
+function renderComponentTreeNode() {
+  const item = document.createElement("div");
+  const node = document.createElement("div");
+  const iconGroup = document.createElement("span");
+  const branchToggle = document.createElement("button");
+  const chevron = document.createElement("span");
+  const label = document.createElement("span");
+  const rootLayers = getLayerChildren(null);
+  const isSelected = selectedLayerKeys.size === 0;
+
+  item.className = "dynamic-tree-item";
+  node.className = "tree-node tree-node--dynamic tree-node--component";
+  node.setAttribute("role", "treeitem");
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("aria-level", "1");
+  node.setAttribute("aria-expanded", String(isComponentExpanded));
+  node.setAttribute("aria-selected", String(isSelected));
+  node.style.setProperty("--tree-indent", "8px");
+  if (isSelected) node.classList.add("is-selected");
+
+  node.addEventListener("click", selectComponentTreeNode);
+  node.addEventListener("keydown", (event) => {
+    if (event.target === node && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      selectComponentTreeNode();
+    }
+  });
+  node.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    showTreeDropIndicator(node, "inside");
+  });
+  node.addEventListener("drop", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const draggedLayer = getLayerDragData(event);
+    clearTreeDropIndicators();
+    if (draggedLayer) moveLayer(draggedLayer, null, rootLayers.length);
+  });
+
+  iconGroup.className = "branch-icon-group";
+  branchToggle.className = "icon-cell branch-toggle";
+  branchToggle.type = "button";
+  branchToggle.setAttribute("aria-label", `${isComponentExpanded ? "Collapse" : "Expand"} ${currentComponent.name}`);
+  branchToggle.setAttribute("aria-expanded", String(isComponentExpanded));
+  chevron.className = `chevron ${isComponentExpanded ? "chevron--down" : "chevron--right"}`;
+  chevron.setAttribute("aria-hidden", "true");
+  branchToggle.append(chevron);
+  branchToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    isComponentExpanded = !isComponentExpanded;
+    renderTree();
+  });
+  iconGroup.append(branchToggle, createIconCell(createLayerTypeIcon("component")));
+
+  label.className = "tree-node-label";
+  label.textContent = currentComponent.name;
+  node.append(iconGroup, label);
+  item.append(node);
+  if (isComponentExpanded) {
+    rootLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, 2)));
+  }
+  return item;
+}
+
 function renderTree() {
   if (!treeView) return;
-  const rootNodes = getLayerChildren(null).map((layer) => renderLayerTreeNode(layer, 1));
-  treeView.replaceChildren(...rootNodes);
+  treeView.replaceChildren(renderComponentTreeNode());
   updateInspector();
   renderComponentProps();
 }

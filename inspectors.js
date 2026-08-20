@@ -143,44 +143,6 @@ function getFrameOutlineBoxShadow(element) {
   return `inset 0 0 0 ${weight}px ${color}`;
 }
 
-function resizeLeftSidebarPanels(clientY) {
-  if (
-    !(leftSidebar instanceof HTMLElement) ||
-    !(componentsPanel instanceof HTMLElement) ||
-    !(sidebarDivider instanceof HTMLElement)
-  ) return;
-
-  const bounds = leftSidebar.getBoundingClientRect();
-  const nextHeight = Math.min(bounds.height, Math.max(0, clientY - bounds.top));
-  const percentage = bounds.height > 0 ? Math.round((nextHeight / bounds.height) * 100) : 50;
-  componentsPanel.style.height = `${nextHeight}px`;
-  sidebarDivider.setAttribute("aria-valuenow", String(percentage));
-}
-
-sidebarDivider?.addEventListener("pointerdown", (event) => {
-  if (!(sidebarDivider instanceof HTMLElement) || event.button !== 0) return;
-  event.preventDefault();
-  sidebarDivider.setPointerCapture(event.pointerId);
-  resizeLeftSidebarPanels(event.clientY);
-});
-
-sidebarDivider?.addEventListener("pointermove", (event) => {
-  if (!(sidebarDivider instanceof HTMLElement) || !sidebarDivider.hasPointerCapture(event.pointerId)) return;
-  resizeLeftSidebarPanels(event.clientY);
-});
-
-sidebarDivider?.addEventListener("pointerup", (event) => {
-  if (!(sidebarDivider instanceof HTMLElement) || !sidebarDivider.hasPointerCapture(event.pointerId)) return;
-  resizeLeftSidebarPanels(event.clientY);
-  sidebarDivider.releasePointerCapture(event.pointerId);
-});
-
-sidebarDivider?.addEventListener("pointercancel", (event) => {
-  if (sidebarDivider instanceof HTMLElement && sidebarDivider.hasPointerCapture(event.pointerId)) {
-    sidebarDivider.releasePointerCapture(event.pointerId);
-  }
-});
-
 function getFontRecord(family) {
   return fontCatalog.find((font) => font.family === family)
     ?? FALLBACK_FONT_CATALOG.find((font) => font.family === family);

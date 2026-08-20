@@ -343,11 +343,8 @@ input {
   display: none;
 }
 
-.components-panel {
-  flex: 0 0 auto;
-}
-
-.layers-panel {
+.components-tree-panel {
+  height: 100%;
   flex: 1 1 auto;
   min-height: 0;
 }
@@ -365,27 +362,6 @@ input {
   letter-spacing: 0;
 }
 
-.sidebar-divider {
-  position: relative;
-  width: 100%;
-  height: 1px;
-  flex: 0 0 1px;
-  background: var(--border-subtle-00);
-  cursor: row-resize;
-  touch-action: none;
-  user-select: none;
-}
-
-.sidebar-divider::before {
-  position: absolute;
-  top: -4px;
-  right: 0;
-  bottom: -4px;
-  left: 0;
-  content: "";
-}
-
-.contained-list,
 .tree-view {
   display: flex;
   flex-direction: column;
@@ -394,23 +370,10 @@ input {
   gap: 0;
 }
 
-.layers-panel .tree-view {
+.components-tree-panel .tree-view {
   flex: 1 1 auto;
   min-height: 24px;
-}
-
-.contained-list-item {
-  padding: 4px 8px;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 16px;
-  letter-spacing: 0;
-}
-
-.contained-list-item.is-selected {
-  background: var(--background-selected);
-  font-weight: 600;
+  overflow-y: auto;
 }
 
 .export-button {

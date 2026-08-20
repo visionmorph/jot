@@ -263,6 +263,7 @@ function clearElementSelection() {
 function selectCanvasFrame(frameElement, additive = false) {
   const record = frameRecords.find((frameRecord) => frameRecord.element === frameElement);
   if (!record) return;
+  expandFramePath(record.parentId);
   const frameKey = getLayerKey("frame", record.id);
   const selectionKeys = additive ? getFrameSelectionKeys(record.id) : [frameKey];
 

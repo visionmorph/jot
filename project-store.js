@@ -44,12 +44,6 @@ const vectorColorPicker = document.querySelector("#vector-color-picker");
 
 const colorControls = Array.from(document.querySelectorAll("[data-color-control]"));
 
-const leftSidebar = document.querySelector(".left-sidebar");
-
-const componentsPanel = document.querySelector(".components-panel");
-
-const sidebarDivider = document.querySelector(".sidebar-divider");
-
 const frameSizeInputs = Array.from(document.querySelectorAll("[data-frame-size]"));
 
 const textLayerSizeInputs = Array.from(document.querySelectorAll("[data-text-layer-size]"));
@@ -142,6 +136,10 @@ let fontCatalog = FALLBACK_FONT_CATALOG;
 const loadedGoogleFonts = new Set();
 
 let activeTool = "select";
+
+const currentComponent = { id: 1, name: "Button" };
+
+let isComponentExpanded = true;
 
 let selectedCanvasFrame = null;
 
