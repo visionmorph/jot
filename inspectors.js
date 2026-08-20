@@ -794,7 +794,7 @@ function renderComponentProps() {
     removeButton.className = "prop-remove-button";
     removeButton.type = "button";
     removeButton.setAttribute("aria-label", `Remove ${prop.name} prop`);
-    removeIcon.className = "remove-icon";
+    removeIcon.className = "subtract-icon";
     removeIcon.setAttribute("aria-hidden", "true");
     removeButton.append(removeIcon);
     removeButton.addEventListener("click", () => {
@@ -1125,7 +1125,6 @@ sizeSelect?.addEventListener("keydown", (event) => {
 textSizeToggle?.addEventListener("click", () => {
   if (!(textSizeMenu instanceof HTMLElement) || !(sizeSelect instanceof HTMLInputElement)) return;
   setTextSizeComboboxOpen(textSizeMenu.hidden);
-  sizeSelect.focus();
 });
 
 textSizeOptions.forEach((option) => {
@@ -1397,7 +1396,6 @@ sizeModeComboboxes.forEach((wrapper) => {
 
   toggle?.addEventListener("click", () => {
     setSizeComboboxOpen(wrapper, menu.hidden);
-    input.focus();
   });
 
   wrapper.querySelectorAll("[data-size-option]").forEach((option) => {
@@ -1462,6 +1460,7 @@ framePaddingAxisInputs.forEach((input) => {
 
 framePaddingModeToggle?.addEventListener("click", () => {
   if (!(framePaddingModeToggle instanceof HTMLButtonElement)) return;
+  framePaddingModeToggle.focus();
   const isIndividual = framePaddingModeToggle.getAttribute("aria-pressed") !== "true";
   setFramePaddingControlMode(isIndividual);
   const record = getSelectedFrameRecord();
@@ -1486,6 +1485,7 @@ frameRadiusInput?.addEventListener("blur", syncInspectorToSelectedFrame);
 
 frameDirectionOptions.forEach((option) => {
   option.addEventListener("click", () => {
+    option.focus();
     const record = getSelectedFrameRecord();
     const direction = option.getAttribute("data-frame-direction") === "vertical" ? "vertical" : "horizontal";
     if (!record || (record.element.dataset.direction || "horizontal") === direction) return;
@@ -1501,6 +1501,7 @@ frameDirectionOptions.forEach((option) => {
 frameAlignmentOptions.forEach((option) => {
   let wasSelectedAtFirstClick = false;
   option.addEventListener("click", (event) => {
+    option.focus();
     const record = getSelectedFrameRecord();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
     if (event.detail === 1) {
@@ -1629,7 +1630,6 @@ frameGapToggle?.addEventListener("click", () => {
   if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;
   const willOpen = frameGapMenu.hidden;
   setFrameGapMenuOpen(willOpen);
-  frameGapInput.focus();
 });
 
 frameGapAutoOption?.addEventListener("pointerdown", (event) => event.preventDefault());
