@@ -250,6 +250,42 @@ textarea:focus-visible {
   appearance: none;
 }
 
+.prop-select--has-layer-icon {
+  color: transparent;
+}
+
+.prop-select--has-layer-icon option {
+  color: var(--text-primary);
+}
+
+.prop-target-selected-value {
+  position: absolute;
+  top: 0;
+  right: 32px;
+  bottom: 0;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  pointer-events: none;
+}
+
+.prop-target-selected-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prop-target-selected-value .layer-type-icon {
+  flex: 0 0 16px;
+}
+
 .prop-select-wrap .inspector-select-chevron {
   right: 10px;
 }
