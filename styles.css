@@ -1141,77 +1141,33 @@ input {
 }
 
 .frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-lines {
-  justify-content: space-between;
-  width: 16px;
-  height: 16px;
-  gap: 0;
+  display: none;
 }
 
-.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-lines::before {
+.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-dot {
   display: block;
-  order: 2;
   border-radius: 2px;
   background: var(--background-brand);
-  content: "";
 }
 
-.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-lines > span:first-child {
-  order: 1;
-}
-
-.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-lines > span:last-child {
-  order: 3;
-}
-
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-lines {
-  flex-direction: column;
-}
-
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-lines > span {
-  width: 12px;
-  height: 4px;
-  flex: 0 0 4px;
-}
-
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-lines::before {
-  width: 6px;
-  height: 4px;
-  flex: 0 0 4px;
-}
-
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] [data-frame-alignment$="-center"] .alignment-lines,
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] [data-frame-alignment="center"] .alignment-lines {
-  align-items: center;
-}
-
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] [data-frame-alignment$="-right"] .alignment-lines {
-  align-items: flex-end;
-}
-
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-lines {
-  flex-direction: row;
-  align-items: flex-start;
-}
-
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-lines > span {
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-dot {
   width: 4px;
   height: 12px;
-  flex: 0 0 4px;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-lines::before {
-  width: 4px;
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment$="-center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot {
   height: 6px;
-  flex: 0 0 4px;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] [data-frame-alignment^="center"] .alignment-lines,
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] [data-frame-alignment="center"] .alignment-lines {
-  align-items: center;
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-dot {
+  width: 12px;
+  height: 4px;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] [data-frame-alignment^="bottom"] .alignment-lines {
-  align-items: flex-end;
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment^="center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot {
+  width: 6px;
 }
 
 .inspector-section-divider {
