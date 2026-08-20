@@ -445,11 +445,12 @@ textarea:focus-visible {
 .tree-node {
   display: flex;
   align-items: center;
+  height: 24px;
   min-height: 24px;
   width: 100%;
-  padding: 4px;
-  padding-left: var(--tree-indent, 4px);
-  gap: 4px;
+  padding: 0;
+  padding-left: var(--tree-indent, 0);
+  gap: 0;
   border-radius: 2px;
   border: 0;
   background: transparent;
@@ -463,15 +464,22 @@ textarea:focus-visible {
 }
 
 .tree-node--level-1 {
-  padding-left: 4px;
+  padding-left: 0;
 }
 
 .tree-node--level-2 {
-  padding-left: 44px;
+  padding-left: 20px;
 }
 
 .tree-node--dynamic {
-  padding-left: var(--tree-indent, 4px);
+  padding-left: var(--tree-indent, 0);
+}
+
+.tree-node.is-selected,
+.tree-node.is-renaming {
+  padding-top: 0;
+  padding-right: 0;
+  padding-bottom: 0;
 }
 
 .dynamic-tree-item {
@@ -539,6 +547,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   width: 100%;
+  height: 24px;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -549,9 +558,21 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   width: 100%;
+  height: 24px;
   min-width: 0;
   padding: 4px;
   flex: 1 1 auto;
+}
+
+.tree-node.is-renaming .branch-icon-group {
+  padding-right: 0;
+}
+
+.tree-node.is-renaming .tree-node-label-wrap {
+  padding-top: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+  padding-left: 0;
 }
 
 .icon-cell,
@@ -1908,7 +1929,11 @@ textarea:focus-visible {
   content: "";
 }
 
-.custom-color-control:focus-within {
+.custom-color-hex:focus-visible {
+  outline: 0;
+}
+
+.custom-color-opacity input:focus-visible {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
 }
