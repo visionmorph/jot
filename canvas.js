@@ -982,7 +982,21 @@ function selectHierarchyChild() {
   const children = layer.type === "component"
     ? getLayerChildren(null)
     : layer.type === "frame" ? getLayerChildren(layer.record.id) : [];
-  return selectLayerDescriptor(children[0]);
+  if (children.length === 0) return false;
+
+  selectedComponentId = null;
+  selectedLayerKeys.clear();
+  children.forEach((child) => {
+    if (child.type === "frame") {
+      getFrameSelectionKeys(child.record.id).forEach((key) => selectedLayerKeys.add(key));
+      return;
+    }
+    selectedLayerKeys.add(getLayerKey(child.type, child.record.id));
+  });
+  setPrimarySelectionToLatest();
+  syncElementSelectionStyles();
+  renderTree();
+  return true;
 }
 
 function selectHierarchyParent() {
