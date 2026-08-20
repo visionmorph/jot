@@ -500,6 +500,23 @@ function setBooleanPropProperty(prop, property) {
   renderComponentProps();
 }
 
+function bindNativeSelectChevron(select, wrap) {
+  const closeMenuState = () => wrap.classList.remove("is-open");
+  select.addEventListener("pointerdown", () => wrap.classList.add("is-open"));
+  select.addEventListener("change", closeMenuState);
+  select.addEventListener("blur", closeMenuState);
+  select.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" || event.key === "Enter") closeMenuState();
+    else if (event.key === "ArrowDown" && event.altKey) wrap.classList.add("is-open");
+  });
+}
+
+document.querySelectorAll(".inspector-select-wrap > select").forEach((select) => {
+  if (select instanceof HTMLSelectElement && select.parentElement instanceof HTMLElement) {
+    bindNativeSelectChevron(select, select.parentElement);
+  }
+});
+
 function createPropSelect(options, value, ariaLabel, onChange, disabled = false) {
   const wrap = document.createElement("div");
   const select = document.createElement("select");
@@ -521,6 +538,7 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
   chevron.className = "chevron inspector-select-chevron";
   chevron.setAttribute("aria-hidden", "true");
   wrap.append(select, chevron);
+  bindNativeSelectChevron(select, wrap);
   return wrap;
 }
 

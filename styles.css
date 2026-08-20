@@ -574,18 +574,24 @@ input {
 
 .chevron {
   display: block;
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 0;
+  background: currentColor;
+  clip-path: polygon(50% 68.75%, 18.75% 37.5%, 23.125% 33.125%, 50% 60%, 76.875% 33.125%, 81.25% 37.5%);
 }
 
 .chevron--down {
-  transform: translateY(-1px) rotate(45deg);
+  transform: none;
 }
 
 .chevron--right {
-  transform: translateX(-1px) rotate(-45deg);
+  transform: rotate(-90deg);
+}
+
+.chevron--up {
+  transform: rotate(180deg);
 }
 
 .square-icon {
@@ -650,6 +656,21 @@ input {
 
 .canvas-root-stack:hover {
   outline: 2px solid #992CFF;
+}
+
+.selection-rectangle {
+  position: absolute;
+  z-index: 4;
+  display: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #992CFF;
+  background: rgba(153, 44, 255, 0.1);
+  pointer-events: none;
+}
+
+.selection-rectangle.is-visible {
+  display: block;
 }
 
 .canvas-root-stack > .canvas-frame {
@@ -1661,7 +1682,20 @@ input {
   right: 10px;
   color: var(--icon-secondary);
   pointer-events: none;
-  transform: translateY(-60%) rotate(45deg);
+  transform: translateY(-50%);
+}
+
+.inspector-combobox-toggle[aria-expanded="true"] .inspector-select-chevron,
+.inspector-select-wrap.is-open .inspector-select-chevron,
+.prop-select-wrap.is-open .inspector-select-chevron {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+@supports selector(select:open) {
+  .inspector-select-wrap select:open + .inspector-select-chevron,
+  .prop-select-wrap select:open + .inspector-select-chevron {
+    transform: translateY(-50%) rotate(180deg);
+  }
 }
 
 .inspector-control:focus-visible {

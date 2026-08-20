@@ -6,6 +6,12 @@ resizeOverlay.hidden = true;
 
 resizeOverlay.setAttribute("aria-hidden", "true");
 
+const selectionRectangle = document.createElement("div");
+selectionRectangle.className = "selection-rectangle";
+selectionRectangle.setAttribute("aria-hidden", "true");
+
+let selectionDrag = null;
+
 RESIZE_HANDLE_DIRECTIONS.forEach((direction) => {
   const handle = document.createElement("button");
   handle.className = `resize-handle resize-handle--${direction}`;
@@ -17,6 +23,7 @@ RESIZE_HANDLE_DIRECTIONS.forEach((direction) => {
 });
 
 if (canvas instanceof HTMLElement) {
+  canvas.insertBefore(selectionRectangle, toolbar instanceof Node ? toolbar : null);
   canvas.insertBefore(resizeOverlay, toolbar instanceof Node ? toolbar : null);
 }
 
@@ -904,6 +911,124 @@ canvas?.addEventListener("drop", (event) => {
     { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
   );
 });
+
+function getMarqueeBounds(startX, startY, endX, endY) {
+  return {
+    left: Math.min(startX, endX),
+    top: Math.min(startY, endY),
+    right: Math.max(startX, endX),
+    bottom: Math.max(startY, endY),
+    width: Math.abs(endX - startX),
+    height: Math.abs(endY - startY),
+  };
+}
+
+function isRectEnclosed(elementBounds, selectionBounds) {
+  return elementBounds.left >= selectionBounds.left
+    && elementBounds.top >= selectionBounds.top
+    && elementBounds.right <= selectionBounds.right
+    && elementBounds.bottom <= selectionBounds.bottom;
+}
+
+function doRectsIntersect(elementBounds, selectionBounds) {
+  return elementBounds.right >= selectionBounds.left
+    && elementBounds.left <= selectionBounds.right
+    && elementBounds.bottom >= selectionBounds.top
+    && elementBounds.top <= selectionBounds.bottom;
+}
+
+function applyMarqueeSelection(selectionBounds) {
+  if (!selectionDrag || !currentComponent) return;
+  const nextKeys = new Set(selectionDrag.additive ? selectionDrag.initialKeys : []);
+  let nextComponentId = selectionDrag.additive ? selectionDrag.initialComponentId : null;
+  const componentIsEnclosed = isRectEnclosed(canvasRootStack.getBoundingClientRect(), selectionBounds);
+
+  if (componentIsEnclosed) {
+    nextComponentId = currentComponent.id;
+    frameRecords.forEach((record) => getFrameSelectionKeys(record.id).forEach((key) => nextKeys.add(key)));
+    textRecords.forEach((record) => nextKeys.add(getLayerKey("text", record.id)));
+    vectorRecords.forEach((record) => nextKeys.add(getLayerKey("vector", record.id)));
+  } else {
+    frameRecords.forEach((record) => {
+      if (isRectEnclosed(record.element.getBoundingClientRect(), selectionBounds)) {
+        getFrameSelectionKeys(record.id).forEach((key) => nextKeys.add(key));
+      }
+    });
+    textRecords.forEach((record) => {
+      if (doRectsIntersect(record.element.getBoundingClientRect(), selectionBounds)) {
+        nextKeys.add(getLayerKey("text", record.id));
+      }
+    });
+    vectorRecords.forEach((record) => {
+      if (doRectsIntersect(record.element.getBoundingClientRect(), selectionBounds)) {
+        nextKeys.add(getLayerKey("vector", record.id));
+      }
+    });
+  }
+
+  selectedLayerKeys.clear();
+  nextKeys.forEach((key) => selectedLayerKeys.add(key));
+  if (selectedLayerKeys.size > 0) setPrimarySelectionToLatest();
+  else {
+    selectedCanvasFrame = null;
+    selectedCanvasText = null;
+    selectedCanvasVector = null;
+  }
+  selectedComponentId = nextComponentId;
+  syncElementSelectionStyles();
+  renderTree();
+}
+
+canvas?.addEventListener("pointerdown", (event) => {
+  if (
+    !(canvas instanceof HTMLElement)
+    || event.target !== canvas
+    || event.button !== 0
+    || activeTool !== "select"
+  ) return;
+  const canvasBounds = canvas.getBoundingClientRect();
+  const startX = Math.max(canvasBounds.left, Math.min(event.clientX, canvasBounds.right));
+  const startY = Math.max(canvasBounds.top, Math.min(event.clientY, canvasBounds.bottom));
+  selectionDrag = {
+    pointerId: event.pointerId,
+    startX,
+    startY,
+    additive: event.ctrlKey || event.metaKey,
+    initialKeys: [...selectedLayerKeys],
+    initialComponentId: selectedComponentId,
+    dragged: false,
+  };
+  canvas.setPointerCapture(event.pointerId);
+});
+
+canvas?.addEventListener("pointermove", (event) => {
+  if (!selectionDrag || event.pointerId !== selectionDrag.pointerId || !(canvas instanceof HTMLElement)) return;
+  const canvasBounds = canvas.getBoundingClientRect();
+  const endX = Math.max(canvasBounds.left, Math.min(event.clientX, canvasBounds.right));
+  const endY = Math.max(canvasBounds.top, Math.min(event.clientY, canvasBounds.bottom));
+  const bounds = getMarqueeBounds(selectionDrag.startX, selectionDrag.startY, endX, endY);
+  if (!selectionDrag.dragged && bounds.width < 3 && bounds.height < 3) return;
+  selectionDrag.dragged = true;
+  selectionRectangle.classList.add("is-visible");
+  selectionRectangle.style.left = `${bounds.left - canvasBounds.left}px`;
+  selectionRectangle.style.top = `${bounds.top - canvasBounds.top}px`;
+  selectionRectangle.style.width = `${bounds.width}px`;
+  selectionRectangle.style.height = `${bounds.height}px`;
+  applyMarqueeSelection(bounds);
+});
+
+function finishMarqueeSelection(event) {
+  if (!selectionDrag || event.pointerId !== selectionDrag.pointerId || !(canvas instanceof HTMLElement)) return;
+  const wasDragged = selectionDrag.dragged;
+  selectionDrag = null;
+  selectionRectangle.classList.remove("is-visible");
+  selectionRectangle.removeAttribute("style");
+  if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  if (wasDragged && event.type === "pointerup") suppressNextCanvasSurfaceClick = true;
+}
+
+canvas?.addEventListener("pointerup", finishMarqueeSelection);
+canvas?.addEventListener("pointercancel", finishMarqueeSelection);
 
 canvas?.addEventListener("pointerdown", (event) => {
   if (!(canvas instanceof HTMLElement)) return;
