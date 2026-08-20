@@ -650,6 +650,10 @@ textarea:focus-visible {
   padding-left: 0;
 }
 
+.tree-node.is-renaming .layer-visibility-button {
+  display: none;
+}
+
 .icon-cell,
 .text-layer-icon {
   display: flex;
