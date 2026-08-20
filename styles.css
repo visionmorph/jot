@@ -15,6 +15,7 @@
   --background-brand: #4589ff;
   --layer-hover-01: #343a3f;
   --text-secondary: #c1c7cd;
+  --text-inverse: #121619;
   --text-disabled: rgba(244, 244, 244, 0.25);
   --field-01: #21272a;
 }
@@ -851,6 +852,50 @@ input {
   z-index: 2;
 }
 
+.tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar > .tooltip {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+}
+
+.paint-section-title-row > .tooltip {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+
+.tooltip-content {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  z-index: 20;
+  display: none;
+  align-items: center;
+  height: 20px;
+  padding: 2px;
+  border-radius: 2px;
+  background: #ffffff;
+  color: var(--text-inverse);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.tooltip:hover > .tooltip-content,
+.tooltip:focus-within > .tooltip-content {
+  display: flex;
+}
+
 .tool-button {
   display: flex;
   align-items: center;
@@ -1422,6 +1467,17 @@ input {
   position: relative;
   width: 119.5px;
   height: 24px;
+}
+
+.text-size-combobox,
+.text-size-combobox .inspector-control,
+.text-size-combobox .inspector-combobox-menu {
+  width: 100%;
+}
+
+.text-size-combobox .inspector-combobox-menu {
+  max-height: 192px;
+  overflow-y: auto;
 }
 
 .inspector-control {

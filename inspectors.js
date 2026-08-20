@@ -51,6 +51,7 @@ function syncCustomColorControl(picker, color, opacity = 100) {
   const section = control.closest("[data-paint-section]");
   const actionButton = section?.querySelector("[data-color-action]");
   const actionIcon = actionButton?.querySelector(".subtract-icon, .plus-icon");
+  const actionTooltip = actionButton?.closest(".tooltip")?.querySelector("[data-tooltip-content]");
   const propertyLabels = {
     canvas: "page fill",
     "frame-background": "frame fill",
@@ -77,6 +78,9 @@ function syncCustomColorControl(picker, color, opacity = 100) {
   }
   if (actionIcon instanceof HTMLElement) {
     actionIcon.className = isEmpty ? "plus-icon" : "subtract-icon";
+  }
+  if (actionTooltip instanceof HTMLElement) {
+    actionTooltip.textContent = isEmpty ? "Add" : "Remove";
   }
 }
 
@@ -275,7 +279,10 @@ function syncInspectorToSelectedText() {
   const weight = Number(element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
   if (fontSelect instanceof HTMLSelectElement) fontSelect.value = family;
   populateWeightOptions(family, weight);
-  if (sizeSelect instanceof HTMLSelectElement) sizeSelect.value = element.dataset.fontSize || "14";
+  if (sizeSelect instanceof HTMLInputElement) {
+    sizeSelect.value = element.dataset.fontSize || "14";
+    syncTextSizeCombobox(sizeSelect.value);
+  }
   if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.value = element.dataset.lineHeight || "Auto";
   if (letterSpacingInput instanceof HTMLInputElement) letterSpacingInput.value = element.dataset.letterSpacing || "0%";
   if (textColorPicker instanceof HTMLInputElement) {
@@ -1034,20 +1041,102 @@ weightSelect?.addEventListener("change", () => {
   requestAnimationFrame(syncSelectedTextSizeInputs);
 });
 
-sizeSelect?.addEventListener("change", () => {
+function syncTextSizeCombobox(value) {
+  textSizeOptions.forEach((option) => {
+    option.setAttribute("aria-selected", String(option.getAttribute("data-text-size-option") === String(value)));
+  });
+}
+
+function setTextSizeComboboxOpen(isOpen) {
+  if (!(textSizeMenu instanceof HTMLElement) || !(sizeSelect instanceof HTMLInputElement)) return;
+  textSizeMenu.hidden = !isOpen;
+  sizeSelect.setAttribute("aria-expanded", String(isOpen));
+  textSizeToggle?.setAttribute("aria-expanded", String(isOpen));
+}
+
+function applyTextSizeValue(rawValue = sizeSelect?.value, normalize = true) {
   const record = getSelectedTextRecord();
-  if (!record || !(sizeSelect instanceof HTMLSelectElement)) return;
-  if ((record.element.dataset.fontSize || "14") !== sizeSelect.value) recordHistory();
-  record.element.dataset.fontSize = sizeSelect.value;
-  record.element.style.fontSize = `${sizeSelect.value}px`;
+  if (!record || !(sizeSelect instanceof HTMLInputElement)) return false;
+  const value = String(rawValue || "").trim();
+  if (!/^\d+(?:\.\d+)?$/.test(value)) return false;
+  const numberValue = Math.max(0, Number(value));
+  const normalizedValue = String(numberValue);
+  if ((record.element.dataset.fontSize || "14") !== normalizedValue) recordHistory();
+  record.element.dataset.fontSize = normalizedValue;
+  record.element.style.fontSize = `${normalizedValue}px`;
+  if (normalize) sizeSelect.value = normalizedValue;
+  syncTextSizeCombobox(normalizedValue);
   requestAnimationFrame(syncSelectedTextSizeInputs);
+  return true;
+}
+
+sizeSelect?.addEventListener("focus", () => {
+  if (sizeSelect instanceof HTMLInputElement) sizeSelect.select();
+});
+
+sizeSelect?.addEventListener("click", () => {
+  if (sizeSelect instanceof HTMLInputElement) sizeSelect.select();
+});
+
+sizeSelect?.addEventListener("input", () => {
+  if (sizeSelect instanceof HTMLInputElement) applyTextSizeValue(sizeSelect.value, false);
+});
+
+sizeSelect?.addEventListener("blur", (event) => {
+  if (event.relatedTarget instanceof Node && textSizeCombobox?.contains(event.relatedTarget)) return;
+  if (!applyTextSizeValue()) syncInspectorToSelectedText();
+  setTextSizeComboboxOpen(false);
+});
+
+sizeSelect?.addEventListener("keydown", (event) => {
+  if (!(sizeSelect instanceof HTMLInputElement)) return;
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    setTextSizeComboboxOpen(true);
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    setTextSizeComboboxOpen(false);
+    syncInspectorToSelectedText();
+    return;
+  }
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  if (!applyTextSizeValue()) syncInspectorToSelectedText();
+  setTextSizeComboboxOpen(false);
+  sizeSelect.select();
+});
+
+textSizeToggle?.addEventListener("click", () => {
+  if (!(textSizeMenu instanceof HTMLElement) || !(sizeSelect instanceof HTMLInputElement)) return;
+  setTextSizeComboboxOpen(textSizeMenu.hidden);
+  sizeSelect.focus();
+});
+
+textSizeOptions.forEach((option) => {
+  option.addEventListener("pointerdown", (event) => event.preventDefault());
+  option.addEventListener("click", () => {
+    const value = option.getAttribute("data-text-size-option");
+    if (value) applyTextSizeValue(value);
+    setTextSizeComboboxOpen(false);
+    if (sizeSelect instanceof HTMLInputElement) {
+      sizeSelect.focus();
+      sizeSelect.select();
+    }
+  });
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!(event.target instanceof Node) || !(textSizeCombobox instanceof HTMLElement)) return;
+  if (!textSizeCombobox.contains(event.target)) setTextSizeComboboxOpen(false);
 });
 
 function applyLineHeightValue() {
   const record = getSelectedTextRecord();
   if (!record || !(lineHeightInput instanceof HTMLInputElement)) return false;
   const value = lineHeightInput.value.trim();
-  if (/^auto$/i.test(value)) {
+  if (/^(?:a|auto)$/i.test(value)) {
     if ((record.element.dataset.lineHeight || "Auto") !== "Auto") recordHistory();
     lineHeightInput.value = "Auto";
     record.element.dataset.lineHeight = "Auto";
@@ -1065,6 +1154,14 @@ function applyLineHeightValue() {
   requestAnimationFrame(syncSelectedTextSizeInputs);
   return true;
 }
+
+lineHeightInput?.addEventListener("focus", () => {
+  if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.select();
+});
+
+lineHeightInput?.addEventListener("click", () => {
+  if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.select();
+});
 
 lineHeightInput?.addEventListener("input", applyLineHeightValue);
 

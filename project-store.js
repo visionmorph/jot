@@ -26,6 +26,14 @@ const weightSelect = document.querySelector("#text-weight");
 
 const sizeSelect = document.querySelector("#text-size");
 
+const textSizeCombobox = document.querySelector("[data-text-size-combobox]");
+
+const textSizeToggle = document.querySelector("[data-text-size-toggle]");
+
+const textSizeMenu = document.querySelector("[data-text-size-menu]");
+
+const textSizeOptions = Array.from(document.querySelectorAll("[data-text-size-option]"));
+
 const lineHeightInput = document.querySelector("#text-line-height");
 
 const letterSpacingInput = document.querySelector("#text-letter-spacing");
