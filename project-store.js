@@ -231,6 +231,7 @@ function getDefaultComponentFrameState() {
       outlinePosition: "inside",
       outlineWeight: "1",
       htmlTag: "div",
+      layerVisibility: "visible",
     },
     style: "width: 100px; height: 100px; padding: 10px; gap: 10px; flex-direction: row; align-items: flex-start; justify-content: flex-start; border-radius: 0px; background-color: transparent; box-sizing: border-box;",
   };
@@ -448,6 +449,18 @@ function restoreElementState(element, dataset, style) {
   else element.setAttribute("style", style);
 }
 
+function isLayerVisible(element) {
+  return element?.dataset.layerVisibility !== "hidden";
+}
+
+function syncLayerVisibility(element) {
+  if (!(element instanceof HTMLElement)) return;
+  const isVisible = isLayerVisible(element);
+  element.classList.toggle("is-layer-hidden", !isVisible);
+  if (isVisible) element.removeAttribute("aria-hidden");
+  else element.setAttribute("aria-hidden", "true");
+}
+
 function attachRestoredLayers(parentFrameId, parentElement) {
   getLayerChildren(parentFrameId).forEach((layer) => {
     if (parentFrameId === null && canvasRootStack instanceof HTMLElement) {
@@ -478,6 +491,7 @@ function restoreWorkspaceState(snapshot, options = {}) {
     }
     const componentFrameState = snapshot.componentFrame ?? getDefaultComponentFrameState();
     restoreElementState(canvasRootStack, componentFrameState.dataset, componentFrameState.style);
+    syncLayerVisibility(canvasRootStack);
     canvasRootStack.setAttribute("aria-label", currentComponent?.name || "Component");
     canvasRootStack.setAttribute("aria-selected", "false");
   }
@@ -487,6 +501,7 @@ function restoreWorkspaceState(snapshot, options = {}) {
     entry.record.parentId = entry.parentId;
     entry.record.order = entry.order;
     restoreElementState(entry.record.element, entry.dataset, entry.style);
+    syncLayerVisibility(entry.record.element);
     return entry.record;
   });
   textRecords = snapshot.texts.map((entry) => {
@@ -495,6 +510,7 @@ function restoreWorkspaceState(snapshot, options = {}) {
     entry.record.order = entry.order;
     entry.record.isNew = entry.isNew;
     restoreElementState(entry.record.element, entry.dataset, entry.style);
+    syncLayerVisibility(entry.record.element);
     entry.record.element.textContent = entry.textContent;
     entry.record.element.contentEditable = entry.contentEditable;
     return entry.record;
@@ -506,6 +522,7 @@ function restoreWorkspaceState(snapshot, options = {}) {
     entry.record.svgSource = entry.svgSource;
     entry.record.originalSvgSource = entry.originalSvgSource ?? entry.record.originalSvgSource ?? entry.svgSource;
     restoreElementState(entry.record.element, entry.dataset, entry.style);
+    syncLayerVisibility(entry.record.element);
     entry.record.element.replaceChildren(createCanvasSvg(entry.record.svgSource));
     return entry.record;
   });

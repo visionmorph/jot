@@ -45,7 +45,11 @@ function getSelectedResizeRecord() {
 function positionResizeOverlay() {
   if (!(canvas instanceof HTMLElement)) return;
   const element = getSelectedResizeElement();
-  if (!(element instanceof HTMLElement) || !element.isConnected) {
+  if (
+    !(element instanceof HTMLElement)
+    || !element.isConnected
+    || getComputedStyle(element).visibility === "hidden"
+  ) {
     resizeOverlay.hidden = true;
     return;
   }
@@ -489,6 +493,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
   vector.dataset.height = String(height);
   vector.dataset.widthMode = "fixed";
   vector.dataset.heightMode = "fixed";
+  vector.dataset.layerVisibility = "visible";
   vector.setAttribute("aria-label", record.name);
   vector.setAttribute("aria-selected", "false");
   vector.append(createCanvasSvg(record.svgSource));
@@ -557,6 +562,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   text.dataset.alignment = "top-left";
   text.dataset.widthMode = "hug";
   text.dataset.heightMode = "hug";
+  text.dataset.layerVisibility = "visible";
   text.style.fontFamily = `${JSON.stringify(DEFAULT_FONT_FAMILY)}, sans-serif`;
   text.style.fontWeight = String(DEFAULT_FONT_WEIGHT);
   text.style.fontSize = "14px";
@@ -677,6 +683,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.dataset.outlinePosition = "inside";
   frame.dataset.outlineWeight = "1";
   frame.dataset.htmlTag = "div";
+  frame.dataset.layerVisibility = "visible";
   frame.style.width = "100px";
   frame.style.height = "100px";
   if (parentRecord) {

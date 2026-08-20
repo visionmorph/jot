@@ -476,7 +476,8 @@ textarea:focus-visible {
 }
 
 .tree-node.is-selected .icon-cell,
-.tree-node.is-selected .text-layer-icon {
+.tree-node.is-selected .text-layer-icon,
+.tree-node.is-selected .layer-visibility-button {
   color: var(--icon-on-color);
 }
 
@@ -504,12 +505,10 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  width: 44px;
-  min-width: 44px;
-  min-height: 24px;
-  flex: 0 0 auto;
+  width: 40px;
+  flex: 0 0 40px;
   margin: 0;
-  padding: 4px 0 4px 4px;
+  padding: 0;
   gap: 4px;
 }
 
@@ -532,6 +531,56 @@ textarea:focus-visible {
   min-width: 0;
   padding: 4px;
   flex: 1 1 auto;
+}
+
+.layer-visibility-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--icon-secondary);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tree-node-content:hover > .layer-visibility-button,
+.layer-visibility-button:focus-visible,
+.layer-visibility-button.is-layer-hidden {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.layer-visibility-button:hover {
+  background: var(--layer-hover-01);
+  color: var(--icon-on-color);
+}
+
+.layer-visibility-button:focus-visible {
+  outline: 1px solid var(--background-brand);
+  outline-offset: -1px;
+}
+
+.layer-visibility-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.layer-visibility-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .tree-node.is-renaming .branch-icon-group {
@@ -562,6 +611,10 @@ textarea:focus-visible {
   height: 16px;
   flex: 0 0 16px;
   color: currentColor;
+}
+
+.vector-layer-preview-icon {
+  overflow: hidden;
 }
 
 .branch-toggle {
@@ -697,6 +750,13 @@ textarea:focus-visible {
 
 .canvas-root-stack:hover {
   outline: 2px solid #992CFF;
+}
+
+.canvas-root-stack.is-layer-hidden,
+.canvas-frame.is-layer-hidden,
+.canvas-text.is-layer-hidden,
+.canvas-vector.is-layer-hidden {
+  visibility: hidden;
 }
 
 .selection-rectangle {

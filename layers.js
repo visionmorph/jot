@@ -148,11 +148,100 @@ function beginTreeNodeRename(type, record) {
   selectTreeNodeForRename(type, record);
 }
 
-function createTreeNodeContent(node, iconGroup, type, record) {
+function getTreeLayerElement(type, record) {
+  if (type === "component") return record.id === currentComponent?.id ? canvasRootStack : null;
+  return record.element;
+}
+
+function getTreeLayerVisibility(type, record) {
+  if (type === "component" && record.id !== currentComponent?.id) {
+    return record.workspace?.componentFrame?.dataset?.layerVisibility !== "hidden";
+  }
+  return isLayerVisible(getTreeLayerElement(type, record));
+}
+
+function createLayerVisibilityGraphic(isVisible, isTopLevel) {
+  if (!isVisible && !isTopLevel) {
+    const dot = document.createElement("span");
+    dot.className = "layer-visibility-dot";
+    dot.setAttribute("aria-hidden", "true");
+    return dot;
+  }
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const eye = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  svg.setAttribute("class", "layer-visibility-icon");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("aria-hidden", "true");
+  eye.setAttribute("d", "M1 8s2.5-4 7-4 7 4 7 4-2.5 4-7 4S1 8 1 8Z");
+  eye.setAttribute("stroke", "currentColor");
+  eye.setAttribute("stroke-width", "1.25");
+  eye.setAttribute("stroke-linejoin", "round");
+  svg.append(eye);
+
+  const pupil = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  pupil.setAttribute("cx", "8");
+  pupil.setAttribute("cy", "8");
+  pupil.setAttribute("r", "2");
+  pupil.setAttribute("fill", "currentColor");
+  svg.append(pupil);
+
+  if (!isVisible) {
+    const slash = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    slash.setAttribute("d", "M2 2l12 12");
+    slash.setAttribute("stroke", "currentColor");
+    slash.setAttribute("stroke-width", "1.5");
+    slash.setAttribute("stroke-linecap", "round");
+    svg.append(slash);
+  }
+  return svg;
+}
+
+function createVectorLayerTreeIcon(record) {
+  const source = record.originalSvgSource || record.svgSource;
+  if (!source) return createLayerTypeIcon("vector");
+
+  const svg = createCanvasSvg(source);
+  svg.classList.add("layer-type-icon", "vector-layer-preview-icon");
+  svg.setAttribute("aria-hidden", "true");
+  svg.querySelectorAll("path, rect, circle, ellipse, line, polyline, polygon, use").forEach((shape) => {
+    if (shape.closest("defs, clipPath, mask, pattern, symbol")) return;
+    shape.style.setProperty("fill", "none", "important");
+    shape.style.setProperty("stroke", "currentColor", "important");
+    shape.style.setProperty("stroke-width", "1px", "important");
+    shape.style.setProperty("vector-effect", "non-scaling-stroke", "important");
+  });
+  return svg;
+}
+
+function toggleTreeLayerVisibility(type, record) {
+  const isVisible = getTreeLayerVisibility(type, record);
+  const nextVisibility = isVisible ? "hidden" : "visible";
+
+  if (type === "component" && record.id !== currentComponent?.id) {
+    const frameState = record.workspace?.componentFrame ?? getDefaultComponentFrameState();
+    frameState.dataset = { ...frameState.dataset, layerVisibility: nextVisibility };
+    record.workspace.componentFrame = frameState;
+  } else {
+    const element = getTreeLayerElement(type, record);
+    if (!(element instanceof HTMLElement)) return;
+    recordHistory();
+    element.dataset.layerVisibility = nextVisibility;
+    syncLayerVisibility(element);
+    requestAnimationFrame(syncResizeOverlay);
+  }
+  renderTree();
+}
+
+function createTreeNodeContent(node, iconGroup, type, record, depth) {
   const content = document.createElement("div");
   const labelWrapper = document.createElement("div");
+  const visibilityButton = document.createElement("button");
   const key = getTreeNodeKey(type, record.id);
   const name = getTreeNodeName(type, record);
+  const isVisible = getTreeLayerVisibility(type, record);
+  const isTopLevel = depth === 1;
 
   content.className = "tree-node-content";
   labelWrapper.className = "tree-node-label-wrap";
@@ -227,7 +316,20 @@ function createTreeNodeContent(node, iconGroup, type, record) {
     labelWrapper.append(label);
   }
 
-  content.append(iconGroup, labelWrapper);
+  visibilityButton.className = `layer-visibility-button${isVisible ? "" : " is-layer-hidden"}${isTopLevel ? " is-top-level" : " is-child-layer"}`;
+  visibilityButton.type = "button";
+  visibilityButton.draggable = false;
+  visibilityButton.setAttribute("aria-label", `${isVisible ? "Hide" : "Show"} ${name}`);
+  visibilityButton.setAttribute("aria-pressed", String(!isVisible));
+  visibilityButton.append(createLayerVisibilityGraphic(isVisible, isTopLevel));
+  visibilityButton.addEventListener("pointerdown", (event) => event.stopPropagation());
+  visibilityButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleTreeLayerVisibility(type, record);
+  });
+
+  content.append(iconGroup, labelWrapper, visibilityButton);
   return content;
 }
 
@@ -300,7 +402,7 @@ function renderFrameTreeNode(record, depth) {
   }
 
   iconGroup.append(createIconCell(createSquareIcon()));
-  node.append(createTreeNodeContent(node, iconGroup, "frame", record));
+  node.append(createTreeNodeContent(node, iconGroup, "frame", record, depth));
   item.append(node);
 
   if (isBranch && isExpanded) {
@@ -354,7 +456,7 @@ function renderTextTreeNode(record, depth) {
 
   iconGroup.className = "branch-icon-group";
   iconGroup.append(createIconCell(createLayerTypeIcon("text")));
-  node.append(createTreeNodeContent(node, iconGroup, "text", record));
+  node.append(createTreeNodeContent(node, iconGroup, "text", record, depth));
   item.append(node);
   return item;
 }
@@ -402,8 +504,8 @@ function renderVectorTreeNode(record, depth) {
   });
 
   iconGroup.className = "branch-icon-group";
-  iconGroup.append(createIconCell(createLayerTypeIcon("vector")));
-  node.append(createTreeNodeContent(node, iconGroup, "vector", record));
+  iconGroup.append(createIconCell(createVectorLayerTreeIcon(record)));
+  node.append(createTreeNodeContent(node, iconGroup, "vector", record, depth));
   item.append(node);
   return item;
 }
@@ -502,7 +604,7 @@ function renderComponentTreeNode(component) {
   }
   iconGroup.append(createIconCell(createLayerTypeIcon("component")));
 
-  node.append(createTreeNodeContent(node, iconGroup, "component", component));
+  node.append(createTreeNodeContent(node, iconGroup, "component", component, 1));
   item.append(node);
   if (isExpanded) {
     rootLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, 2)));
