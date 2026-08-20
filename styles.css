@@ -1148,8 +1148,9 @@ input {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
   border-radius: 0;
   background: transparent;
 }
@@ -1162,36 +1163,63 @@ input {
 }
 
 .frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-dot::before {
-  width: 4px;
-  height: 12px;
+  width: 2px;
+  height: 16px;
 }
 
 .frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment$="-center"] .alignment-dot::before,
 .frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot::before {
-  height: 6px;
+  height: 8px;
 }
 
 .frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected .alignment-dot::before {
-  width: 12px;
-  height: 4px;
+  width: 16px;
+  height: 2px;
 }
 
 .frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment^="center"] .alignment-dot::before,
 .frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot::before {
-  width: 6px;
+  width: 8px;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment$="-left"] {
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment^="top"] .alignment-dot {
+  align-items: flex-start;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment^="center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot {
+  align-items: center;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected[data-frame-alignment^="bottom"] .alignment-dot {
+  align-items: flex-end;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment$="-left"] .alignment-dot {
   justify-content: flex-start;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment$="-center"],
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment="center"] {
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment$="-center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment="center"] .alignment-dot {
   justify-content: center;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment$="-right"] {
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"] .frame-alignment-option.is-selected[data-frame-alignment$="-right"] .alignment-dot {
   justify-content: flex-end;
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="top"]:hover) [data-frame-alignment^="top"],
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"]:hover) [data-frame-alignment^="center"],
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment^="center"],
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"]:hover) [data-frame-alignment="center"],
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="bottom"]:hover) [data-frame-alignment^="bottom"],
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-left"]:hover) [data-frame-alignment$="-left"],
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"]:hover) [data-frame-alignment$="-center"],
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment$="-center"],
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"]:hover) [data-frame-alignment="center"],
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment="center"],
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-right"]:hover) [data-frame-alignment$="-right"] {
+  background: var(--background-selected-hover);
 }
 
 .inspector-section-divider {
