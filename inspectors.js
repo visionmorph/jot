@@ -795,35 +795,47 @@ lineHeightInput?.addEventListener("keydown", (event) => {
   applyLineHeightValue();
 });
 
-function applyLetterSpacingValue() {
+function applyLetterSpacingValue(normalizeDisplay = true) {
   const record = getSelectedTextRecord();
   if (!record || !(letterSpacingInput instanceof HTMLInputElement)) return false;
-  const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)$/i);
+  const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)?$/i);
   if (!match) return false;
-  const value = `${Number(match[1])}${match[2].toLowerCase()}`;
+  const unit = match[2]?.toLowerCase() || "%";
+  const value = `${Number(match[1])}${unit}`;
   if ((record.element.dataset.letterSpacing || "0%") !== value) recordHistory();
-  letterSpacingInput.value = value;
+  if (normalizeDisplay) letterSpacingInput.value = value;
   record.element.dataset.letterSpacing = value;
-  record.element.style.letterSpacing = match[2].toLowerCase() === "%"
+  record.element.style.letterSpacing = unit === "%"
     ? `${Number(match[1]) / 100}em`
     : value;
   requestAnimationFrame(syncSelectedTextSizeInputs);
   return true;
 }
 
-letterSpacingInput?.addEventListener("input", applyLetterSpacingValue);
+letterSpacingInput?.addEventListener("click", () => {
+  if (letterSpacingInput instanceof HTMLInputElement) letterSpacingInput.select();
+});
+
+letterSpacingInput?.addEventListener("input", () => applyLetterSpacingValue(false));
 
 letterSpacingInput?.addEventListener("blur", () => {
   if (!applyLetterSpacingValue()) syncInspectorToSelectedText();
 });
 
 letterSpacingInput?.addEventListener("keydown", (event) => {
-  if (!(letterSpacingInput instanceof HTMLInputElement) || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
-  const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)$/i);
+  if (!(letterSpacingInput instanceof HTMLInputElement)) return;
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (!applyLetterSpacingValue()) syncInspectorToSelectedText();
+    letterSpacingInput.select();
+    return;
+  }
+  if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)?$/i);
   if (!match) return;
   event.preventDefault();
   const direction = event.key === "ArrowUp" ? 1 : -1;
-  letterSpacingInput.value = `${Number(match[1]) + direction}${match[2].toLowerCase()}`;
+  letterSpacingInput.value = `${Number(match[1]) + direction}${match[2]?.toLowerCase() || "%"}`;
   applyLetterSpacingValue();
 });
 
