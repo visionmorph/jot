@@ -97,6 +97,130 @@ function getLayerDragData(event) {
   return { type, id };
 }
 
+let treeRenameState = null;
+
+let lastTreeLabelPointer = { key: null, time: 0 };
+
+function getTreeNodeKey(type, id) {
+  return `${type}:${id}`;
+}
+
+function getTreeNodeName(type, record) {
+  if (type === "component") return record.name || "Component";
+  if (type === "frame") return record.name || `Frame ${record.id}`;
+  if (type === "text") return record.name || record.element.textContent || "Text";
+  return record.name || `Vector ${record.id}`;
+}
+
+function selectTreeNodeForRename(type, record) {
+  if (type === "component") selectComponentTreeNode(record.id);
+  else if (type === "frame") selectCanvasFrame(record.element);
+  else if (type === "text") selectCanvasText(record.element);
+  else selectCanvasVector(record.element);
+}
+
+function applyTreeNodeName(type, record, name) {
+  if (type === "component") {
+    record.name = name;
+    record.frameRecord.name = name;
+    record.frameRecord.element.setAttribute("aria-label", name);
+    return;
+  }
+  record.name = name;
+  record.element.setAttribute("aria-label", name);
+}
+
+function beginTreeNodeRename(type, record) {
+  treeRenameState = {
+    key: getTreeNodeKey(type, record.id),
+    originalName: getTreeNodeName(type, record),
+  };
+  selectTreeNodeForRename(type, record);
+}
+
+function createTreeNodeContent(node, iconGroup, type, record) {
+  const content = document.createElement("div");
+  const labelWrapper = document.createElement("div");
+  const key = getTreeNodeKey(type, record.id);
+  const name = getTreeNodeName(type, record);
+
+  content.className = "tree-node-content";
+  labelWrapper.className = "tree-node-label-wrap";
+
+  if (treeRenameState?.key === key) {
+    const input = document.createElement("input");
+    let didCommit = false;
+    let shouldRevert = false;
+    node.classList.add("is-renaming", "is-selected");
+    node.setAttribute("aria-selected", "true");
+    node.draggable = false;
+    input.className = "tree-node-rename-input";
+    input.type = "text";
+    input.value = treeRenameState.originalName;
+    input.setAttribute("aria-label", `Rename ${treeRenameState.originalName}`);
+    input.autocomplete = "off";
+    input.spellcheck = false;
+
+    const commit = () => {
+      if (didCommit) return;
+      didCommit = true;
+      const originalName = treeRenameState.originalName;
+      const nextName = shouldRevert || input.value.trim().length === 0
+        ? originalName
+        : input.value.trim();
+      if (nextName !== originalName) {
+        recordHistory();
+        applyTreeNodeName(type, record, nextName);
+      }
+      treeRenameState = null;
+      renderTree();
+    };
+
+    input.addEventListener("pointerdown", (event) => event.stopPropagation());
+    input.addEventListener("click", (event) => event.stopPropagation());
+    input.addEventListener("dblclick", (event) => event.stopPropagation());
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        input.blur();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        shouldRevert = true;
+        input.blur();
+      }
+    });
+    input.addEventListener("blur", commit);
+    labelWrapper.append(input);
+    requestAnimationFrame(() => {
+      if (input.isConnected) {
+        input.focus();
+        input.select();
+      }
+    });
+  } else {
+    const label = document.createElement("span");
+    label.className = "tree-node-label";
+    label.textContent = name;
+    const startRename = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      beginTreeNodeRename(type, record);
+    };
+    labelWrapper.addEventListener("pointerdown", (event) => {
+      const now = performance.now();
+      const isDoubleClick = event.detail === 2
+        || (lastTreeLabelPointer.key === key && now - lastTreeLabelPointer.time <= 500);
+      lastTreeLabelPointer = { key, time: now };
+      if (isDoubleClick) startRename(event);
+    });
+    labelWrapper.addEventListener("dblclick", startRename);
+    labelWrapper.append(label);
+  }
+
+  content.append(iconGroup, labelWrapper);
+  return content;
+}
+
 function renderFrameTreeNode(record, depth) {
   const childLayers = getLayerChildren(record.id);
   const isBranch = childLayers.length > 0;
@@ -104,7 +228,6 @@ function renderFrameTreeNode(record, depth) {
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
-  const label = document.createElement("span");
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic";
@@ -166,9 +289,7 @@ function renderFrameTreeNode(record, depth) {
   }
 
   iconGroup.append(createIconCell(createSquareIcon()));
-  label.className = "tree-node-label";
-  label.textContent = `Frame ${record.id}`;
-  node.append(iconGroup, label);
+  node.append(createTreeNodeContent(node, iconGroup, "frame", record));
   item.append(node);
 
   if (isBranch && isExpanded) {
@@ -182,7 +303,6 @@ function renderTextTreeNode(record, depth) {
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
-  const label = document.createElement("span");
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic";
@@ -223,11 +343,7 @@ function renderTextTreeNode(record, depth) {
 
   iconGroup.className = "branch-icon-group";
   iconGroup.append(createIconCell(createLayerTypeIcon("text")));
-  label.className = "tree-node-label";
-  label.textContent = (record.element.textContent ?? "").length > 0
-    ? record.element.textContent
-    : "Text";
-  node.append(iconGroup, label);
+  node.append(createTreeNodeContent(node, iconGroup, "text", record));
   item.append(node);
   return item;
 }
@@ -236,7 +352,6 @@ function renderVectorTreeNode(record, depth) {
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
-  const label = document.createElement("span");
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic";
@@ -277,9 +392,7 @@ function renderVectorTreeNode(record, depth) {
 
   iconGroup.className = "branch-icon-group";
   iconGroup.append(createIconCell(createLayerTypeIcon("vector")));
-  label.className = "tree-node-label";
-  label.textContent = record.name || `Vector ${record.id}`;
-  node.append(iconGroup, label);
+  node.append(createTreeNodeContent(node, iconGroup, "vector", record));
   item.append(node);
   return item;
 }
@@ -315,7 +428,6 @@ function renderComponentTreeNode(component) {
   const iconGroup = document.createElement("span");
   const branchToggle = document.createElement("button");
   const chevron = document.createElement("span");
-  const label = document.createElement("span");
   const isActive = component.id === currentComponent?.id;
   const isBranch = componentHasChildLayers(component);
   const isExpanded = isBranch && isActive && isComponentExpanded;
@@ -380,9 +492,7 @@ function renderComponentTreeNode(component) {
   }
   iconGroup.append(createIconCell(createLayerTypeIcon("component")));
 
-  label.className = "tree-node-label";
-  label.textContent = component.name;
-  node.append(iconGroup, label);
+  node.append(createTreeNodeContent(node, iconGroup, "component", component));
   item.append(node);
   if (isExpanded) {
     rootLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, 2)));

@@ -536,6 +536,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
     element: text,
     order: nextLayerOrder,
     isNew: true,
+    name: undefined,
   };
   nextLayerOrder += 1;
 
@@ -647,6 +648,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
     parentId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
     element: frame,
     order: nextLayerOrder,
+    name: `Frame ${frameId}`,
   };
   nextLayerOrder += 1;
 
@@ -765,6 +767,8 @@ function duplicateTextRecord(sourceRecord, parentRecord, offsetRoot = false) {
   duplicate.textContent = source.textContent ?? "";
   duplicate.contentEditable = "false";
   duplicateRecord.isNew = false;
+  duplicateRecord.name = sourceRecord.name;
+  duplicate.setAttribute("aria-label", duplicateRecord.name || `Text ${duplicateRecord.id}`);
   return duplicateRecord;
 }
 
@@ -797,6 +801,8 @@ function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false) {
   if (!duplicateRecord) return;
 
   const duplicate = duplicateRecord.element;
+  duplicateRecord.name = sourceRecord.name;
+  duplicate.setAttribute("aria-label", duplicateRecord.name || `Frame ${duplicateRecord.id}`);
   copyElementDataset(source, duplicate, ["frameId"]);
   duplicate.setAttribute("style", source.getAttribute("style") || "");
   duplicate.style.left = parentRecord ? "" : `${x}px`;
@@ -1013,8 +1019,9 @@ function selectSiblingLayer(offset) {
   if (!layer) return false;
   if (layer.type === "component") {
     const currentIndex = components.findIndex((component) => component.id === currentComponent?.id);
-    const nextComponent = components[currentIndex + offset];
-    if (!nextComponent) return false;
+    if (currentIndex < 0 || components.length === 0) return false;
+    const nextIndex = (currentIndex + offset + components.length) % components.length;
+    const nextComponent = components[nextIndex];
     selectComponentTreeNode(nextComponent.id);
     return true;
   }
@@ -1023,7 +1030,9 @@ function selectSiblingLayer(offset) {
   const currentIndex = siblings.findIndex(
     (sibling) => sibling.type === layer.type && sibling.record.id === layer.record.id,
   );
-  return selectLayerDescriptor(siblings[currentIndex + offset]);
+  if (currentIndex < 0 || siblings.length === 0) return false;
+  const nextIndex = (currentIndex + offset + siblings.length) % siblings.length;
+  return selectLayerDescriptor(siblings[nextIndex]);
 }
 
 function setSelectedLayersOpacity(percent) {

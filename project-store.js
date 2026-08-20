@@ -12,6 +12,8 @@ const pageInspector = document.querySelector("[data-page-inspector]");
 
 const frameInspector = document.querySelector("[data-frame-inspector]");
 
+const frameInspectorHeading = document.querySelector("#frame-heading");
+
 const textInspector = document.querySelector("[data-text-inspector]");
 
 const vectorInspector = document.querySelector("[data-vector-inspector]");
@@ -272,6 +274,7 @@ function createComponentDefinition(name) {
       element: canvasRootStack,
       order: 0,
       isComponent: true,
+      name,
     },
     workspace: createEmptyWorkspaceState(id),
     undoHistory: [],
@@ -381,6 +384,7 @@ function setPrimarySelectionToLatest() {
 function captureWorkspaceState() {
   return {
     componentId: currentComponent?.id ?? null,
+    componentName: currentComponent?.name ?? "Component",
     componentFrame: canvasRootStack instanceof HTMLElement
       ? {
           dataset: { ...canvasRootStack.dataset },
@@ -389,6 +393,7 @@ function captureWorkspaceState() {
       : getDefaultComponentFrameState(),
     frames: frameRecords.map((record) => ({
       record,
+      name: record.name,
       parentId: record.parentId,
       order: record.order,
       dataset: { ...record.element.dataset },
@@ -396,6 +401,7 @@ function captureWorkspaceState() {
     })),
     texts: textRecords.map((record) => ({
       record,
+      name: record.name,
       parentFrameId: record.parentFrameId,
       order: record.order,
       isNew: record.isNew,
@@ -465,6 +471,10 @@ function restoreWorkspaceState(snapshot, options = {}) {
   allElements.forEach((element) => element.remove());
 
   if (canvasRootStack instanceof HTMLElement) {
+    if (currentComponent && typeof snapshot.componentName === "string") {
+      currentComponent.name = snapshot.componentName;
+      currentComponent.frameRecord.name = snapshot.componentName;
+    }
     const componentFrameState = snapshot.componentFrame ?? getDefaultComponentFrameState();
     restoreElementState(canvasRootStack, componentFrameState.dataset, componentFrameState.style);
     canvasRootStack.setAttribute("aria-label", currentComponent?.name || "Component");
@@ -472,12 +482,14 @@ function restoreWorkspaceState(snapshot, options = {}) {
   }
 
   frameRecords = snapshot.frames.map((entry) => {
+    entry.record.name = entry.name ?? `Frame ${entry.record.id}`;
     entry.record.parentId = entry.parentId;
     entry.record.order = entry.order;
     restoreElementState(entry.record.element, entry.dataset, entry.style);
     return entry.record;
   });
   textRecords = snapshot.texts.map((entry) => {
+    entry.record.name = entry.name;
     entry.record.parentFrameId = entry.parentFrameId;
     entry.record.order = entry.order;
     entry.record.isNew = entry.isNew;

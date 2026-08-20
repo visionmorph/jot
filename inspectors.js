@@ -283,6 +283,12 @@ function syncInspectorToSelectedFrame() {
   if (!record) return;
   const { element } = record;
 
+  if (frameInspectorHeading instanceof HTMLElement) {
+    frameInspectorHeading.textContent = record.isComponent
+      ? currentComponent?.name || "Component"
+      : "Frame";
+  }
+
   frameDirectionOptions.forEach((option) => {
     const isSelected = option.getAttribute("data-frame-direction") === (element.dataset.direction || "horizontal");
     option.classList.toggle("is-selected", isSelected);
