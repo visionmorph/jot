@@ -1072,24 +1072,59 @@ vectorImportButton?.addEventListener("click", () => {
   if (vectorFileInput instanceof HTMLInputElement) vectorFileInput.click();
 });
 
-vectorFileInput?.addEventListener("change", async () => {
-  if (!(vectorFileInput instanceof HTMLInputElement) || !(canvas instanceof HTMLElement)) return;
-  const file = vectorFileInput.files?.[0];
-  vectorFileInput.value = "";
-  if (!file) return;
+function getDroppedSvgFile(dataTransfer) {
+  return Array.from(dataTransfer?.files ?? []).find((file) => (
+    file.type === "image/svg+xml" || /\.svg$/i.test(file.name)
+  )) ?? null;
+}
 
+function hasFileTransfer(dataTransfer) {
+  return Array.from(dataTransfer?.types ?? []).includes("Files")
+    || (dataTransfer?.files?.length ?? 0) > 0;
+}
+
+async function importSvgFile(file, clientX = null, clientY = null) {
+  if (!(file instanceof File) || !(canvas instanceof HTMLElement)) return false;
   try {
     const sanitized = sanitizeSvgText(await file.text());
     const canvasBounds = canvas.getBoundingClientRect();
-    const x = Math.max(0, Math.round((canvasBounds.width - sanitized.width) / 2));
-    const y = Math.max(0, Math.round((canvasBounds.height - sanitized.height) / 2));
+    const x = Number.isFinite(clientX)
+      ? Math.max(0, Math.round(clientX - canvasBounds.left))
+      : Math.max(0, Math.round((canvasBounds.width - sanitized.width) / 2));
+    const y = Number.isFinite(clientY)
+      ? Math.max(0, Math.round(clientY - canvasBounds.top))
+      : Math.max(0, Math.round((canvasBounds.height - sanitized.height) / 2));
     const name = file.name.replace(/\.svg$/i, "").trim() || `Vector ${nextVectorId}`;
     createCanvasVector({ ...sanitized, name }, x, y);
     selectTool("select");
+    return true;
   } catch (error) {
     window.alert(error instanceof Error ? error.message : "Unable to import the selected SVG.");
+    return false;
   }
+}
+
+vectorFileInput?.addEventListener("change", async () => {
+  if (!(vectorFileInput instanceof HTMLInputElement)) return;
+  const file = vectorFileInput.files?.[0];
+  vectorFileInput.value = "";
+  if (file) await importSvgFile(file);
 });
+
+canvas?.addEventListener("dragover", (event) => {
+  if (!hasFileTransfer(event.dataTransfer)) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.dataTransfer.dropEffect = "copy";
+}, true);
+
+canvas?.addEventListener("drop", (event) => {
+  const file = getDroppedSvgFile(event.dataTransfer);
+  if (!file) return;
+  event.preventDefault();
+  event.stopPropagation();
+  importSvgFile(file, event.clientX, event.clientY);
+}, true);
 
 canvas?.addEventListener("dragover", (event) => {
   if (event.target !== canvas && event.target !== canvasRootStack) return;

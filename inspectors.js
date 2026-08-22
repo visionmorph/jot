@@ -565,6 +565,7 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
   const selectedOptionRecord = options.find((optionRecord) => String(optionRecord.value) === String(value));
 
   wrap.className = "prop-select-wrap";
+  wrap.classList.toggle("is-disabled", disabled);
   select.className = "prop-control prop-select";
   select.setAttribute("aria-label", ariaLabel);
   select.disabled = disabled;
@@ -676,52 +677,21 @@ function renderComponentProps() {
 
     const defaultCell = createCell();
     defaultCell.classList.add("props-table-value-cell");
+    const valueTag = document.createElement("span");
+    valueTag.className = "prop-value-tag";
     if (prop.type === "boolean") {
-      const defaultToggle = document.createElement("div");
-      defaultToggle.className = "frame-direction-toggle prop-boolean-toggle";
-      defaultToggle.setAttribute("role", "group");
-      defaultToggle.setAttribute("aria-label", "Default Boolean value");
-      [false, true].forEach((value) => {
-        const option = document.createElement("button");
-        const isSelected = Boolean(prop.defaultValue) === value;
-        option.className = `frame-direction-option${isSelected ? " is-selected" : ""}`;
-        option.type = "button";
-        option.textContent = value ? "True" : "False";
-        option.setAttribute("aria-pressed", String(isSelected));
-        option.addEventListener("click", () => {
-          if (Boolean(prop.defaultValue) === value) return;
-          recordHistory();
-          prop.defaultValue = value;
-          renderComponentProps();
-        });
-        defaultToggle.append(option);
-      });
-      defaultCell.append(defaultToggle);
+      valueTag.textContent = Boolean(prop.defaultValue) ? "True" : "False";
+      valueTag.setAttribute("aria-label", `Default Boolean value: ${valueTag.textContent}`);
     } else if (prop.type === "string") {
-      const defaultInput = document.createElement("input");
-      let hasRecordedHistory = false;
-      defaultInput.className = "prop-control";
-      defaultInput.type = "text";
-      defaultInput.value = String(prop.defaultValue);
-      defaultInput.setAttribute("aria-label", "Default string value");
-      defaultInput.addEventListener("input", () => {
-        if (!hasRecordedHistory) {
-          recordHistory();
-          hasRecordedHistory = true;
-        }
-        prop.defaultValue = defaultInput.value;
-        const target = getTextRecord(prop.targetTextId);
-        if (target) target.element.textContent = defaultInput.value;
-      });
-      defaultInput.addEventListener("change", renderTree);
-      defaultCell.append(defaultInput);
+      const stringValue = String(prop.defaultValue);
+      valueTag.textContent = stringValue || '""';
+      valueTag.setAttribute("aria-label", `Default string value: ${stringValue || "empty string"}`);
     } else {
-      const emptyValue = document.createElement("span");
-      emptyValue.className = "prop-empty-value prop-value-tag";
-      emptyValue.textContent = "—";
-      emptyValue.setAttribute("aria-label", "No default value");
-      defaultCell.append(emptyValue);
+      valueTag.classList.add("prop-empty-value");
+      valueTag.textContent = "—";
+      valueTag.setAttribute("aria-label", "No default value");
     }
+    defaultCell.append(valueTag);
 
     const targetCell = createCell();
     const isStringProp = prop.type === "string";
