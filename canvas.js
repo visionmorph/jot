@@ -14,6 +14,10 @@ let selectionDrag = null;
 
 let canvasDragSession = null;
 
+let canvasPointerDrag = null;
+
+const CANVAS_DRAG_THRESHOLD = 4;
+
 RESIZE_HANDLE_DIRECTIONS.forEach((direction) => {
   const handle = document.createElement("button");
   handle.className = `resize-handle resize-handle--${direction}`;
@@ -683,7 +687,10 @@ function createCanvasDragPlaceholder(element) {
 
 function clearCanvasDropTarget() {
   canvasDragSession?.targetElement?.classList.remove("is-canvas-drop-inside");
-  if (canvasDragSession) canvasDragSession.targetElement = null;
+  if (canvasDragSession) {
+    canvasDragSession.targetElement = null;
+    canvasDragSession.insideLock = null;
+  }
 }
 
 function previewCanvasDropIntent(intent) {
@@ -691,6 +698,12 @@ function previewCanvasDropIntent(intent) {
   clearCanvasDropTarget();
   const parentElement = getCanvasParentElement(intent.parentFrameId);
   if (!(parentElement instanceof HTMLElement)) return;
+  const shouldLockInsideTarget = intent.mode === "inside"
+    && intent.targetElement?.classList.contains("canvas-frame")
+    && canvasDragSession.originalParentId !== intent.parentFrameId;
+  const insideTargetBounds = shouldLockInsideTarget
+    ? intent.targetElement.getBoundingClientRect()
+    : null;
   const siblings = getLayerChildren(intent.parentFrameId).filter(
     (sibling) => !isSameLayerDescriptor(canvasDragSession.draggedLayer, { type: sibling.type, id: sibling.record.id }),
   );
@@ -698,6 +711,15 @@ function previewCanvasDropIntent(intent) {
   parentElement.insertBefore(canvasDragSession.placeholder, referenceElement);
   canvasDragSession.intent = intent;
   canvasDragSession.targetElement = intent.mode === "inside" ? intent.targetElement : null;
+  canvasDragSession.insideLock = insideTargetBounds
+    ? {
+        intent,
+        left: insideTargetBounds.left + insideTargetBounds.width * 0.25,
+        top: insideTargetBounds.top + insideTargetBounds.height * 0.25,
+        right: insideTargetBounds.right - insideTargetBounds.width * 0.25,
+        bottom: insideTargetBounds.bottom - insideTargetBounds.height * 0.25,
+      }
+    : null;
   canvasDragSession.targetElement?.classList.add("is-canvas-drop-inside");
   requestAnimationFrame(syncResizeOverlay);
 }
@@ -724,12 +746,14 @@ function startCanvasDragSession(draggedLayer, deferDraggingStyle = false) {
     originalIndex,
     intent: null,
     targetElement: null,
+    insideLock: null,
   };
   const applyDraggingStyle = () => {
     if (canvasDragSession?.element === record.element) record.element.classList.add("is-canvas-dragging");
   };
   if (deferDraggingStyle) requestAnimationFrame(applyDraggingStyle);
   else applyDraggingStyle();
+  resizeOverlay.hidden = true;
   return canvasDragSession;
 }
 
@@ -796,6 +820,10 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
 
   vector.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (suppressNextCanvasSurfaceClick) {
+      suppressNextCanvasSurfaceClick = false;
+      return;
+    }
     selectCanvasVector(vector, event.ctrlKey);
   });
   vector.addEventListener("dragstart", (event) => {
@@ -869,6 +897,10 @@ function createCanvasText(parentRecord, x, y, options = {}) {
 
   text.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (suppressNextCanvasSurfaceClick) {
+      suppressNextCanvasSurfaceClick = false;
+      return;
+    }
     if (activeTool === "text") startEditingText(text);
     else selectCanvasText(text, event.ctrlKey);
   });
@@ -1444,6 +1476,125 @@ canvas?.addEventListener("drop", (event) => {
 }, true);
 
 document.addEventListener("dragend", clearCanvasDragSession);
+
+function selectDraggedCanvasLayer(layer) {
+  const record = getLayerRecord(layer);
+  if (!record) return;
+  if (layer.type === "frame") selectCanvasFrame(record.element);
+  else if (layer.type === "text") selectCanvasText(record.element);
+  else selectCanvasVector(record.element);
+}
+
+function getPointerCanvasDropIntent(event, draggedLayer) {
+  if (!(canvas instanceof HTMLElement)) return null;
+  const canvasBounds = canvas.getBoundingClientRect();
+  const isInsideCanvas = event.clientX >= canvasBounds.left
+    && event.clientX <= canvasBounds.right
+    && event.clientY >= canvasBounds.top
+    && event.clientY <= canvasBounds.bottom;
+  if (!isInsideCanvas) return null;
+  const insideLock = canvasDragSession?.insideLock;
+  if (
+    insideLock
+    && event.clientX >= insideLock.left
+    && event.clientX <= insideLock.right
+    && event.clientY >= insideLock.top
+    && event.clientY <= insideLock.bottom
+  ) return insideLock.intent;
+  if (canvasDragSession) canvasDragSession.insideLock = null;
+  const target = document.elementFromPoint(event.clientX, event.clientY);
+  return getCanvasDropIntent({
+    target,
+    clientX: event.clientX,
+    clientY: event.clientY,
+  }, draggedLayer);
+}
+
+function updateCanvasPointerDrag(event) {
+  if (!canvasPointerDrag || event.pointerId !== canvasPointerDrag.pointerId) return false;
+  const distance = Math.hypot(
+    event.clientX - canvasPointerDrag.startX,
+    event.clientY - canvasPointerDrag.startY,
+  );
+  if (!canvasPointerDrag.hasStarted && distance < CANVAS_DRAG_THRESHOLD) return false;
+
+  if (!canvasPointerDrag.hasStarted) {
+    canvasPointerDrag.hasStarted = true;
+    selectDraggedCanvasLayer(canvasPointerDrag.draggedLayer);
+    startCanvasDragSession(canvasPointerDrag.draggedLayer);
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  const intent = getPointerCanvasDropIntent(event, canvasPointerDrag.draggedLayer);
+  if (intent) previewCanvasDropIntent(intent);
+  else restoreCanvasDragPreview();
+  return true;
+}
+
+function finishCanvasPointerDrag(event, shouldCommit) {
+  if (!canvasPointerDrag || event.pointerId !== canvasPointerDrag.pointerId) return;
+  const pointerDrag = canvasPointerDrag;
+  if (pointerDrag.hasStarted) updateCanvasPointerDrag(event);
+  const intent = shouldCommit ? canvasDragSession?.intent ?? null : null;
+  canvasPointerDrag = null;
+
+  pointerDrag.element.draggable = pointerDrag.wasDraggable;
+  if (pointerDrag.element.hasPointerCapture(event.pointerId)) {
+    pointerDrag.element.releasePointerCapture(event.pointerId);
+  }
+  if (!pointerDrag.hasStarted) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  clearCanvasDragSession();
+  if (intent) moveLayer(pointerDrag.draggedLayer, intent.parentFrameId, intent.targetIndex);
+  suppressNextCanvasSurfaceClick = true;
+  setTimeout(() => {
+    suppressNextCanvasSurfaceClick = false;
+  }, 0);
+}
+
+canvas?.addEventListener("pointerdown", (event) => {
+  if (
+    event.button !== 0
+    || !event.isPrimary
+    || activeTool !== "select"
+    || canvasPointerDrag
+    || resizeInteraction
+  ) return;
+  const element = getCanvasLayerElementFromTarget(event.target);
+  const draggedLayer = getCanvasLayerDescriptor(element);
+  if (!(element instanceof HTMLElement) || !draggedLayer || element.isContentEditable) return;
+
+  canvasPointerDrag = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    draggedLayer,
+    element,
+    wasDraggable: element.draggable,
+    hasStarted: false,
+  };
+  element.draggable = false;
+  element.setPointerCapture(event.pointerId);
+}, true);
+
+canvas?.addEventListener("pointermove", (event) => {
+  updateCanvasPointerDrag(event);
+}, true);
+
+canvas?.addEventListener("pointerup", (event) => {
+  finishCanvasPointerDrag(event, true);
+}, true);
+
+canvas?.addEventListener("pointercancel", (event) => {
+  finishCanvasPointerDrag(event, false);
+}, true);
+
+canvas?.addEventListener("lostpointercapture", (event) => {
+  if (canvasPointerDrag?.pointerId === event.pointerId) finishCanvasPointerDrag(event, false);
+}, true);
 
 function getMarqueeBounds(startX, startY, endX, endY) {
   return {
