@@ -286,7 +286,7 @@ function createComponentDefinition(name) {
 
 function initializeComponents() {
   if (components.length > 0) return;
-  const component = createComponentDefinition("Button");
+  const component = createComponentDefinition("Component 1");
   components.push(component);
   currentComponent = component;
   selectedComponentId = component.id;
