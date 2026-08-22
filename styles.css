@@ -1047,8 +1047,6 @@ textarea:focus-visible {
   min-width: 0;
   min-height: 0;
   box-sizing: border-box;
-  border: 1px solid #992CFF;
-  background: rgba(153, 44, 255, 0.16);
   pointer-events: none;
 }
 
