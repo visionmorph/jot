@@ -1058,6 +1058,14 @@ textarea:focus-visible {
   pointer-events: none !important;
 }
 
+.canvas-drag-preview {
+  position: fixed !important;
+  z-index: 1000 !important;
+  margin: 0 !important;
+  opacity: 1;
+  pointer-events: none !important;
+}
+
 .canvas-text.is-selected {
   outline: 1px solid #992CFF;
 }
