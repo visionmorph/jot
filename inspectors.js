@@ -1451,6 +1451,7 @@ framePaddingInputs.forEach((input) => {
     record.element.dataset[propertyName] = String(value);
     record.element.style[propertyName] = `${value}px`;
     syncFramePaddingAxisInputs(record.element);
+    requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", syncInspectorToSelectedFrame);
 });
@@ -1476,6 +1477,7 @@ framePaddingAxisInputs.forEach((input) => {
       const sideInput = framePaddingInputs.find((candidate) => candidate.dataset.framePadding === side);
       if (sideInput instanceof HTMLInputElement) sideInput.value = String(value);
     });
+    requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", syncInspectorToSelectedFrame);
 });
