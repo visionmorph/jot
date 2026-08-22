@@ -18,13 +18,9 @@ let canvasPointerDrag = null;
 
 const CANVAS_DRAG_THRESHOLD = 4;
 
-const canvasMovementTimingSelect = document.querySelector("[data-canvas-movement-timing]");
+const CANVAS_REFLOW_DURATION = 160;
 
-const canvasAnimationTypeSelect = document.querySelector("[data-canvas-animation-type]");
-
-const DEFAULT_CANVAS_REFLOW_DURATION = 200;
-
-const DEFAULT_CANVAS_REFLOW_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
+const CANVAS_REFLOW_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
 
 const canvasReflowAnimations = new WeakMap();
 
@@ -60,6 +56,11 @@ function getSelectedResizeRecord() {
 
 function positionResizeOverlay() {
   if (!(canvas instanceof HTMLElement)) return;
+  if (canvasDragSession || canvasPointerDrag?.hasStarted) {
+    resizeOverlay.hidden = true;
+    return;
+  }
+
   const element = getSelectedResizeElement();
   if (
     !(element instanceof HTMLElement)
@@ -730,12 +731,6 @@ function animateCanvasLayerReflow(previousPositions) {
     || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
   ) return;
 
-  const selectedDuration = Number(canvasMovementTimingSelect?.value);
-  const duration = Number.isFinite(selectedDuration)
-    ? Math.max(100, Math.min(2000, selectedDuration))
-    : DEFAULT_CANVAS_REFLOW_DURATION;
-  const easing = canvasAnimationTypeSelect?.value || DEFAULT_CANVAS_REFLOW_EASING;
-
   const movements = new Map();
   previousPositions.forEach((previous, element) => {
     if (!(element instanceof HTMLElement) || !element.isConnected || element.classList.contains("is-canvas-dragging")) return;
@@ -758,8 +753,8 @@ function animateCanvasLayerReflow(previousPositions) {
         { transform: "translate(0, 0)" },
       ],
       {
-        duration,
-        easing,
+        duration: CANVAS_REFLOW_DURATION,
+        easing: CANVAS_REFLOW_EASING,
       },
     );
     canvasReflowAnimations.set(element, animation);
