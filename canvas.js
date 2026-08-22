@@ -417,6 +417,29 @@ function getSvgPresentationValue(element, property) {
   return property === "fill" ? "black" : property === "stroke" ? "none" : "1";
 }
 
+function getSvgClassPresentationValue(element, property) {
+  const svg = element?.ownerSVGElement;
+  if (!(svg instanceof SVGElement) || !element.classList.length) return "";
+  const propertyPattern = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;!}]+)`, "i");
+  for (const className of element.classList) {
+    const escapedClassName = className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rulePattern = new RegExp(`\\.${escapedClassName}(?:\\s|\\{|,|:)[^{]*\\{([^}]*)\\}`, "gi");
+    for (const match of svg.querySelectorAll("style")) {
+      for (const rule of match.textContent?.matchAll(rulePattern) || []) {
+        const declaration = rule[1].match(propertyPattern);
+        if (declaration) return declaration[1].trim();
+      }
+    }
+  }
+  return "";
+}
+
+function getEffectiveSvgPresentationValue(element, property) {
+  const inlineValue = element.style.getPropertyValue(property).trim();
+  if (inlineValue) return inlineValue;
+  return getSvgClassPresentationValue(element, property) || getSvgPresentationValue(element, property);
+}
+
 function isTransparentSvgPaint(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "none" || normalized === "transparent") return true;
@@ -427,12 +450,11 @@ function isTransparentSvgPaint(value) {
 
 function isExplicitlyTransparentSvgShape(element) {
   if (!(element instanceof SVGElement)) return false;
-  if (element.closest("[class]") || element.ownerSVGElement?.querySelector("style")) return false;
-  if (Number(getSvgPresentationValue(element, "opacity")) === 0) return true;
-  const fill = getSvgPresentationValue(element, "fill");
-  const stroke = getSvgPresentationValue(element, "stroke");
-  const fillOpacity = Number(getSvgPresentationValue(element, "fill-opacity"));
-  const strokeOpacity = Number(getSvgPresentationValue(element, "stroke-opacity"));
+  if (Number(getEffectiveSvgPresentationValue(element, "opacity")) === 0) return true;
+  const fill = getEffectiveSvgPresentationValue(element, "fill");
+  const stroke = getEffectiveSvgPresentationValue(element, "stroke");
+  const fillOpacity = Number(getEffectiveSvgPresentationValue(element, "fill-opacity"));
+  const strokeOpacity = Number(getEffectiveSvgPresentationValue(element, "stroke-opacity"));
   const fillIsTransparent = isTransparentSvgPaint(fill) || fillOpacity === 0;
   const strokeIsTransparent = isTransparentSvgPaint(stroke) || strokeOpacity === 0;
   return fillIsTransparent && strokeIsTransparent;
