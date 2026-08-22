@@ -529,10 +529,11 @@ document.querySelectorAll(".inspector-select-wrap > select").forEach((select) =>
   }
 });
 
-function createPropSelectIcon(iconType) {
+function createPropSelectIcon(iconType, record = null) {
   if (iconType === "prop-boolean") return createSvgAssetIcon("toggle-on", "layer-type-icon prop-type-icon");
   if (iconType === "prop-string") return createSvgAssetIcon("text", "layer-type-icon prop-type-icon");
   if (iconType === "prop-action") return createSvgAssetIcon("cursor-1", "layer-type-icon prop-type-icon");
+  if (iconType === "vector" && record) return createVectorLayerTreeIcon(record);
   return createLayerTypeIcon(iconType);
 }
 
@@ -577,7 +578,7 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
     selectedValue.className = "prop-select-selected-value";
     selectedLabel.className = "prop-select-selected-label";
     selectedLabel.textContent = selectedOptionRecord.label;
-    selectedValue.append(createPropSelectIcon(selectedOptionRecord.iconType), selectedLabel);
+    selectedValue.append(createPropSelectIcon(selectedOptionRecord.iconType, selectedOptionRecord.iconRecord), selectedLabel);
     select.classList.add("prop-select--has-layer-icon");
     wrap.append(selectedValue);
   }
@@ -725,6 +726,7 @@ function renderComponentProps() {
               value: `${layer.type}:${layer.record.id}`,
               label: getVisibilityTargetLabel(layer.type, layer.record),
               iconType: getTargetLayerIconType(layer.type, layer.record),
+              iconRecord: layer.type === "vector" ? layer.record : null,
             })),
           ];
     } else {
