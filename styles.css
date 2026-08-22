@@ -119,27 +119,18 @@ textarea:focus-visible {
   background: var(--background);
 }
 
-.props-toolbar {
-  display: flex;
-  width: 100%;
-  padding: 8px 16px;
-}
-
 .add-prop-button {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  width: fit-content;
-  height: 24px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   margin: 0;
-  padding: 4px 16px;
-  gap: 8px;
+  padding: 8px;
   border: 0;
   border-radius: 4px;
-  background: var(--layer-01);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 16px;
+  background: transparent;
+  color: var(--icon-secondary);
   cursor: pointer;
 }
 
@@ -185,17 +176,28 @@ textarea:focus-visible {
 
 .props-table-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) 40px;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(240px, 1fr) 32px;
   width: 100%;
 }
 
 .props-table-header .props-table-cell {
-  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0;
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
   line-height: 16px;
   letter-spacing: 0;
+}
+
+.props-table-header .tooltip-content {
+  top: calc(100% + 4px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+  transform: none;
 }
 
 .props-table-cell {
@@ -204,7 +206,10 @@ textarea:focus-visible {
 }
 
 .props-table-action-cell {
-  width: 40px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  align-self: center;
 }
 
 .props-property-row {
@@ -215,27 +220,27 @@ textarea:focus-visible {
 .props-property-row .props-table-cell {
   display: flex;
   align-items: center;
-  padding: 8px 16px;
+  padding: 0;
 }
 
 .props-property-row .props-table-action-cell {
-  padding: 8px;
+  padding: 0;
 }
 
 .prop-control,
 .prop-select-wrap {
   width: 100%;
   min-width: 0;
-  height: 24px;
+  height: 32px;
 }
 
 .prop-control {
   margin: 0;
-  padding: 4px 8px;
-  border: 1px solid var(--border-subtle-01);
-  border-radius: 4px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 0;
   outline: 0;
-  background: var(--layer-01);
+  background: transparent;
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 400;
@@ -247,7 +252,7 @@ textarea:focus-visible {
 }
 
 .prop-select {
-  padding-right: 32px;
+  padding: 8px 16px;
   appearance: none;
 }
 
@@ -259,12 +264,12 @@ textarea:focus-visible {
   color: var(--text-primary);
 }
 
-.prop-target-selected-value {
+.prop-select-selected-value {
   position: absolute;
   top: 0;
   right: 32px;
   bottom: 0;
-  left: 8px;
+  left: 16px;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -276,19 +281,41 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-.prop-target-selected-label {
+.prop-select-selected-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.prop-target-selected-value .layer-type-icon {
+.prop-select-selected-value .layer-type-icon,
+.prop-select-selected-value .prop-type-icon {
   flex: 0 0 16px;
 }
 
+.prop-type-icon--boolean {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 10px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  color: var(--icon-secondary);
+}
+
+.prop-type-icon--boolean::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
 .prop-select-wrap .inspector-select-chevron {
-  right: 10px;
+  right: 8px;
 }
 
 .prop-control:focus-visible {
@@ -313,8 +340,8 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   margin: 0;
   padding: 0;
   border: 0;

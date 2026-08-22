@@ -510,21 +510,22 @@
         </aside>
 
       <section class="props-panel" aria-label="Component properties">
-        <div class="props-toolbar">
-          <button class="add-prop-button" type="button" data-add-prop>
-            <span class="plus-icon" aria-hidden="true"></span>
-            <span>Add prop</span>
-          </button>
-        </div>
-
         <div class="props-table" role="table" aria-label="Props">
           <div class="props-table-row props-table-header" role="row">
             <div class="props-table-cell" role="columnheader">Name</div>
             <div class="props-table-cell" role="columnheader">Type</div>
-            <div class="props-table-cell" role="columnheader">Default</div>
             <div class="props-table-cell" role="columnheader">Target</div>
             <div class="props-table-cell" role="columnheader">Property</div>
-            <div class="props-table-cell props-table-action-cell" role="columnheader"><span class="sr-only">Actions</span></div>
+            <div class="props-table-cell props-table-value-cell" role="columnheader">Value</div>
+            <div class="props-table-cell props-table-action-cell" role="columnheader">
+              <span class="sr-only">Actions</span>
+              <span class="tooltip">
+                <button class="add-prop-button" type="button" aria-label="Add prop" data-add-prop>
+                  <span class="plus-icon" aria-hidden="true"></span>
+                </button>
+                <span class="tooltip-content" role="tooltip">Add</span>
+              </span>
+            </div>
           </div>
           <div class="props-table-body" role="rowgroup" data-prop-rows></div>
         </div>

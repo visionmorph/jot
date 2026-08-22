@@ -526,6 +526,26 @@ document.querySelectorAll(".inspector-select-wrap > select").forEach((select) =>
   }
 });
 
+function createPropSelectIcon(iconType) {
+  if (iconType === "prop-boolean") {
+    const icon = document.createElement("span");
+    icon.className = "prop-type-icon prop-type-icon--boolean";
+    icon.setAttribute("aria-hidden", "true");
+    return icon;
+  }
+  if (iconType === "prop-string") return createLayerTypeIcon("text");
+  if (iconType === "prop-action") {
+    const sourceIcon = document.querySelector('[data-tool="select"] .tool-icon');
+    if (sourceIcon instanceof SVGElement) {
+      const icon = sourceIcon.cloneNode(true);
+      icon.setAttribute("class", "layer-type-icon prop-type-icon");
+      icon.setAttribute("aria-hidden", "true");
+      return icon;
+    }
+  }
+  return createLayerTypeIcon(iconType);
+}
+
 function createPropSelect(options, value, ariaLabel, onChange, disabled = false) {
   const wrap = document.createElement("div");
   const select = document.createElement("select");
@@ -551,10 +571,10 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
   if (selectedOptionRecord?.iconType) {
     const selectedValue = document.createElement("span");
     const selectedLabel = document.createElement("span");
-    selectedValue.className = "prop-target-selected-value";
-    selectedLabel.className = "prop-target-selected-label";
+    selectedValue.className = "prop-select-selected-value";
+    selectedLabel.className = "prop-select-selected-label";
     selectedLabel.textContent = selectedOptionRecord.label;
-    selectedValue.append(selectedLabel, createLayerTypeIcon(selectedOptionRecord.iconType));
+    selectedValue.append(createPropSelectIcon(selectedOptionRecord.iconType), selectedLabel);
     select.classList.add("prop-select--has-layer-icon");
     wrap.append(selectedValue);
   }
@@ -601,9 +621,9 @@ function renderComponentProps() {
     const typeCell = createCell();
     typeCell.append(createPropSelect(
       [
-        { value: "boolean", label: "Boolean" },
-        { value: "string", label: "String" },
-        { value: "action", label: "Action" },
+        { value: "boolean", label: "Boolean", iconType: "prop-boolean" },
+        { value: "string", label: "String", iconType: "prop-string" },
+        { value: "action", label: "Action", iconType: "prop-action" },
       ],
       prop.type,
       "Prop type",
@@ -643,6 +663,7 @@ function renderComponentProps() {
     ));
 
     const defaultCell = createCell();
+    defaultCell.classList.add("props-table-value-cell");
     if (prop.type === "boolean") {
       const defaultToggle = document.createElement("div");
       defaultToggle.className = "frame-direction-toggle prop-boolean-toggle";
@@ -823,7 +844,7 @@ function renderComponentProps() {
     });
     actionCell.append(removeButton);
 
-    row.append(nameCell, typeCell, defaultCell, targetCell, propertyCell, actionCell);
+    row.append(nameCell, typeCell, targetCell, propertyCell, defaultCell, actionCell);
     return row;
   });
   propRowsContainer.replaceChildren(...rows);
