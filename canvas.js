@@ -423,7 +423,7 @@ function getSvgClassPresentationValue(element, property) {
   const propertyPattern = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;!}]+)`, "i");
   for (const className of element.classList) {
     const escapedClassName = className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const rulePattern = new RegExp(`\\.${escapedClassName}(?:\\s|\\{|,|:)[^{]*\\{([^}]*)\\}`, "gi");
+    const rulePattern = new RegExp(`\\.${escapedClassName}\\s*\\{([^}]*)\\}`, "gi");
     for (const match of svg.querySelectorAll("style")) {
       for (const rule of match.textContent?.matchAll(rulePattern) || []) {
         const declaration = rule[1].match(propertyPattern);

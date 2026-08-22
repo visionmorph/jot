@@ -239,10 +239,8 @@ function createVectorLayerTreeIcon(record) {
       shape.remove();
       return;
     }
-    shape.style.setProperty("fill", "none", "important");
-    shape.style.setProperty("stroke", "currentColor", "important");
-    shape.style.setProperty("stroke-width", "1px", "important");
-    shape.style.setProperty("vector-effect", "non-scaling-stroke", "important");
+    shape.style.setProperty("fill", "currentColor", "important");
+    shape.style.setProperty("stroke", "none", "important");
   });
   return svg;
 }
@@ -355,7 +353,7 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
     labelWrapper.append(label);
   }
 
-  visibilityButton.className = `layer-visibility-button${isVisible ? "" : " is-layer-hidden"}${disabledState === "top-level" ? " is-top-level" : " is-child-layer"}`;
+  visibilityButton.className = `layer-visibility-button${isVisible ? "" : " is-layer-hidden"}${disabledState === "top-level" ? " is-top-level" : disabledState === "child" ? " is-child-layer" : ""}`;
   visibilityButton.type = "button";
   visibilityButton.draggable = false;
   visibilityButton.setAttribute("aria-label", `${isVisible ? "Hide" : "Show"} ${name}`);

@@ -657,7 +657,8 @@ textarea:focus-visible {
 
 .tree-node-content:hover > .layer-visibility-button,
 .layer-visibility-button:focus-visible,
-.layer-visibility-button.is-layer-hidden {
+.layer-visibility-button.is-layer-hidden,
+.layer-visibility-button.is-child-layer {
   opacity: 1;
   pointer-events: auto;
 }
@@ -698,6 +699,10 @@ textarea:focus-visible {
 .tree-node.is-disabled .text-layer-icon,
 .tree-node.is-disabled .layer-visibility-button {
   color: var(--icon-disabled);
+}
+
+.tree-node.is-disabled-top-level .layer-visibility-button {
+  color: var(--icon-primary);
 }
 
 .tree-node.is-disabled .tree-node-rename-input {
