@@ -1095,7 +1095,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.dataset.widthMode = "fixed";
   frame.dataset.heightMode = "fixed";
   frame.dataset.radius = "0";
-  frame.dataset.frameColor = "";
+  frame.dataset.frameColor = "#FFFFFF";
   frame.dataset.frameColorOpacity = "100";
   frame.dataset.direction = "horizontal";
   frame.dataset.alignment = "top-left";
@@ -1109,6 +1109,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.dataset.layerVisibility = "visible";
   frame.style.width = "100px";
   frame.style.height = "100px";
+  frame.style.backgroundColor = "#FFFFFF";
   if (parentRecord) {
     frame.style.left = "";
     frame.style.top = "";
