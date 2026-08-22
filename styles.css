@@ -5,6 +5,7 @@
   --icon-disabled: rgba(244, 244, 244, 0.25);
   --icon-on-color: #ffffff;
   --background: #121619;
+  --background-inverse: #f4f4f4;
   --layer-01: #21272a;
   --background-hover: rgba(141, 141, 141, 0.16);
   --background-selected: rgba(141, 141, 141, 0.24);
@@ -315,7 +316,7 @@ textarea:focus-visible {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .prop-select-selected-value .layer-type-icon,
@@ -1173,18 +1174,44 @@ textarea:focus-visible {
   z-index: 20;
   display: none;
   align-items: center;
-  height: 20px;
+  min-height: 24px;
+  max-width: 200px;
   padding: 2px 8px;
+  gap: 8px;
   box-sizing: border-box;
   border-radius: 2px;
-  background: #ffffff;
+  background: var(--background-inverse);
   color: var(--text-inverse);
-  font-size: 12px;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
   font-weight: 400;
-  line-height: 14px;
+  line-height: 16px;
   white-space: nowrap;
   pointer-events: none;
   transform: translateX(-50%);
+}
+
+.tooltip-kbd-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tooltip-content kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20px;
+  padding: 2px 4px;
+  border: 1px solid #C1C7CD;
+  border-radius: 2px;
+  color: var(--text-inverse);
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .components-heading-row .tooltip-content {
