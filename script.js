@@ -59,6 +59,12 @@ document.addEventListener("keydown", (event) => {
   }
 
   if (!isTyping && event.key === "Enter" && !isCommandShortcut && !event.altKey) {
+    const selectedLayer = getPrimaryLayerDescriptor();
+    if (!event.shiftKey && selectedLayer?.type === "text") {
+      event.preventDefault();
+      startEditingText(selectedLayer.record.element);
+      return;
+    }
     const didSelect = event.shiftKey ? selectHierarchyParent() : selectHierarchyChild();
     if (didSelect) event.preventDefault();
     return;
