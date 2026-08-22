@@ -75,23 +75,28 @@ function componentHasChildLayers(component) {
   return getComponentLayerChildren(component, null).length > 0;
 }
 
-function createSquareIcon() {
-  return createLayerTypeIcon("frame");
+function createSvgAssetIcon(name, className = "layer-type-icon") {
+  const icon = document.createElement("span");
+  icon.className = `${className} svg-icon svg-icon--${name}`;
+  icon.setAttribute("aria-hidden", "true");
+  return icon;
 }
 
-function createLayerTypeIcon(type) {
-  if (type === "component") {
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    svg.setAttribute("class", "layer-type-icon");
-    svg.setAttribute("viewBox", "0 0 32 32");
-    svg.setAttribute("fill", "none");
-    svg.setAttribute("aria-hidden", "true");
-    path.setAttribute("d", "M14.5868 3.27128C15.3678 2.49027 16.6338 2.49034 17.4149 3.27128L28.7294 14.5848C29.5101 15.3657 29.51 16.6318 28.7294 17.4129L17.4149 28.7273L17.2635 28.864C16.5304 29.4622 15.4724 29.462 14.7391 28.864L14.5868 28.7273L3.2733 17.4129C2.54129 16.6807 2.49523 15.5226 3.13561 14.7371L3.2733 14.5848L14.5868 3.27128Z");
-    path.setAttribute("fill", "currentColor");
-    svg.append(path);
-    return svg;
-  }
+function createFrameLayerIcon(record) {
+  const direction = record?.element?.dataset?.direction === "vertical" ? "vertical" : "horizontal";
+  const alignment = normalizeFrameAlignment(record?.element?.dataset?.alignment || "top-left");
+  const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
+  return createSvgAssetIcon(`align-${direction}-${direction === "vertical" ? vertical : horizontal}`);
+}
+
+function createSquareIcon(record) {
+  return createFrameLayerIcon(record);
+}
+
+function createLayerTypeIcon(type, record = null) {
+  if (type === "component") return createSvgAssetIcon("diamond-filled");
+  if (type === "frame") return createFrameLayerIcon(record);
+  if (type === "text") return createSvgAssetIcon("letter-t");
   if (type === "vector") {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
@@ -114,9 +119,7 @@ function createLayerTypeIcon(type) {
   svg.setAttribute("fill", "none");
   svg.setAttribute("aria-hidden", "true");
 
-  const paths = type === "frame"
-    ? ["M24 26V28H8V26H24ZM26 24V8C26 6.89543 25.1046 6 24 6H8C6.89543 6 6 6.89543 6 8V24C6 25.1046 6.89543 26 8 26V28C5.79086 28 4 26.2091 4 24V8C4 5.79086 5.79086 4 8 4H24C26.2091 4 28 5.79086 28 8V24C28 26.2091 26.2091 28 24 28V26C25.1046 26 26 25.1046 26 24Z"]
-    : ["M5 4H27V6H5V4Z", "M15 6H17V28H15V6Z"];
+  const paths = ["M5 4H27V6H5V4Z", "M15 6H17V28H15V6Z"];
   paths.forEach((pathData) => {
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", pathData);
@@ -213,42 +216,14 @@ function getTreeLayerVisibility(type, record, component) {
   return isLayerVisible(getTreeLayerElement(type, record, component));
 }
 
-function createLayerVisibilityGraphic(isVisible, isTopLevel) {
-  if (!isVisible && !isTopLevel) {
+function createLayerVisibilityGraphic(isVisible, disabledState = null) {
+  if (disabledState === "child") {
     const dot = document.createElement("span");
     dot.className = "layer-visibility-dot";
     dot.setAttribute("aria-hidden", "true");
     return dot;
   }
-
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  const eye = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  svg.setAttribute("class", "layer-visibility-icon");
-  svg.setAttribute("viewBox", "0 0 16 16");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("aria-hidden", "true");
-  eye.setAttribute("d", "M1 8s2.5-4 7-4 7 4 7 4-2.5 4-7 4S1 8 1 8Z");
-  eye.setAttribute("stroke", "currentColor");
-  eye.setAttribute("stroke-width", "1.25");
-  eye.setAttribute("stroke-linejoin", "round");
-  svg.append(eye);
-
-  const pupil = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-  pupil.setAttribute("cx", "8");
-  pupil.setAttribute("cy", "8");
-  pupil.setAttribute("r", "2");
-  pupil.setAttribute("fill", "currentColor");
-  svg.append(pupil);
-
-  if (!isVisible) {
-    const slash = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    slash.setAttribute("d", "M2 2l12 12");
-    slash.setAttribute("stroke", "currentColor");
-    slash.setAttribute("stroke-width", "1.5");
-    slash.setAttribute("stroke-linecap", "round");
-    svg.append(slash);
-  }
-  return svg;
+  return createSvgAssetIcon(isVisible ? "view" : "view-off", "layer-visibility-icon");
 }
 
 function createVectorLayerTreeIcon(record) {
@@ -260,6 +235,10 @@ function createVectorLayerTreeIcon(record) {
   svg.setAttribute("aria-hidden", "true");
   svg.querySelectorAll("path, rect, circle, ellipse, line, polyline, polygon, use").forEach((shape) => {
     if (shape.closest("defs, clipPath, mask, pattern, symbol")) return;
+    if (isExplicitlyTransparentSvgShape(shape)) {
+      shape.remove();
+      return;
+    }
     shape.style.setProperty("fill", "none", "important");
     shape.style.setProperty("stroke", "currentColor", "important");
     shape.style.setProperty("stroke-width", "1px", "important");
@@ -291,18 +270,20 @@ function toggleTreeLayerVisibility(type, record, component) {
   renderTree();
 }
 
-function createTreeNodeContent(node, iconGroup, type, record, depth, component) {
+function createTreeNodeContent(node, iconGroup, type, record, depth, component, hasHiddenAncestor = false) {
   const content = document.createElement("div");
   const labelWrapper = document.createElement("div");
   const visibilityButton = document.createElement("button");
   const key = getTreeNodeKey(type, record.id, component.id);
   const name = getTreeNodeName(type, record);
   const isVisible = getTreeLayerVisibility(type, record, component);
-  const isTopLevel = depth === 1;
+  const disabledState = hasHiddenAncestor ? "child" : isVisible ? null : "top-level";
 
   content.className = "tree-node-content";
   labelWrapper.className = "tree-node-label-wrap";
-  node.classList.toggle("is-disabled", !isVisible);
+  node.classList.toggle("is-disabled", Boolean(disabledState));
+  node.classList.toggle("is-disabled-top-level", disabledState === "top-level");
+  node.classList.toggle("is-disabled-child", disabledState === "child");
 
   if (treeRenameState?.key === key) {
     const input = document.createElement("input");
@@ -374,12 +355,12 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component) 
     labelWrapper.append(label);
   }
 
-  visibilityButton.className = `layer-visibility-button${isVisible ? "" : " is-layer-hidden"}${isTopLevel ? " is-top-level" : " is-child-layer"}`;
+  visibilityButton.className = `layer-visibility-button${isVisible ? "" : " is-layer-hidden"}${disabledState === "top-level" ? " is-top-level" : " is-child-layer"}`;
   visibilityButton.type = "button";
   visibilityButton.draggable = false;
   visibilityButton.setAttribute("aria-label", `${isVisible ? "Hide" : "Show"} ${name}`);
   visibilityButton.setAttribute("aria-pressed", String(!isVisible));
-  visibilityButton.append(createLayerVisibilityGraphic(isVisible, isTopLevel));
+  visibilityButton.append(createLayerVisibilityGraphic(isVisible, disabledState));
   visibilityButton.addEventListener("pointerdown", (event) => event.stopPropagation());
   visibilityButton.addEventListener("click", (event) => {
     event.preventDefault();
@@ -391,7 +372,7 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component) 
   return content;
 }
 
-function renderFrameTreeNode(record, depth, component) {
+function renderFrameTreeNode(record, depth, component, hasHiddenAncestor = false) {
   const childLayers = getComponentLayerChildren(component, record.id);
   const isBranch = childLayers.length > 0;
   const isExpanded = getComponentExpandedFrameIds(component).has(record.id);
@@ -460,18 +441,19 @@ function renderFrameTreeNode(record, depth, component) {
     iconGroup.append(branchToggle);
   }
 
-  iconGroup.append(createIconCell(createSquareIcon()));
-  node.append(createTreeNodeContent(node, iconGroup, "frame", record, depth, component));
+  iconGroup.append(createIconCell(createSquareIcon(record)));
+  node.append(createTreeNodeContent(node, iconGroup, "frame", record, depth, component, hasHiddenAncestor));
   item.append(node);
 
   if (isBranch && isExpanded) {
-    childLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, depth + 1, component)));
+    const hidesChildren = hasHiddenAncestor || !getTreeLayerVisibility("frame", record, component);
+    childLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, depth + 1, component, hidesChildren)));
   }
 
   return item;
 }
 
-function renderTextTreeNode(record, depth, component) {
+function renderTextTreeNode(record, depth, component, hasHiddenAncestor = false) {
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
@@ -518,12 +500,12 @@ function renderTextTreeNode(record, depth, component) {
 
   iconGroup.className = "branch-icon-group";
   iconGroup.append(createIconCell(createLayerTypeIcon("text")));
-  node.append(createTreeNodeContent(node, iconGroup, "text", record, depth, component));
+  node.append(createTreeNodeContent(node, iconGroup, "text", record, depth, component, hasHiddenAncestor));
   item.append(node);
   return item;
 }
 
-function renderVectorTreeNode(record, depth, component) {
+function renderVectorTreeNode(record, depth, component, hasHiddenAncestor = false) {
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
@@ -570,15 +552,15 @@ function renderVectorTreeNode(record, depth, component) {
 
   iconGroup.className = "branch-icon-group";
   iconGroup.append(createIconCell(createVectorLayerTreeIcon(record)));
-  node.append(createTreeNodeContent(node, iconGroup, "vector", record, depth, component));
+  node.append(createTreeNodeContent(node, iconGroup, "vector", record, depth, component, hasHiddenAncestor));
   item.append(node);
   return item;
 }
 
-function renderLayerTreeNode(layer, depth, component) {
-  if (layer.type === "frame") return renderFrameTreeNode(layer.record, depth, component);
-  if (layer.type === "text") return renderTextTreeNode(layer.record, depth, component);
-  return renderVectorTreeNode(layer.record, depth, component);
+function renderLayerTreeNode(layer, depth, component, hasHiddenAncestor = false) {
+  if (layer.type === "frame") return renderFrameTreeNode(layer.record, depth, component, hasHiddenAncestor);
+  if (layer.type === "text") return renderTextTreeNode(layer.record, depth, component, hasHiddenAncestor);
+  return renderVectorTreeNode(layer.record, depth, component, hasHiddenAncestor);
 }
 
 function selectComponentTreeNode(componentId = currentComponent?.id) {
@@ -670,7 +652,8 @@ function renderComponentTreeNode(component) {
   node.append(createTreeNodeContent(node, iconGroup, "component", component, 1, component));
   item.append(node);
   if (isExpanded) {
-    rootLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, 2, component)));
+    const componentIsHidden = !getTreeLayerVisibility("component", component, component);
+    rootLayers.forEach((layer) => item.append(renderLayerTreeNode(layer, 2, component, componentIsHidden)));
   }
   return item;
 }

@@ -405,6 +405,39 @@ function hasUnsafeSvgCss(cssText) {
   return urlReferences.some((match) => !match[1].trim().startsWith("#"));
 }
 
+function getSvgPresentationValue(element, property) {
+  let current = element;
+  while (current instanceof SVGElement) {
+    const inlineValue = current.style.getPropertyValue(property).trim();
+    if (inlineValue) return inlineValue;
+    const attributeValue = current.getAttribute(property);
+    if (attributeValue !== null && attributeValue.trim()) return attributeValue.trim();
+    current = current.parentElement;
+  }
+  return property === "fill" ? "black" : property === "stroke" ? "none" : "1";
+}
+
+function isTransparentSvgPaint(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "none" || normalized === "transparent") return true;
+  if (/^#[\da-f]{8}$/i.test(normalized)) return normalized.slice(7) === "00";
+  const colorChannels = normalized.match(/[\d.]+/g);
+  return /^(?:rgba|hsla)\(/.test(normalized) && colorChannels?.length >= 4 && Number(colorChannels[3]) === 0;
+}
+
+function isExplicitlyTransparentSvgShape(element) {
+  if (!(element instanceof SVGElement)) return false;
+  if (element.closest("[class]") || element.ownerSVGElement?.querySelector("style")) return false;
+  if (Number(getSvgPresentationValue(element, "opacity")) === 0) return true;
+  const fill = getSvgPresentationValue(element, "fill");
+  const stroke = getSvgPresentationValue(element, "stroke");
+  const fillOpacity = Number(getSvgPresentationValue(element, "fill-opacity"));
+  const strokeOpacity = Number(getSvgPresentationValue(element, "stroke-opacity"));
+  const fillIsTransparent = isTransparentSvgPaint(fill) || fillOpacity === 0;
+  const strokeIsTransparent = isTransparentSvgPaint(stroke) || strokeOpacity === 0;
+  return fillIsTransparent && strokeIsTransparent;
+}
+
 function sanitizeSvgText(svgText) {
   const parsed = new DOMParser().parseFromString(svgText, "image/svg+xml");
   if (parsed.querySelector("parsererror")) throw new Error("The selected file is not valid SVG.");
@@ -432,6 +465,10 @@ function sanitizeSvgText(svgText) {
         element.removeAttribute(attribute.name);
       }
     });
+  });
+
+  root.querySelectorAll("path, rect, circle, ellipse, line, polyline, polygon, use").forEach((shape) => {
+    if (isExplicitlyTransparentSvgShape(shape)) shape.remove();
   });
 
   const viewBox = (root.getAttribute("viewBox") || "")
@@ -921,6 +958,7 @@ function getSelectedTopLevelLayers() {
     const [type, rawId] = key.split(":");
     if (type === "frame") selectedFrameIds.add(Number(rawId));
   });
+
   const hasSelectedFrameAncestor = (parentFrameId) => {
     let ancestorId = parentFrameId;
     while (ancestorId !== null) {

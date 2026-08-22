@@ -511,7 +511,10 @@ function setBooleanPropProperty(prop, property) {
 
 function bindNativeSelectChevron(select, wrap) {
   const closeMenuState = () => wrap.classList.remove("is-open");
-  select.addEventListener("pointerdown", () => wrap.classList.add("is-open"));
+  select.addEventListener("pointerdown", () => {
+    if (select.disabled) closeMenuState();
+    else wrap.classList.add("is-open");
+  });
   select.addEventListener("change", closeMenuState);
   select.addEventListener("blur", closeMenuState);
   select.addEventListener("keydown", (event) => {
@@ -527,22 +530,9 @@ document.querySelectorAll(".inspector-select-wrap > select").forEach((select) =>
 });
 
 function createPropSelectIcon(iconType) {
-  if (iconType === "prop-boolean") {
-    const icon = document.createElement("span");
-    icon.className = "prop-type-icon prop-type-icon--boolean";
-    icon.setAttribute("aria-hidden", "true");
-    return icon;
-  }
-  if (iconType === "prop-string") return createLayerTypeIcon("text");
-  if (iconType === "prop-action") {
-    const sourceIcon = document.querySelector('[data-tool="select"] .tool-icon');
-    if (sourceIcon instanceof SVGElement) {
-      const icon = sourceIcon.cloneNode(true);
-      icon.setAttribute("class", "layer-type-icon prop-type-icon");
-      icon.setAttribute("aria-hidden", "true");
-      return icon;
-    }
-  }
+  if (iconType === "prop-boolean") return createSvgAssetIcon("toggle-on", "layer-type-icon prop-type-icon");
+  if (iconType === "prop-string") return createSvgAssetIcon("text", "layer-type-icon prop-type-icon");
+  if (iconType === "prop-action") return createSvgAssetIcon("cursor-1", "layer-type-icon prop-type-icon");
   return createLayerTypeIcon(iconType);
 }
 
@@ -1525,6 +1515,7 @@ frameDirectionOptions.forEach((option) => {
     applyFrameAlignment(record.element);
     applyAllLayerSizing();
     syncInspectorToSelectedFrame();
+    renderTree();
   });
 });
 
@@ -1542,6 +1533,7 @@ frameAlignmentOptions.forEach((option) => {
     record.element.dataset.alignment = alignment;
     applyFrameAlignment(record.element);
     syncInspectorToSelectedFrame();
+    renderTree();
   });
   option.addEventListener("dblclick", (event) => {
     const record = getSelectedFrameRecord();
