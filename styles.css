@@ -577,6 +577,13 @@ textarea:focus-visible {
 
 .tree-node:hover {
   background: var(--background-hover);
+  color: var(--text-primary);
+}
+
+.tree-node:hover .icon-cell,
+.tree-node:hover .text-layer-icon,
+.tree-node:hover .layer-visibility-button {
+  color: var(--icon-primary);
 }
 
 .tree-node.is-selected:hover {
