@@ -166,6 +166,7 @@ document.addEventListener("keydown", (event) => {
   textRecords = textRecords.filter((record) => !textIdsToDelete.has(record.id));
   vectorRecords = vectorRecords.filter((record) => !vectorIdsToDelete.has(record.id));
   frameIdsToDelete.forEach((frameId) => expandedFrameIds.delete(frameId));
+  applyAllLayerSizing();
   selectedLayerKeys.clear();
   selectedCanvasFrame = null;
   selectedCanvasText = null;

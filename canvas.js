@@ -256,7 +256,10 @@ function applyLayerSizing(type, record) {
     if (mode === "fixed") {
       element.style[dimension] = `${element.dataset[dimension] || fallbackValue}px`;
     } else if (mode === "hug") {
-      element.style[dimension] = "max-content";
+      const isEmptyComponent = isRoot && getLayerChildren(null).length === 0;
+      element.style[dimension] = isEmptyComponent
+        ? `${element.dataset[dimension] || fallbackValue}px`
+        : "max-content";
     } else if (isRoot) {
       element.style[dimension] = "100%";
     } else {
@@ -385,6 +388,7 @@ function removeCanvasText(textElement, suppressCreationForCurrentClick = false) 
     selectedLayerKeys.delete(getLayerKey("text", textRecord.id));
     textRecords = textRecords.filter((record) => record.id !== textRecord.id);
   }
+  applyAllLayerSizing();
   if (selectedCanvasText === textElement) setPrimarySelectionToLatest();
   syncElementSelectionStyles();
 
@@ -826,6 +830,7 @@ function startCanvasDragSession(draggedLayer, deferDraggingStyle = false) {
     draggedLayer,
     element: record.element,
     placeholder,
+    preview: null,
     originalParentId,
     originalIndex,
     intent: null,
@@ -867,6 +872,7 @@ function commitCanvasLayerDrop(draggedLayer, intent) {
 function clearCanvasDragSession() {
   if (!canvasDragSession) return;
   clearCanvasDropTarget();
+  canvasDragSession.preview?.remove();
   canvasDragSession.placeholder.remove();
   canvasDragSession.element.classList.remove("is-canvas-dragging");
   canvasDragSession = null;
@@ -929,7 +935,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
   vectorRecords.push(record);
   vector.dataset.vectorColor = getVectorRenderedColor(record);
   vector.dataset.vectorColorOpacity = "100";
-  applyLayerSizing("vector", record);
+  applyAllLayerSizing();
   renderTree();
   if (options.select !== false) selectCanvasVector(vector);
   return record;
@@ -1053,7 +1059,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   });
 
   textRecords.push(record);
-  applyLayerSizing("text", record);
+  applyAllLayerSizing();
   renderTree();
   if (options.beginEditing !== false) startEditingText(text, false);
   return record;
@@ -1149,7 +1155,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
     if (canvasRootStack instanceof HTMLElement) canvasRootStack.append(frame);
     else canvas.insertBefore(frame, toolbar);
   }
-  applyLayerSizing("frame", record);
+  applyAllLayerSizing();
   applyFrameAlignment(frame);
   applyFrameOutline(frame);
   renderTree();
@@ -1603,6 +1609,28 @@ function getPointerCanvasDropIntent(event, draggedLayer) {
   }, draggedLayer);
 }
 
+function createCanvasPointerDragPreview(pointerDrag, event) {
+  if (!canvasDragSession || canvasDragSession.preview) return;
+  const bounds = canvasDragSession.element.getBoundingClientRect();
+  const preview = canvasDragSession.element.cloneNode(true);
+  preview.classList.remove("is-canvas-dragging");
+  preview.classList.add("canvas-drag-preview");
+  preview.setAttribute("aria-hidden", "true");
+  preview.removeAttribute("draggable");
+  preview.style.width = `${bounds.width}px`;
+  preview.style.height = `${bounds.height}px`;
+  canvasDragSession.preview = preview;
+  document.body.append(preview);
+  positionCanvasPointerDragPreview(pointerDrag, event);
+}
+
+function positionCanvasPointerDragPreview(pointerDrag, event) {
+  const preview = canvasDragSession?.preview;
+  if (!(preview instanceof HTMLElement)) return;
+  preview.style.left = `${event.clientX - pointerDrag.grabOffsetX}px`;
+  preview.style.top = `${event.clientY - pointerDrag.grabOffsetY}px`;
+}
+
 function updateCanvasPointerDrag(event) {
   if (!canvasPointerDrag || event.pointerId !== canvasPointerDrag.pointerId) return false;
   const distance = Math.hypot(
@@ -1615,10 +1643,12 @@ function updateCanvasPointerDrag(event) {
     canvasPointerDrag.hasStarted = true;
     selectDraggedCanvasLayer(canvasPointerDrag.draggedLayer);
     startCanvasDragSession(canvasPointerDrag.draggedLayer);
+    createCanvasPointerDragPreview(canvasPointerDrag, event);
   }
 
   event.preventDefault();
   event.stopPropagation();
+  positionCanvasPointerDragPreview(canvasPointerDrag, event);
   const intent = getPointerCanvasDropIntent(event, canvasPointerDrag.draggedLayer);
   if (intent) previewCanvasDropIntent(intent);
   else restoreCanvasDragPreview();
@@ -1659,11 +1689,14 @@ canvas?.addEventListener("pointerdown", (event) => {
   const element = getCanvasLayerElementFromTarget(event.target);
   const draggedLayer = getCanvasLayerDescriptor(element);
   if (!(element instanceof HTMLElement) || !draggedLayer || element.isContentEditable) return;
+  const bounds = element.getBoundingClientRect();
 
   canvasPointerDrag = {
     pointerId: event.pointerId,
     startX: event.clientX,
     startY: event.clientY,
+    grabOffsetX: event.clientX - bounds.left,
+    grabOffsetY: event.clientY - bounds.top,
     draggedLayer,
     element,
     wasDraggable: element.draggable,

@@ -220,7 +220,7 @@ function getDefaultComponentFrameState() {
       widthMode: "hug",
       heightMode: "hug",
       radius: "0",
-      frameColor: "",
+      frameColor: "#ffffff",
       frameColorOpacity: "100",
       direction: "horizontal",
       alignment: "top-left",
@@ -229,11 +229,11 @@ function getDefaultComponentFrameState() {
       outlineColor: "",
       outlineColorOpacity: "100",
       outlinePosition: "inside",
-      outlineWeight: "1",
+      outlineWeight: "0",
       htmlTag: "div",
       layerVisibility: "visible",
     },
-    style: "width: max-content; height: max-content; padding: 10px; gap: 10px; flex-direction: row; align-items: flex-start; justify-content: flex-start; border-radius: 0px; background-color: transparent; box-sizing: border-box;",
+    style: "width: 100px; height: 100px; padding: 10px; gap: 10px; flex-direction: row; align-items: flex-start; justify-content: flex-start; border: 0; border-radius: 0px; outline: none; box-shadow: none; background-color: #ffffff; box-sizing: border-box;",
   };
 }
 
