@@ -18,7 +18,13 @@ let canvasPointerDrag = null;
 
 const CANVAS_DRAG_THRESHOLD = 4;
 
-const CANVAS_REFLOW_DURATION = 140;
+const canvasMovementTimingSelect = document.querySelector("[data-canvas-movement-timing]");
+
+const canvasAnimationTypeSelect = document.querySelector("[data-canvas-animation-type]");
+
+const DEFAULT_CANVAS_REFLOW_DURATION = 200;
+
+const DEFAULT_CANVAS_REFLOW_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 
 const canvasReflowAnimations = new WeakMap();
 
@@ -724,6 +730,12 @@ function animateCanvasLayerReflow(previousPositions) {
     || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
   ) return;
 
+  const selectedDuration = Number(canvasMovementTimingSelect?.value);
+  const duration = Number.isFinite(selectedDuration)
+    ? Math.max(100, Math.min(2000, selectedDuration))
+    : DEFAULT_CANVAS_REFLOW_DURATION;
+  const easing = canvasAnimationTypeSelect?.value || DEFAULT_CANVAS_REFLOW_EASING;
+
   const movements = new Map();
   previousPositions.forEach((previous, element) => {
     if (!(element instanceof HTMLElement) || !element.isConnected || element.classList.contains("is-canvas-dragging")) return;
@@ -746,8 +758,8 @@ function animateCanvasLayerReflow(previousPositions) {
         { transform: "translate(0, 0)" },
       ],
       {
-        duration: CANVAS_REFLOW_DURATION,
-        easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+        duration,
+        easing,
       },
     );
     canvasReflowAnimations.set(element, animation);
