@@ -18,6 +18,10 @@ let canvasPointerDrag = null;
 
 const CANVAS_DRAG_THRESHOLD = 4;
 
+const CANVAS_REFLOW_DURATION = 140;
+
+const canvasReflowAnimations = new WeakMap();
+
 RESIZE_HANDLE_DIRECTIONS.forEach((direction) => {
   const handle = document.createElement("button");
   handle.className = `resize-handle resize-handle--${direction}`;
@@ -609,21 +613,28 @@ function getCanvasDropIntent(event, draggedLayer) {
     const horizontalRatio = targetBounds.width > 0 ? (event.clientX - targetBounds.left) / targetBounds.width : 0.5;
     const verticalRatio = targetBounds.height > 0 ? (event.clientY - targetBounds.top) / targetBounds.height : 0.5;
     const isCurrentParent = targetLayer.type === "frame" && getLayerParentId(draggedLayer) === targetLayer.id;
+    if (isCurrentParent) {
+      const targetIndex = getCanvasInsertionIndex(targetLayer.id, draggedLayer, event.clientX, event.clientY);
+      return {
+        parentFrameId: targetLayer.id,
+        targetIndex,
+        mode: "within",
+        targetElement: null,
+        key: `${targetLayer.id}:${targetIndex}:within`,
+      };
+    }
     const canNestInside = targetLayer.type === "frame"
-      && (isCurrentParent || (
-        horizontalRatio >= 0.25
-        && horizontalRatio <= 0.75
-        && verticalRatio >= 0.25
-        && verticalRatio <= 0.75
-      ))
+      && draggedLayer.type !== "frame"
+      && horizontalRatio >= 0.25
+      && horizontalRatio <= 0.75
+      && verticalRatio >= 0.25
+      && verticalRatio <= 0.75
       && canMoveCanvasLayerToParent(draggedLayer, targetLayer.id);
 
     if (canNestInside) {
-      const targetIndex = isCurrentParent
-        ? getCanvasInsertionIndex(targetLayer.id, draggedLayer, event.clientX, event.clientY)
-        : getLayerChildren(targetLayer.id).filter(
-            (sibling) => !isSameLayerDescriptor(draggedLayer, { type: sibling.type, id: sibling.record.id }),
-          ).length;
+      const targetIndex = getLayerChildren(targetLayer.id).filter(
+        (sibling) => !isSameLayerDescriptor(draggedLayer, { type: sibling.type, id: sibling.record.id }),
+      ).length;
       return {
         parentFrameId: targetLayer.id,
         targetIndex,
@@ -685,6 +696,70 @@ function createCanvasDragPlaceholder(element) {
   return placeholder;
 }
 
+function captureCanvasLayerPositions(usePlaceholderForDraggedLayer = false) {
+  const positions = new Map();
+  if (!(canvasRootStack instanceof HTMLElement)) return positions;
+  const elements = Array.from(canvasRootStack.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector"));
+  elements.forEach((element) => {
+    const bounds = usePlaceholderForDraggedLayer && canvasDragSession?.element === element
+      ? canvasDragSession.placeholder.getBoundingClientRect()
+      : element.getBoundingClientRect();
+    positions.set(element, {
+      left: bounds.left,
+      top: bounds.top,
+    });
+  });
+  elements.forEach((element) => {
+    const activeAnimation = canvasReflowAnimations.get(element);
+    activeAnimation?.cancel();
+    canvasReflowAnimations.delete(element);
+  });
+  return positions;
+}
+
+function animateCanvasLayerReflow(previousPositions) {
+  if (
+    previousPositions.size === 0
+    || typeof Element.prototype.animate !== "function"
+    || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  ) return;
+
+  const movements = new Map();
+  previousPositions.forEach((previous, element) => {
+    if (!(element instanceof HTMLElement) || !element.isConnected || element.classList.contains("is-canvas-dragging")) return;
+    const bounds = element.getBoundingClientRect();
+    const x = previous.left - bounds.left;
+    const y = previous.top - bounds.top;
+    if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) return;
+    movements.set(element, { x, y });
+  });
+
+  movements.forEach((movement, element) => {
+    const animatedAncestor = element.parentElement?.closest(".canvas-frame");
+    const ancestorMovement = animatedAncestor ? movements.get(animatedAncestor) : null;
+    const x = movement.x - (ancestorMovement?.x ?? 0);
+    const y = movement.y - (ancestorMovement?.y ?? 0);
+    if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) return;
+    const animation = element.animate(
+      [
+        { transform: `translate(${x}px, ${y}px)` },
+        { transform: "translate(0, 0)" },
+      ],
+      {
+        duration: CANVAS_REFLOW_DURATION,
+        easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+      },
+    );
+    canvasReflowAnimations.set(element, animation);
+    animation.addEventListener("finish", () => {
+      if (canvasReflowAnimations.get(element) === animation) canvasReflowAnimations.delete(element);
+    }, { once: true });
+    animation.addEventListener("cancel", () => {
+      if (canvasReflowAnimations.get(element) === animation) canvasReflowAnimations.delete(element);
+    }, { once: true });
+  });
+}
+
 function clearCanvasDropTarget() {
   canvasDragSession?.targetElement?.classList.remove("is-canvas-drop-inside");
   if (canvasDragSession) {
@@ -695,6 +770,7 @@ function clearCanvasDropTarget() {
 
 function previewCanvasDropIntent(intent) {
   if (!canvasDragSession || !intent || canvasDragSession.intent?.key === intent.key) return;
+  const previousPositions = captureCanvasLayerPositions();
   clearCanvasDropTarget();
   const parentElement = getCanvasParentElement(intent.parentFrameId);
   if (!(parentElement instanceof HTMLElement)) return;
@@ -721,6 +797,7 @@ function previewCanvasDropIntent(intent) {
       }
     : null;
   canvasDragSession.targetElement?.classList.add("is-canvas-drop-inside");
+  animateCanvasLayerReflow(previousPositions);
   requestAnimationFrame(syncResizeOverlay);
 }
 
@@ -759,6 +836,7 @@ function startCanvasDragSession(draggedLayer, deferDraggingStyle = false) {
 
 function restoreCanvasDragPreview() {
   if (!canvasDragSession) return;
+  const previousPositions = captureCanvasLayerPositions();
   clearCanvasDropTarget();
   const parentElement = getCanvasParentElement(canvasDragSession.originalParentId);
   if (!(parentElement instanceof HTMLElement)) return;
@@ -768,6 +846,15 @@ function restoreCanvasDragPreview() {
   const referenceElement = siblings[canvasDragSession.originalIndex]?.record.element ?? null;
   parentElement.insertBefore(canvasDragSession.placeholder, referenceElement);
   canvasDragSession.intent = null;
+  animateCanvasLayerReflow(previousPositions);
+}
+
+function commitCanvasLayerDrop(draggedLayer, intent) {
+  const previousPositions = captureCanvasLayerPositions(true);
+  clearCanvasDragSession();
+  const didMove = moveLayer(draggedLayer, intent.parentFrameId, intent.targetIndex);
+  animateCanvasLayerReflow(previousPositions);
+  return didMove;
 }
 
 function clearCanvasDragSession() {
@@ -1471,8 +1558,7 @@ canvas?.addEventListener("drop", (event) => {
   if (!intent) return;
   event.preventDefault();
   event.stopPropagation();
-  clearCanvasDragSession();
-  moveLayer(draggedLayer, intent.parentFrameId, intent.targetIndex);
+  commitCanvasLayerDrop(draggedLayer, intent);
 }, true);
 
 document.addEventListener("dragend", clearCanvasDragSession);
@@ -1547,8 +1633,8 @@ function finishCanvasPointerDrag(event, shouldCommit) {
 
   event.preventDefault();
   event.stopPropagation();
-  clearCanvasDragSession();
-  if (intent) moveLayer(pointerDrag.draggedLayer, intent.parentFrameId, intent.targetIndex);
+  if (intent) commitCanvasLayerDrop(pointerDrag.draggedLayer, intent);
+  else clearCanvasDragSession();
   suppressNextCanvasSurfaceClick = true;
   setTimeout(() => {
     suppressNextCanvasSurfaceClick = false;
