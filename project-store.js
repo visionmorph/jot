@@ -217,8 +217,8 @@ function getDefaultComponentFrameState() {
       paddingBottom: "10",
       width: "100",
       height: "100",
-      widthMode: "fixed",
-      heightMode: "fixed",
+      widthMode: "hug",
+      heightMode: "hug",
       radius: "0",
       frameColor: "",
       frameColorOpacity: "100",
@@ -233,7 +233,7 @@ function getDefaultComponentFrameState() {
       htmlTag: "div",
       layerVisibility: "visible",
     },
-    style: "width: 100px; height: 100px; padding: 10px; gap: 10px; flex-direction: row; align-items: flex-start; justify-content: flex-start; border-radius: 0px; background-color: transparent; box-sizing: border-box;",
+    style: "width: max-content; height: max-content; padding: 10px; gap: 10px; flex-direction: row; align-items: flex-start; justify-content: flex-start; border-radius: 0px; background-color: transparent; box-sizing: border-box;",
   };
 }
 
