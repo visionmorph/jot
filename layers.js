@@ -663,7 +663,10 @@ function renderTree() {
   renderComponentProps();
 }
 
-addComponentButton?.addEventListener("click", addComponent);
+addComponentButton?.addEventListener("click", () => {
+  const component = addComponent();
+  if (component) beginTreeNodeRename("component", component, component);
+});
 
 function clearTreeDropIndicators() {
   document.querySelectorAll(".tree-node.is-drop-before, .tree-node.is-drop-after, .tree-node.is-drop-inside")
