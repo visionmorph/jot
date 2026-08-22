@@ -180,6 +180,8 @@ loadGoogleFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
 
 loadGoogleFont(DEFAULT_FONT_FAMILY, 600);
 
+loadGoogleFont("JetBrains Mono", 400);
+
 loadFontCatalog();
 
 renderTree();

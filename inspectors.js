@@ -546,6 +546,18 @@ function createPropSelectIcon(iconType) {
   return createLayerTypeIcon(iconType);
 }
 
+function bindPropsActionTooltip(wrapper, button) {
+  const tooltipContent = wrapper.querySelector(".tooltip-content");
+  if (!(tooltipContent instanceof HTMLElement) || !(button instanceof HTMLButtonElement)) return;
+  const positionTooltip = () => {
+    const bounds = button.getBoundingClientRect();
+    tooltipContent.style.left = `${bounds.left + bounds.width / 2}px`;
+    tooltipContent.style.top = `${bounds.top - 4}px`;
+  };
+  wrapper.addEventListener("pointerenter", positionTooltip);
+  wrapper.addEventListener("focusin", positionTooltip);
+}
+
 function createPropSelect(options, value, ariaLabel, onChange, disabled = false) {
   const wrap = document.createElement("div");
   const select = document.createElement("select");
@@ -705,7 +717,7 @@ function renderComponentProps() {
       defaultCell.append(defaultInput);
     } else {
       const emptyValue = document.createElement("span");
-      emptyValue.className = "prop-empty-value";
+      emptyValue.className = "prop-empty-value prop-value-tag";
       emptyValue.textContent = "—";
       emptyValue.setAttribute("aria-label", "No default value");
       defaultCell.append(emptyValue);
@@ -829,20 +841,28 @@ function renderComponentProps() {
     }
 
     const actionCell = createCell(true);
+    const removeTooltip = document.createElement("span");
     const removeButton = document.createElement("button");
     const removeIcon = document.createElement("span");
+    const removeTooltipContent = document.createElement("span");
+    removeTooltip.className = "tooltip props-action-tooltip";
     removeButton.className = "prop-remove-button";
     removeButton.type = "button";
     removeButton.setAttribute("aria-label", `Remove ${prop.name} prop`);
     removeIcon.className = "subtract-icon";
     removeIcon.setAttribute("aria-hidden", "true");
+    removeTooltipContent.className = "tooltip-content";
+    removeTooltipContent.setAttribute("role", "tooltip");
+    removeTooltipContent.textContent = "Remove";
     removeButton.append(removeIcon);
     removeButton.addEventListener("click", () => {
       recordHistory();
       componentProps = componentProps.filter((componentProp) => componentProp.id !== prop.id);
       renderComponentProps();
     });
-    actionCell.append(removeButton);
+    removeTooltip.append(removeButton, removeTooltipContent);
+    bindPropsActionTooltip(removeTooltip, removeButton);
+    actionCell.append(removeTooltip);
 
     row.append(nameCell, typeCell, targetCell, propertyCell, defaultCell, actionCell);
     return row;
@@ -1697,3 +1717,8 @@ frameHtmlTagInput?.addEventListener("change", () => {
 });
 
 addPropButton?.addEventListener("click", addDisabledProp);
+
+const addPropTooltip = addPropButton?.closest(".props-action-tooltip");
+if (addPropTooltip instanceof HTMLElement && addPropButton instanceof HTMLButtonElement) {
+  bindPropsActionTooltip(addPropTooltip, addPropButton);
+}
