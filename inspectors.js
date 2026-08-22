@@ -533,8 +533,9 @@ function createPropSelectIcon(iconType, record = null) {
   if (iconType === "prop-boolean") return createSvgAssetIcon("toggle-on", "layer-type-icon prop-type-icon");
   if (iconType === "prop-string") return createSvgAssetIcon("text", "layer-type-icon prop-type-icon");
   if (iconType === "prop-action") return createSvgAssetIcon("cursor-1", "layer-type-icon prop-type-icon");
+  if (iconType === "frame" && record) return createLayerTypeIcon("frame", record);
   if (iconType === "vector" && record) return createVectorLayerTreeIcon(record);
-  return createLayerTypeIcon(iconType);
+  return createLayerTypeIcon(iconType, record);
 }
 
 function bindPropsActionTooltip(wrapper, button) {
@@ -726,7 +727,7 @@ function renderComponentProps() {
               value: `${layer.type}:${layer.record.id}`,
               label: getVisibilityTargetLabel(layer.type, layer.record),
               iconType: getTargetLayerIconType(layer.type, layer.record),
-              iconRecord: layer.type === "vector" ? layer.record : null,
+              iconRecord: layer.type === "component" ? null : layer.record,
             })),
           ];
     } else {
@@ -743,6 +744,7 @@ function renderComponentProps() {
                 ? currentComponent?.name || "Component"
                 : getTreeNodeName("frame", record),
               iconType: getTargetLayerIconType("frame", record),
+              iconRecord: record.isComponent ? null : record,
             })),
           ];
     }
