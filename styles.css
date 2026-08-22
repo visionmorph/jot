@@ -705,6 +705,10 @@ textarea:focus-visible {
   color: var(--icon-primary);
 }
 
+.tree-node.is-disabled-child .layer-visibility-button {
+  color: var(--icon-primary);
+}
+
 .tree-node.is-disabled .tree-node-rename-input {
   color: var(--text-disabled);
 }
