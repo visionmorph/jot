@@ -12,6 +12,8 @@ selectionRectangle.setAttribute("aria-hidden", "true");
 
 let selectionDrag = null;
 
+let canvasDragSession = null;
+
 RESIZE_HANDLE_DIRECTIONS.forEach((direction) => {
   const handle = document.createElement("button");
   handle.className = `resize-handle resize-handle--${direction}`;
@@ -525,6 +527,234 @@ function createCanvasSvg(svgSource) {
   return svg;
 }
 
+function getCanvasLayerDescriptor(element) {
+  if (!(element instanceof HTMLElement)) return null;
+  const frameId = Number(element.dataset.frameId);
+  if (element.classList.contains("canvas-frame") && Number.isInteger(frameId)) {
+    return { type: "frame", id: frameId };
+  }
+  const textId = Number(element.dataset.textId);
+  if (element.classList.contains("canvas-text") && Number.isInteger(textId)) {
+    return { type: "text", id: textId };
+  }
+  const vectorId = Number(element.dataset.vectorId);
+  if (element.classList.contains("canvas-vector") && Number.isInteger(vectorId)) {
+    return { type: "vector", id: vectorId };
+  }
+  return null;
+}
+
+function isSameLayerDescriptor(first, second) {
+  return Boolean(first && second && first.type === second.type && first.id === second.id);
+}
+
+function getCanvasLayerElementFromTarget(target) {
+  if (!(target instanceof Element)) return null;
+  const element = target.closest(".canvas-frame, .canvas-text, .canvas-vector");
+  return element instanceof HTMLElement && canvasRootStack?.contains(element) ? element : null;
+}
+
+function getCanvasParentElement(parentFrameId) {
+  return parentFrameId === null ? canvasRootStack : getFrameRecord(parentFrameId)?.element ?? null;
+}
+
+function canMoveCanvasLayerToParent(layer, parentFrameId) {
+  return layer.type !== "frame" || parentFrameId === null || canNestFrame(layer.id, parentFrameId);
+}
+
+function getCanvasInsertionIndex(parentFrameId, draggedLayer, clientX, clientY) {
+  const parentElement = getCanvasParentElement(parentFrameId);
+  if (!(parentElement instanceof HTMLElement)) return 0;
+  const isVertical = parentElement.dataset.direction === "vertical";
+  const pointerPosition = isVertical ? clientY : clientX;
+  const siblings = getLayerChildren(parentFrameId).filter(
+    (sibling) => !isSameLayerDescriptor(draggedLayer, { type: sibling.type, id: sibling.record.id }),
+  );
+
+  const insertionIndex = siblings.findIndex((sibling) => {
+    const bounds = sibling.record.element.getBoundingClientRect();
+    const midpoint = isVertical
+      ? bounds.top + bounds.height / 2
+      : bounds.left + bounds.width / 2;
+    return pointerPosition < midpoint;
+  });
+  return insertionIndex < 0 ? siblings.length : insertionIndex;
+}
+
+function getCanvasDropIntent(event, draggedLayer) {
+  if (!(canvasRootStack instanceof HTMLElement)) return null;
+  const targetElement = getCanvasLayerElementFromTarget(event.target);
+  const targetLayer = getCanvasLayerDescriptor(targetElement);
+
+  if (targetLayer && isSameLayerDescriptor(targetLayer, draggedLayer)) {
+    const parentFrameId = getLayerParentId(draggedLayer);
+    const targetIndex = getLayerChildren(parentFrameId).findIndex(
+      (sibling) => sibling.type === draggedLayer.type && sibling.record.id === draggedLayer.id,
+    );
+    return {
+      parentFrameId,
+      targetIndex: Math.max(0, targetIndex),
+      mode: "before",
+      targetElement: null,
+      key: `${parentFrameId ?? "root"}:${Math.max(0, targetIndex)}:before`,
+    };
+  }
+
+  if (targetElement && targetLayer && !isSameLayerDescriptor(targetLayer, draggedLayer)) {
+    const targetBounds = targetElement.getBoundingClientRect();
+    const horizontalRatio = targetBounds.width > 0 ? (event.clientX - targetBounds.left) / targetBounds.width : 0.5;
+    const verticalRatio = targetBounds.height > 0 ? (event.clientY - targetBounds.top) / targetBounds.height : 0.5;
+    const isCurrentParent = targetLayer.type === "frame" && getLayerParentId(draggedLayer) === targetLayer.id;
+    const canNestInside = targetLayer.type === "frame"
+      && (isCurrentParent || (
+        horizontalRatio >= 0.25
+        && horizontalRatio <= 0.75
+        && verticalRatio >= 0.25
+        && verticalRatio <= 0.75
+      ))
+      && canMoveCanvasLayerToParent(draggedLayer, targetLayer.id);
+
+    if (canNestInside) {
+      const targetIndex = isCurrentParent
+        ? getCanvasInsertionIndex(targetLayer.id, draggedLayer, event.clientX, event.clientY)
+        : getLayerChildren(targetLayer.id).filter(
+            (sibling) => !isSameLayerDescriptor(draggedLayer, { type: sibling.type, id: sibling.record.id }),
+          ).length;
+      return {
+        parentFrameId: targetLayer.id,
+        targetIndex,
+        mode: "inside",
+        targetElement,
+        key: `${targetLayer.id}:${targetIndex}:inside`,
+      };
+    }
+
+    const parentFrameId = getLayerParentId(targetLayer);
+    if (!canMoveCanvasLayerToParent(draggedLayer, parentFrameId)) return null;
+    const parentElement = getCanvasParentElement(parentFrameId);
+    const isVertical = parentElement?.dataset.direction === "vertical";
+    const targetRatio = isVertical ? verticalRatio : horizontalRatio;
+    const siblings = getLayerChildren(parentFrameId).filter(
+      (sibling) => !isSameLayerDescriptor(draggedLayer, { type: sibling.type, id: sibling.record.id }),
+    );
+    const targetIndex = siblings.findIndex(
+      (sibling) => sibling.type === targetLayer.type && sibling.record.id === targetLayer.id,
+    );
+    if (targetIndex < 0) return null;
+    const mode = targetRatio < 0.5 ? "before" : "after";
+    const insertionIndex = targetIndex + (mode === "after" ? 1 : 0);
+    return {
+      parentFrameId,
+      targetIndex: insertionIndex,
+      mode,
+      targetElement,
+      key: `${parentFrameId ?? "root"}:${insertionIndex}:${mode}`,
+    };
+  }
+
+  const parentElement = event.target instanceof Element
+    ? event.target.closest(".canvas-frame, [data-canvas-root-stack]")
+    : null;
+  const parentFrameId = parentElement instanceof HTMLElement && parentElement.classList.contains("canvas-frame")
+    ? Number(parentElement.dataset.frameId)
+    : null;
+  if (!canMoveCanvasLayerToParent(draggedLayer, parentFrameId)) return null;
+  const targetIndex = getCanvasInsertionIndex(parentFrameId, draggedLayer, event.clientX, event.clientY);
+  return {
+    parentFrameId,
+    targetIndex,
+    mode: "inside",
+    targetElement: getCanvasParentElement(parentFrameId),
+    key: `${parentFrameId ?? "root"}:${targetIndex}:inside`,
+  };
+}
+
+function createCanvasDragPlaceholder(element) {
+  const bounds = element.getBoundingClientRect();
+  const placeholder = document.createElement("div");
+  placeholder.className = "canvas-drop-placeholder";
+  placeholder.setAttribute("aria-hidden", "true");
+  placeholder.style.width = `${bounds.width}px`;
+  placeholder.style.height = `${bounds.height}px`;
+  placeholder.style.flex = "0 0 auto";
+  placeholder.style.alignSelf = getComputedStyle(element).alignSelf;
+  return placeholder;
+}
+
+function clearCanvasDropTarget() {
+  canvasDragSession?.targetElement?.classList.remove("is-canvas-drop-inside");
+  if (canvasDragSession) canvasDragSession.targetElement = null;
+}
+
+function previewCanvasDropIntent(intent) {
+  if (!canvasDragSession || !intent || canvasDragSession.intent?.key === intent.key) return;
+  clearCanvasDropTarget();
+  const parentElement = getCanvasParentElement(intent.parentFrameId);
+  if (!(parentElement instanceof HTMLElement)) return;
+  const siblings = getLayerChildren(intent.parentFrameId).filter(
+    (sibling) => !isSameLayerDescriptor(canvasDragSession.draggedLayer, { type: sibling.type, id: sibling.record.id }),
+  );
+  const referenceElement = siblings[intent.targetIndex]?.record.element ?? null;
+  parentElement.insertBefore(canvasDragSession.placeholder, referenceElement);
+  canvasDragSession.intent = intent;
+  canvasDragSession.targetElement = intent.mode === "inside" ? intent.targetElement : null;
+  canvasDragSession.targetElement?.classList.add("is-canvas-drop-inside");
+  requestAnimationFrame(syncResizeOverlay);
+}
+
+function startCanvasDragSession(draggedLayer, deferDraggingStyle = false) {
+  const record = getLayerRecord(draggedLayer);
+  if (!record || !(record.element instanceof HTMLElement)) return null;
+  if (canvasDragSession && isSameLayerDescriptor(canvasDragSession.draggedLayer, draggedLayer)) {
+    return canvasDragSession;
+  }
+  clearCanvasDragSession();
+  const originalParentId = getLayerParentId(draggedLayer);
+  const originalSiblings = getLayerChildren(originalParentId);
+  const originalIndex = originalSiblings.findIndex(
+    (sibling) => sibling.type === draggedLayer.type && sibling.record.id === draggedLayer.id,
+  );
+  const placeholder = createCanvasDragPlaceholder(record.element);
+  record.element.insertAdjacentElement("beforebegin", placeholder);
+  canvasDragSession = {
+    draggedLayer,
+    element: record.element,
+    placeholder,
+    originalParentId,
+    originalIndex,
+    intent: null,
+    targetElement: null,
+  };
+  const applyDraggingStyle = () => {
+    if (canvasDragSession?.element === record.element) record.element.classList.add("is-canvas-dragging");
+  };
+  if (deferDraggingStyle) requestAnimationFrame(applyDraggingStyle);
+  else applyDraggingStyle();
+  return canvasDragSession;
+}
+
+function restoreCanvasDragPreview() {
+  if (!canvasDragSession) return;
+  clearCanvasDropTarget();
+  const parentElement = getCanvasParentElement(canvasDragSession.originalParentId);
+  if (!(parentElement instanceof HTMLElement)) return;
+  const siblings = getLayerChildren(canvasDragSession.originalParentId).filter(
+    (sibling) => !isSameLayerDescriptor(canvasDragSession.draggedLayer, { type: sibling.type, id: sibling.record.id }),
+  );
+  const referenceElement = siblings[canvasDragSession.originalIndex]?.record.element ?? null;
+  parentElement.insertBefore(canvasDragSession.placeholder, referenceElement);
+  canvasDragSession.intent = null;
+}
+
+function clearCanvasDragSession() {
+  if (!canvasDragSession) return;
+  clearCanvasDropTarget();
+  canvasDragSession.placeholder.remove();
+  canvasDragSession.element.classList.remove("is-canvas-dragging");
+  canvasDragSession = null;
+  requestAnimationFrame(syncResizeOverlay);
+}
+
 function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = {}) {
   if (!(canvas instanceof HTMLElement)) return;
   if (options.recordHistory !== false) recordHistory();
@@ -571,6 +801,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
   vector.addEventListener("dragstart", (event) => {
     event.stopPropagation();
     setLayerDragData(event, "vector", vectorId);
+    startCanvasDragSession({ type: "vector", id: vectorId }, true);
   });
 
   vectorRecords.push(record);
@@ -692,6 +923,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
     }
     event.stopPropagation();
     setLayerDragData(event, "text", textId);
+    startCanvasDragSession({ type: "text", id: textId }, true);
   });
 
   textRecords.push(record);
@@ -780,17 +1012,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.addEventListener("dragstart", (event) => {
     event.stopPropagation();
     setLayerDragData(event, "frame", frameId);
-  });
-  frame.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "move";
-  });
-  frame.addEventListener("drop", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const draggedLayer = getLayerDragData(event);
-    if (draggedLayer) nestLayer(draggedLayer, frameId);
+    startCanvasDragSession({ type: "frame", id: frameId }, true);
   });
 
   frameRecords.push(record);
@@ -1187,24 +1409,41 @@ canvas?.addEventListener("drop", (event) => {
 }, true);
 
 canvas?.addEventListener("dragover", (event) => {
-  if (event.target !== canvas && event.target !== canvasRootStack) return;
+  if (hasFileTransfer(event.dataTransfer)) return;
+  const draggedLayer = canvasDragSession?.draggedLayer ?? getLayerDragData(event);
+  if (!draggedLayer) return;
+  const session = canvasDragSession ?? startCanvasDragSession(draggedLayer);
+  const intent = session ? getCanvasDropIntent(event, draggedLayer) : null;
+  if (!intent) return;
   event.preventDefault();
+  event.stopPropagation();
   event.dataTransfer.dropEffect = "move";
-});
+  previewCanvasDropIntent(intent);
+}, true);
+
+canvas?.addEventListener("dragleave", (event) => {
+  if (!canvasDragSession || !(canvas instanceof HTMLElement)) return;
+  const bounds = canvas.getBoundingClientRect();
+  const isOutside = event.clientX <= bounds.left
+    || event.clientX >= bounds.right
+    || event.clientY <= bounds.top
+    || event.clientY >= bounds.bottom;
+  if (isOutside) restoreCanvasDragPreview();
+}, true);
 
 canvas?.addEventListener("drop", (event) => {
-  if (!(canvas instanceof HTMLElement) || (event.target !== canvas && event.target !== canvasRootStack)) return;
-  event.preventDefault();
-  const draggedLayer = getLayerDragData(event);
+  if (hasFileTransfer(event.dataTransfer)) return;
+  const draggedLayer = canvasDragSession?.draggedLayer ?? getLayerDragData(event);
   if (!draggedLayer) return;
-  const bounds = canvas.getBoundingClientRect();
-  moveLayer(
-    draggedLayer,
-    null,
-    getLayerChildren(null).length,
-    { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
-  );
-});
+  const intent = getCanvasDropIntent(event, draggedLayer) ?? canvasDragSession?.intent;
+  if (!intent) return;
+  event.preventDefault();
+  event.stopPropagation();
+  clearCanvasDragSession();
+  moveLayer(draggedLayer, intent.parentFrameId, intent.targetIndex);
+}, true);
+
+document.addEventListener("dragend", clearCanvasDragSession);
 
 function getMarqueeBounds(startX, startY, endX, endY) {
   return {
