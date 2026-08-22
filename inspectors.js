@@ -511,12 +511,26 @@ function setBooleanPropProperty(prop, property) {
 
 function bindNativeSelectChevron(select, wrap) {
   const closeMenuState = () => wrap.classList.remove("is-open");
+  const clearSelectionFocus = () => wrap.classList.remove("is-selection-focused");
   select.addEventListener("pointerdown", () => {
     if (select.disabled) closeMenuState();
-    else wrap.classList.add("is-open");
+    else {
+      clearSelectionFocus();
+      wrap.classList.add("is-open");
+    }
   });
-  select.addEventListener("change", closeMenuState);
-  select.addEventListener("blur", closeMenuState);
+  select.addEventListener("change", () => {
+    closeMenuState();
+    wrap.classList.add("is-selection-focused");
+  });
+  select.addEventListener("click", () => requestAnimationFrame(() => {
+    closeMenuState();
+    if (!select.disabled) wrap.classList.add("is-selection-focused");
+  }));
+  select.addEventListener("blur", () => {
+    closeMenuState();
+    clearSelectionFocus();
+  });
   select.addEventListener("keydown", (event) => {
     if (event.key === "Escape" || event.key === "Enter") closeMenuState();
     else if (event.key === "ArrowDown" && event.altKey) wrap.classList.add("is-open");
@@ -1110,6 +1124,7 @@ function applyTextSizeValue(rawValue = sizeSelect?.value, normalize = true) {
 
 sizeSelect?.addEventListener("focus", () => {
   if (sizeSelect instanceof HTMLInputElement) sizeSelect.select();
+  textSizeCombobox?.classList.add("is-selection-focused");
 });
 
 sizeSelect?.addEventListener("click", () => {
@@ -1124,6 +1139,7 @@ sizeSelect?.addEventListener("blur", (event) => {
   if (event.relatedTarget instanceof Node && textSizeCombobox?.contains(event.relatedTarget)) return;
   if (!applyTextSizeValue()) syncInspectorToSelectedText();
   setTextSizeComboboxOpen(false);
+  textSizeCombobox?.classList.remove("is-selection-focused");
 });
 
 sizeSelect?.addEventListener("keydown", (event) => {
@@ -1161,6 +1177,7 @@ textSizeOptions.forEach((option) => {
       sizeSelect.focus();
       sizeSelect.select();
     }
+    textSizeCombobox?.classList.add("is-selection-focused");
   });
 });
 
@@ -1395,6 +1412,7 @@ sizeModeComboboxes.forEach((wrapper) => {
       else syncInspectorToSelectedText();
     }
     setSizeComboboxOpen(wrapper, false);
+    wrapper.classList.remove("is-selection-focused");
   });
   input.addEventListener("keydown", (event) => {
     if (event.key === "ArrowDown") {
@@ -1429,6 +1447,7 @@ sizeModeComboboxes.forEach((wrapper) => {
       if (mode) applySizeInputValue(input, mode);
       setSizeComboboxOpen(wrapper, false);
       input.focus();
+      wrapper.classList.add("is-selection-focused");
     });
   });
 });
@@ -1460,7 +1479,10 @@ framePaddingInputs.forEach((input) => {
 
 framePaddingAxisInputs.forEach((input) => {
   if (!(input instanceof HTMLInputElement)) return;
-  input.addEventListener("focus", () => input.select());
+  input.addEventListener("focus", () => {
+    input.select();
+    wrapper.classList.add("is-selection-focused");
+  });
   input.addEventListener("input", () => {
     const record = getSelectedFrameRecord();
     const axis = input.dataset.framePaddingAxis;
@@ -1627,6 +1649,7 @@ function applyFrameGapValue(normalize = true) {
 
 frameGapInput?.addEventListener("focus", () => {
   if (frameGapInput instanceof HTMLInputElement) frameGapInput.select();
+  frameGapCombobox?.classList.add("is-selection-focused");
 });
 
 frameGapInput?.addEventListener("input", () => applyFrameGapValue(false));
@@ -1635,6 +1658,7 @@ frameGapInput?.addEventListener("blur", (event) => {
   if (frameGapCombobox instanceof HTMLElement && event.relatedTarget instanceof Node && frameGapCombobox.contains(event.relatedTarget)) return;
   if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
   setFrameGapMenuOpen(false);
+  frameGapCombobox?.classList.remove("is-selection-focused");
 });
 
 frameGapInput?.addEventListener("keydown", (event) => {
@@ -1668,6 +1692,7 @@ frameGapAutoOption?.addEventListener("click", () => {
   applyFrameGapValue();
   setFrameGapMenuOpen(false);
   frameGapInput.focus();
+  frameGapCombobox?.classList.add("is-selection-focused");
 });
 
 document.addEventListener("pointerdown", (event) => {
