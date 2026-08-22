@@ -337,6 +337,14 @@ textarea:focus-visible {
   outline-offset: -1px;
 }
 
+.inspector-select-wrap.is-selection-focused,
+.prop-select-wrap.is-selection-focused,
+.inspector-combobox-wrap.is-selection-focused,
+.size-mode-combobox.is-selection-focused {
+  outline: 1px solid var(--background-brand);
+  outline-offset: -1px;
+}
+
 .prop-control:disabled {
   color: var(--text-disabled);
   cursor: not-allowed;
