@@ -957,6 +957,7 @@ textarea:focus-visible {
   border-radius: 0;
   outline: none;
   background: transparent;
+  touch-action: none;
 }
 
 .canvas-frame.is-selected {
@@ -986,10 +987,13 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
   cursor: default;
   outline: none;
+  touch-action: none;
+  user-select: none;
 }
 
 .canvas-text[contenteditable="true"] {
   cursor: text;
+  user-select: text;
 }
 
 .canvas-text[data-width] {
@@ -1015,6 +1019,8 @@ textarea:focus-visible {
   height: 24px;
   outline: none;
   cursor: default;
+  touch-action: none;
+  user-select: none;
 }
 
 .canvas-vector > svg {
