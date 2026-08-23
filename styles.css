@@ -2153,7 +2153,7 @@ textarea:focus-visible {
   width: 208px;
   height: 208px;
   flex: 0 0 208px;
-  border-radius: 8px;
+  border-radius: 4px;
   background:
     linear-gradient(to bottom, transparent 0%, #000 100%),
     linear-gradient(to right, #fff 0%, var(--picker-hue, #f00) 100%);
@@ -2185,11 +2185,9 @@ textarea:focus-visible {
 }
 
 .color-picker-opacity {
-  border-right: 1px solid var(--border-subtle-01);
-  border-left: 1px solid transparent;
   background:
     linear-gradient(to right, var(--picker-color, #fff) 0%, transparent 100%),
-    conic-gradient(#8d8d8d 25%, #f4f4f4 0 50%, #8d8d8d 0 75%, #f4f4f4 0) 0 0 / 8px 8px;
+    conic-gradient(#343a3f 25%, #21272a 0 50%, #343a3f 0 75%, #21272a 0) 0 0 / 8px 8px;
 }
 
 .color-picker-knob {
@@ -2231,6 +2229,10 @@ textarea:focus-visible {
 
 .color-picker-hue .color-picker-knob-color {
   background: var(--picker-hue, #f00);
+}
+
+.color-picker-opacity .color-picker-knob-color {
+  background: color-mix(in srgb, var(--picker-color, #fff) var(--picker-opacity, 100%), transparent);
 }
 
 .color-picker-fields {
