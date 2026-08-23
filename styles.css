@@ -2200,7 +2200,8 @@ textarea:focus-visible {
   width: 16px;
   height: 16px;
   border-radius: 8px;
-  background: var(--icon-on-color);
+  border: 2px solid var(--icon-on-color);
+  background: transparent;
   filter: drop-shadow(0 0 1.5px #000);
   pointer-events: none;
   transform: translate(-50%, -50%);
@@ -2216,8 +2217,8 @@ textarea:focus-visible {
   justify-content: center;
   width: 12px;
   height: 12px;
-  border-radius: 50%;
-  background: var(--layer-02);
+  border-radius: 6px;
+  background: var(--layer-01);
 }
 
 .color-picker-knob-color {
