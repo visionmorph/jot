@@ -975,7 +975,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   text.dataset.fontSize = "14";
   text.dataset.lineHeight = "Auto";
   text.dataset.letterSpacing = "0%";
-  text.dataset.textColor = "#ffffff";
+  text.dataset.textColor = "#000000";
   text.dataset.textColorOpacity = "100";
   text.dataset.alignment = "top-left";
   text.dataset.widthMode = "hug";
@@ -986,7 +986,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   text.style.fontSize = "14px";
   text.style.lineHeight = "normal";
   text.style.letterSpacing = "0em";
-  text.style.color = "#ffffff";
+  text.style.color = "#000000";
   applyTextAlignment(text);
 
   if (parentRecord) {

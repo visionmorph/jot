@@ -83,6 +83,7 @@ function syncCustomColorControl(picker, color, opacity = 100) {
   }
   if (actionWrapper instanceof HTMLElement) actionWrapper.hidden = !isEmpty;
   if (removeWrapper instanceof HTMLElement) removeWrapper.hidden = isEmpty;
+  syncOpenColorPicker(control, normalizedColor, normalizedOpacity);
 }
 
 function getFrameAlignmentValues(element) {
@@ -251,7 +252,7 @@ function syncInspectorToSelectedText() {
   if (textColorPicker instanceof HTMLInputElement) {
     const color = Object.prototype.hasOwnProperty.call(element.dataset, "textColor")
       ? element.dataset.textColor
-      : "#ffffff";
+      : "#000000";
     syncCustomColorControl(textColorPicker, color, element.dataset.textColorOpacity || "100");
   }
   textAlignmentOptions.forEach((option) => {
@@ -875,7 +876,7 @@ function getCustomColorState(control) {
     if (!record) return null;
     const color = Object.prototype.hasOwnProperty.call(record.element.dataset, "textColor")
       ? record.element.dataset.textColor
-      : "#ffffff";
+      : "#000000";
     return {
       property,
       record,
@@ -967,6 +968,214 @@ function applyCustomColorValue(control, color, opacity) {
   return true;
 }
 
+function colorPickerKnobMarkup() {
+  return '<span class="color-picker-knob" aria-hidden="true"><span class="color-picker-knob-middle"><span class="color-picker-knob-color"></span></span></span>';
+}
+
+function hsvToHex(hue, saturation, value) {
+  const chroma = value * saturation;
+  const sector = ((hue % 360) + 360) % 360 / 60;
+  const secondary = chroma * (1 - Math.abs((sector % 2) - 1));
+  const match = value - chroma;
+  const [red, green, blue] = sector < 1 ? [chroma, secondary, 0]
+    : sector < 2 ? [secondary, chroma, 0]
+      : sector < 3 ? [0, chroma, secondary]
+        : sector < 4 ? [0, secondary, chroma]
+          : sector < 5 ? [secondary, 0, chroma]
+            : [chroma, 0, secondary];
+  const channel = (number) => Math.round((number + match) * 255).toString(16).padStart(2, "0");
+  return `#${channel(red)}${channel(green)}${channel(blue)}`.toUpperCase();
+}
+
+function hexToHsv(color) {
+  const normalizedColor = normalizeHexColor(color) || "#000000";
+  const red = Number.parseInt(normalizedColor.slice(1, 3), 16) / 255;
+  const green = Number.parseInt(normalizedColor.slice(3, 5), 16) / 255;
+  const blue = Number.parseInt(normalizedColor.slice(5, 7), 16) / 255;
+  const maximum = Math.max(red, green, blue);
+  const minimum = Math.min(red, green, blue);
+  const delta = maximum - minimum;
+  let hue = 0;
+  if (delta && maximum === red) hue = 60 * (((green - blue) / delta) % 6);
+  else if (delta && maximum === green) hue = 60 * (((blue - red) / delta) + 2);
+  else if (delta) hue = 60 * (((red - green) / delta) + 4);
+  return {
+    hue: (hue + 360) % 360,
+    saturation: maximum === 0 ? 0 : delta / maximum,
+    value: maximum,
+  };
+}
+
+const colorPickerPopup = document.createElement("div");
+colorPickerPopup.className = "color-picker-popup";
+colorPickerPopup.hidden = true;
+colorPickerPopup.setAttribute("role", "dialog");
+colorPickerPopup.setAttribute("aria-label", "Color picker");
+colorPickerPopup.innerHTML = `
+  <div class="color-picker-sv" data-picker-sv role="slider" aria-label="Saturation and value">${colorPickerKnobMarkup()}</div>
+  <div class="color-picker-sliders">
+    <div class="color-picker-slider color-picker-hue" data-picker-hue role="slider" aria-label="Hue">${colorPickerKnobMarkup()}</div>
+    <div class="color-picker-slider color-picker-opacity" data-picker-opacity role="slider" aria-label="Opacity">${colorPickerKnobMarkup()}</div>
+  </div>
+  <div class="color-picker-fields">
+    <div class="custom-color-value"><input class="custom-color-hex" type="text" inputmode="text" maxlength="6" aria-label="Hex color value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-picker-hex></div>
+    <div class="custom-color-divider" aria-hidden="true"></div>
+    <div class="custom-color-opacity"><input type="text" inputmode="decimal" maxlength="3" aria-label="Color opacity" data-picker-opacity-input><span aria-hidden="true">%</span></div>
+    <div class="custom-color-divider color-picker-remove-divider" aria-hidden="true"></div>
+    <span class="tooltip custom-color-remove-action"><button class="paint-section-action" type="button" aria-label="Remove color" data-picker-remove><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip">Remove</span></span>
+  </div>`;
+document.body.append(colorPickerPopup);
+
+const colorPickerSv = colorPickerPopup.querySelector("[data-picker-sv]");
+const colorPickerHue = colorPickerPopup.querySelector("[data-picker-hue]");
+const colorPickerOpacity = colorPickerPopup.querySelector("[data-picker-opacity]");
+const colorPickerHex = colorPickerPopup.querySelector("[data-picker-hex]");
+const colorPickerOpacityInput = colorPickerPopup.querySelector("[data-picker-opacity-input]");
+const colorPickerRemove = colorPickerPopup.querySelector("[data-picker-remove]");
+const colorPickerRemoveWrapper = colorPickerRemove?.closest(".custom-color-remove-action");
+let activeColorControl = null;
+let pickerHue = 0;
+let pickerSaturation = 0;
+let pickerValue = 1;
+let pickerOpacity = 100;
+let isApplyingPickerColor = false;
+
+function renderColorPicker() {
+  const currentColor = hsvToHex(pickerHue, pickerSaturation, pickerValue);
+  const hueColor = hsvToHex(pickerHue, 1, 1);
+  colorPickerPopup.style.setProperty("--picker-color", currentColor);
+  colorPickerPopup.style.setProperty("--picker-hue", hueColor);
+  const svKnob = colorPickerSv?.querySelector(".color-picker-knob");
+  const hueKnob = colorPickerHue?.querySelector(".color-picker-knob");
+  const opacityKnob = colorPickerOpacity?.querySelector(".color-picker-knob");
+  if (svKnob instanceof HTMLElement) {
+    svKnob.style.left = `${pickerSaturation * 100}%`;
+    svKnob.style.top = `${(1 - pickerValue) * 100}%`;
+  }
+  if (hueKnob instanceof HTMLElement) hueKnob.style.left = `${pickerHue / 3.6}%`;
+  if (opacityKnob instanceof HTMLElement) opacityKnob.style.left = `${100 - pickerOpacity}%`;
+  if (colorPickerHex instanceof HTMLInputElement) colorPickerHex.value = currentColor.slice(1);
+  if (colorPickerOpacityInput instanceof HTMLInputElement) colorPickerOpacityInput.value = String(pickerOpacity);
+  colorPickerSv?.setAttribute("aria-valuetext", `${Math.round(pickerSaturation * 100)}% saturation, ${Math.round(pickerValue * 100)}% value`);
+  colorPickerHue?.setAttribute("aria-valuenow", String(Math.round(pickerHue)));
+  colorPickerOpacity?.setAttribute("aria-valuenow", String(pickerOpacity));
+}
+
+function syncOpenColorPicker(control, color, opacity) {
+  if (activeColorControl !== control || colorPickerPopup.hidden) return;
+  pickerOpacity = normalizeColorOpacity(opacity);
+  if (!isApplyingPickerColor) {
+    const hsv = hexToHsv(color);
+    pickerHue = hsv.hue;
+    pickerSaturation = hsv.saturation;
+    pickerValue = hsv.value;
+  }
+  renderColorPicker();
+  if (colorPickerRemoveWrapper instanceof HTMLElement) {
+    colorPickerRemoveWrapper.hidden = !control.querySelector("[data-color-remove-action]") || !normalizeHexColor(color);
+  }
+}
+
+function positionColorPicker() {
+  if (!(activeColorControl instanceof HTMLElement) || colorPickerPopup.hidden) return;
+  const rect = activeColorControl.getBoundingClientRect();
+  colorPickerPopup.style.left = `${rect.left - colorPickerPopup.offsetWidth - 4}px`;
+  colorPickerPopup.style.top = `${rect.top}px`;
+}
+
+function openColorPicker(control) {
+  const state = getCustomColorState(control);
+  if (!state || !normalizeHexColor(state.color)) return;
+  activeColorControl = control;
+  const hsv = hexToHsv(state.color);
+  pickerHue = hsv.hue;
+  pickerSaturation = hsv.saturation;
+  pickerValue = hsv.value;
+  pickerOpacity = state.opacity;
+  colorPickerPopup.hidden = false;
+  syncOpenColorPicker(control, state.color, state.opacity);
+  positionColorPicker();
+}
+
+function closeColorPicker() {
+  colorPickerPopup.hidden = true;
+  activeColorControl = null;
+}
+
+function applyPickerColor() {
+  if (!(activeColorControl instanceof HTMLElement)) return;
+  isApplyingPickerColor = true;
+  applyCustomColorValue(activeColorControl, hsvToHex(pickerHue, pickerSaturation, pickerValue), pickerOpacity);
+  isApplyingPickerColor = false;
+  renderColorPicker();
+}
+
+function bindColorPickerPointer(surface, update) {
+  if (!(surface instanceof HTMLElement)) return;
+  const move = (event) => {
+    const rect = surface.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    update(x / rect.width, y / rect.height);
+    applyPickerColor();
+  };
+  surface.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    surface.setPointerCapture(event.pointerId);
+    move(event);
+  });
+  surface.addEventListener("pointermove", (event) => {
+    if (surface.hasPointerCapture(event.pointerId)) move(event);
+  });
+}
+
+bindColorPickerPointer(colorPickerSv, (x, y) => {
+  pickerSaturation = x;
+  pickerValue = 1 - y;
+});
+bindColorPickerPointer(colorPickerHue, (x) => {
+  pickerHue = x * 360;
+});
+bindColorPickerPointer(colorPickerOpacity, (x) => {
+  pickerOpacity = Math.round((1 - x) * 100);
+});
+
+colorPickerHex?.addEventListener("input", () => {
+  if (!(colorPickerHex instanceof HTMLInputElement) || !/^[\da-f]{6}$/i.test(colorPickerHex.value.trim())) return;
+  const hsv = hexToHsv(colorPickerHex.value);
+  pickerHue = hsv.hue;
+  pickerSaturation = hsv.saturation;
+  pickerValue = hsv.value;
+  applyPickerColor();
+});
+
+colorPickerOpacityInput?.addEventListener("input", () => {
+  if (!(colorPickerOpacityInput instanceof HTMLInputElement) || colorPickerOpacityInput.value.trim() === "" || !Number.isFinite(Number(colorPickerOpacityInput.value))) return;
+  pickerOpacity = normalizeColorOpacity(colorPickerOpacityInput.value);
+  applyPickerColor();
+});
+
+colorPickerRemove?.addEventListener("click", () => {
+  if (activeColorControl instanceof HTMLElement) applyCustomColorValue(activeColorControl, "", pickerOpacity);
+  closeColorPicker();
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (colorPickerPopup.hidden || colorPickerPopup.contains(event.target)) return;
+  if (activeColorControl?.contains(event.target)) return;
+  closeColorPicker();
+}, true);
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || colorPickerPopup.hidden) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  closeColorPicker();
+}, true);
+
+window.addEventListener("resize", positionColorPicker);
+document.addEventListener("scroll", positionColorPicker, true);
+
 colorControls.forEach((control) => {
   if (!(control instanceof HTMLElement)) return;
   const picker = control.querySelector("input[type='color']");
@@ -975,6 +1184,22 @@ colorControls.forEach((control) => {
   const section = control.closest("[data-paint-section]");
   const actionButton = section?.querySelector("[data-color-action]");
   const removeButton = control.querySelector("[data-color-remove-action]");
+  const swatch = control.querySelector(".custom-color-swatch");
+
+  if (swatch instanceof HTMLElement) {
+    swatch.tabIndex = 0;
+    swatch.setAttribute("role", "button");
+    swatch.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (activeColorControl === control && !colorPickerPopup.hidden) closeColorPicker();
+      else openColorPicker(control);
+    });
+    swatch.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openColorPicker(control);
+    });
+  }
 
   picker?.addEventListener("input", () => {
     if (!(picker instanceof HTMLInputElement)) return;
@@ -1041,9 +1266,9 @@ colorControls.forEach((control) => {
     if (!state) return;
     const fallbackColors = {
       canvas: "#121619",
-      "frame-background": "#000000",
+      "frame-background": "#FFFFFF",
       "frame-outline": "#000000",
-      text: "#FFFFFF",
+      text: "#000000",
       vector: "#000000",
     };
     const nextColor = normalizeHexColor(control.dataset.lastColor)
