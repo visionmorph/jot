@@ -1021,8 +1021,6 @@ colorPickerPopup.innerHTML = `
     <div class="custom-color-value"><input class="custom-color-hex" type="text" inputmode="text" maxlength="6" aria-label="Hex color value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-picker-hex></div>
     <div class="custom-color-divider" aria-hidden="true"></div>
     <div class="custom-color-opacity"><input type="text" inputmode="decimal" maxlength="3" aria-label="Color opacity" data-picker-opacity-input><span aria-hidden="true">%</span></div>
-    <div class="custom-color-divider color-picker-remove-divider" aria-hidden="true"></div>
-    <span class="tooltip custom-color-remove-action"><button class="paint-section-action" type="button" aria-label="Remove color" data-picker-remove><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip">Remove</span></span>
   </div>`;
 document.body.append(colorPickerPopup);
 
@@ -1031,8 +1029,6 @@ const colorPickerHue = colorPickerPopup.querySelector("[data-picker-hue]");
 const colorPickerOpacity = colorPickerPopup.querySelector("[data-picker-opacity]");
 const colorPickerHex = colorPickerPopup.querySelector("[data-picker-hex]");
 const colorPickerOpacityInput = colorPickerPopup.querySelector("[data-picker-opacity-input]");
-const colorPickerRemove = colorPickerPopup.querySelector("[data-picker-remove]");
-const colorPickerRemoveWrapper = colorPickerRemove?.closest(".custom-color-remove-action");
 let activeColorControl = null;
 let pickerHue = 0;
 let pickerSaturation = 0;
@@ -1052,8 +1048,8 @@ function renderColorPicker() {
     svKnob.style.left = `${pickerSaturation * 100}%`;
     svKnob.style.top = `${(1 - pickerValue) * 100}%`;
   }
-  if (hueKnob instanceof HTMLElement) hueKnob.style.left = `${pickerHue / 3.6}%`;
-  if (opacityKnob instanceof HTMLElement) opacityKnob.style.left = `${100 - pickerOpacity}%`;
+  if (hueKnob instanceof HTMLElement) hueKnob.style.left = `${8 + (pickerHue / 360) * 192}px`;
+  if (opacityKnob instanceof HTMLElement) opacityKnob.style.left = `${8 + ((100 - pickerOpacity) / 100) * 192}px`;
   if (colorPickerHex instanceof HTMLInputElement) colorPickerHex.value = currentColor.slice(1);
   if (colorPickerOpacityInput instanceof HTMLInputElement) colorPickerOpacityInput.value = String(pickerOpacity);
   colorPickerSv?.setAttribute("aria-valuetext", `${Math.round(pickerSaturation * 100)}% saturation, ${Math.round(pickerValue * 100)}% value`);
@@ -1071,9 +1067,6 @@ function syncOpenColorPicker(control, color, opacity) {
     pickerValue = hsv.value;
   }
   renderColorPicker();
-  if (colorPickerRemoveWrapper instanceof HTMLElement) {
-    colorPickerRemoveWrapper.hidden = !control.querySelector("[data-color-remove-action]") || !normalizeHexColor(color);
-  }
 }
 
 function positionColorPicker() {
@@ -1153,11 +1146,6 @@ colorPickerOpacityInput?.addEventListener("input", () => {
   if (!(colorPickerOpacityInput instanceof HTMLInputElement) || colorPickerOpacityInput.value.trim() === "" || !Number.isFinite(Number(colorPickerOpacityInput.value))) return;
   pickerOpacity = normalizeColorOpacity(colorPickerOpacityInput.value);
   applyPickerColor();
-});
-
-colorPickerRemove?.addEventListener("click", () => {
-  if (activeColorControl instanceof HTMLElement) applyCustomColorValue(activeColorControl, "", pickerOpacity);
-  closeColorPicker();
 });
 
 document.addEventListener("pointerdown", (event) => {

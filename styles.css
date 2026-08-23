@@ -2229,6 +2229,10 @@ textarea:focus-visible {
   background: var(--picker-color, #fff);
 }
 
+.color-picker-hue .color-picker-knob-color {
+  background: var(--picker-hue, #f00);
+}
+
 .color-picker-fields {
   display: flex;
   align-items: center;
@@ -2253,14 +2257,6 @@ textarea:focus-visible {
   height: 22px;
 }
 
-.color-picker-fields .custom-color-remove-action,
-.color-picker-fields .paint-section-action {
-  height: 22px;
-}
-
-.color-picker-fields:has(.custom-color-remove-action[hidden]) .color-picker-remove-divider {
-  display: none;
-}
 
 .custom-color-hex,
 .custom-color-opacity input {
