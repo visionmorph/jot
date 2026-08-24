@@ -1092,7 +1092,6 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
   min-width: 24px;
   padding: 0;
   text-align: left;
@@ -1106,26 +1105,38 @@ textarea:focus-visible {
   cursor: default;
 }
 
-.variant-preview-label {
-  display: flex;
-  max-width: 220px;
-  min-height: 16px;
-  align-items: center;
+.variant-preview-label,
+.component-preview-label {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: -webkit-box;
+  width: 100%;
+  max-width: 100%;
+  max-height: 24px;
   padding: 0;
   border-radius: 0;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 16px;
-  white-space: nowrap;
+  font-size: 10px;
+  line-height: 12px;
+  white-space: normal;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: none;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
 }
 
 .variant-preview.is-selected .variant-preview-label {
   background: transparent;
   color: var(--text-secondary);
+}
+
+.component-preview-label {
+  pointer-events: auto;
 }
 
 .variant-preview-content {

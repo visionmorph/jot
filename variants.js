@@ -101,6 +101,26 @@ function getVariantInstance(instanceId = selectedVariantInstanceId) {
   return variantInstances.find((instance) => instance.id === instanceId) ?? null;
 }
 
+function getSelectedVariantStyleOverride(property, fallback = "") {
+  const instance = getVariantInstance();
+  const override = instance?.overrides?.find((entry) => entry.target === "component:0" && entry.property === property);
+  return override ? String(override.value ?? "") : fallback;
+}
+
+function setSelectedVariantStyleOverride(property, value) {
+  const instance = getVariantInstance();
+  if (!instance) return false;
+  const nextValue = String(value ?? "");
+  const overrides = instance.overrides ?? (instance.overrides = []);
+  const override = overrides.find((entry) => entry.target === "component:0" && entry.property === property);
+  if (override?.value === nextValue) return true;
+  recordHistory();
+  if (override) override.value = nextValue;
+  else overrides.push({ target: "component:0", property, value: nextValue });
+  renderVariantInstances();
+  return true;
+}
+
 function getVariantTargetOptions() {
   return [
     ...(currentComponent ? [{ value: "component:0", label: currentComponent.name || "Component", type: "component" }] : []),
@@ -207,6 +227,11 @@ function getVariantPropSchemaTitle(instance) {
   return values.join(", ") || instance.name;
 }
 
+function setVariantLabelTooltip(label, fullLabel) {
+  const isTruncated = label.scrollHeight > label.clientHeight || label.scrollWidth > label.clientWidth;
+  label.title = isTruncated ? fullLabel : "";
+}
+
 function syncVariantFlexbox(root) {
   if (!(root instanceof HTMLElement)) return;
   [root, ...root.querySelectorAll(".canvas-frame")].forEach((container) => {
@@ -248,6 +273,7 @@ function namespaceVariantCloneIds(clone, instanceId) {
 
 function prepareVariantClone(clone, instanceId) {
   clone.removeAttribute("data-canvas-root-stack");
+  clone.querySelectorAll(".component-preview-label").forEach((label) => label.remove());
   clone.classList.remove("is-selected", "is-canvas-drop-inside", "is-canvas-dragging");
   clone.setAttribute("aria-selected", "false");
   clone.querySelectorAll(".is-selected, .is-canvas-drop-inside, .is-canvas-dragging").forEach((element) => {
@@ -259,8 +285,17 @@ function prepareVariantClone(clone, instanceId) {
   namespaceVariantCloneIds(clone, instanceId);
 }
 
+function renderBaseComponentLabel() {
+  if (!(canvasRootStack instanceof HTMLElement)) return;
+  const label = canvasRootStack.querySelector("[data-component-preview-label]");
+  if (!(label instanceof HTMLElement)) return;
+  label.textContent = currentComponent?.name || "Component";
+  setVariantLabelTooltip(label, label.textContent);
+}
+
 function renderVariantInstances() {
   if (!(componentSet instanceof HTMLElement) || !(canvasRootStack instanceof HTMLElement)) return;
+  renderBaseComponentLabel();
   componentSet.querySelectorAll(":scope > .variant-preview").forEach((preview) => preview.remove());
 
   variantInstances.forEach((instance) => {
@@ -294,6 +329,7 @@ function renderVariantInstances() {
       selectVariantInstance(instance.id);
     });
     componentSet.append(preview);
+    setVariantLabelTooltip(label, label.textContent);
   });
 }
 

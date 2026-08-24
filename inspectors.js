@@ -284,6 +284,9 @@ function syncInspectorToSelectedFrame() {
   const record = getSelectedFrameRecord();
   if (!record) return;
   const { element } = record;
+  const getValue = (property, fallback) => selectedVariantInstanceId !== null
+    ? getSelectedVariantStyleOverride(property, fallback)
+    : fallback;
 
   if (frameInspectorHeading instanceof HTMLElement) {
     frameInspectorHeading.textContent = record.isComponent
@@ -293,7 +296,10 @@ function syncInspectorToSelectedFrame() {
   if (addVariantAction instanceof HTMLElement) addVariantAction.hidden = !record.isComponent;
 
   frameDirectionOptions.forEach((option) => {
-    const isSelected = option.getAttribute("data-frame-direction") === (element.dataset.direction || "horizontal");
+    const direction = getValue("flexDirection", element.dataset.direction === "vertical" ? "column" : "row") === "column"
+      ? "vertical"
+      : "horizontal";
+    const isSelected = option.getAttribute("data-frame-direction") === direction;
     option.classList.toggle("is-selected", isSelected);
     option.setAttribute("aria-pressed", String(isSelected));
   });
@@ -302,19 +308,21 @@ function syncInspectorToSelectedFrame() {
   }
   syncFrameAlignmentDistribution(element);
   if (frameGapInput instanceof HTMLInputElement) {
-    frameGapInput.value = element.dataset.gapMode === "auto"
+    const gap = getValue("gap", element.dataset.gapMode === "auto" ? "0px" : `${element.dataset.gap || "10"}px`);
+    frameGapInput.value = element.dataset.gapMode === "auto" && !isVariantSelected
       ? "Auto"
-      : `${element.dataset.gap || "10"}px`;
+      : gap;
   }
 
   frameSizeInputs.forEach((input) => {
     if (!(input instanceof HTMLInputElement)) return;
     const dimension = input.dataset.frameSize;
     if (dimension !== "width" && dimension !== "height") return;
+    const override = getValue(dimension, "");
     const mode = getLayerDimensionMode(element, dimension);
-    input.value = mode === "fixed"
+    input.value = override || (mode === "fixed"
       ? element.dataset[dimension] || "100"
-      : mode === "fill" ? "Fill" : "Hug";
+      : mode === "fill" ? "Fill" : "Hug");
     const wrapper = input.closest("[data-size-combobox]");
     if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
   });
@@ -323,16 +331,22 @@ function syncInspectorToSelectedFrame() {
     if (!(input instanceof HTMLInputElement)) return;
     const side = input.dataset.framePadding;
     if (!side) return;
-    input.value = element.dataset[`padding${side[0].toUpperCase()}${side.slice(1)}`] || "10";
+    input.value = String(getValue(
+      `padding${side[0].toUpperCase()}${side.slice(1)}`,
+      `${element.dataset[`padding${side[0].toUpperCase()}${side.slice(1)}`] || "10"}px`,
+    )).replace(/px$/, "");
   });
   syncFramePaddingAxisInputs(element);
 
   if (frameRadiusInput instanceof HTMLInputElement) {
-    frameRadiusInput.value = element.dataset.radius || "0";
+    frameRadiusInput.value = String(getValue("borderRadius", `${element.dataset.radius || "0"}px`)).replace(/px$/, "");
   }
   if (frameColorPicker instanceof HTMLInputElement) {
-    const color = element.dataset.frameColor || "";
-    syncCustomColorControl(frameColorPicker, color, element.dataset.frameColorOpacity || "100");
+    const colorValue = getValue("backgroundColor", element.dataset.frameColor || "");
+    const rgbaAlpha = String(colorValue).match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+    const color = normalizeHexColor(colorValue) || cssColorToHex(colorValue) || "";
+    const opacity = rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : element.dataset.frameColorOpacity || "100";
+    syncCustomColorControl(frameColorPicker, color, opacity);
   }
   if (frameOutlineColorPicker instanceof HTMLInputElement) {
     const color = element.dataset.outlineColor || "";
@@ -1129,6 +1143,12 @@ function applyCustomColorValue(control, color, opacity) {
   if (!state || !(state.picker instanceof HTMLInputElement)) return false;
   const normalizedColor = normalizeHexColor(color);
   const normalizedOpacity = normalizeColorOpacity(opacity);
+  if (selectedVariantInstanceId !== null && state.property === "frame-background") {
+    if (normalizedColor) control.dataset.lastColor = normalizedColor;
+    setSelectedVariantStyleOverride("backgroundColor", getColorWithOpacity(normalizedColor, normalizedOpacity));
+    syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
+    return true;
+  }
   if (normalizedColor) control.dataset.lastColor = normalizedColor;
   if (state.color === normalizedColor && state.opacity === normalizedOpacity) {
     syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
@@ -1792,6 +1812,15 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
   const numberMatch = trimmedValue.match(/^\d+(?:\.\d+)?$/);
   if (!requestedMode && !numberMatch) return false;
 
+  if (selectedVariantInstanceId !== null && type === "frame") {
+    const value = numberMatch
+      ? `${numberMatch[0]}px`
+      : requestedMode === "fill" ? "100%" : "auto";
+    setSelectedVariantStyleOverride(dimension, value);
+    if (normalize) input.value = numberMatch ? numberMatch[0] : requestedMode === "fill" ? "Fill" : "Hug";
+    return true;
+  }
+
   const currentMode = getLayerDimensionMode(element, dimension, type === "text" ? "hug" : "fixed");
   const mode = numberMatch ? "fixed" : requestedMode;
   let fixedValue = Number(element.dataset[dimension]);
@@ -1884,6 +1913,11 @@ framePaddingInputs.forEach((input) => {
     const value = Number(input.value);
     if (!record || !side || !Number.isFinite(value) || value < 0) return;
     const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+    if (selectedVariantInstanceId !== null) {
+      setSelectedVariantStyleOverride(propertyName, `${value}px`);
+      syncFramePaddingAxisInputs(record.element);
+      return;
+    }
     if (Number(record.element.dataset[propertyName] || "10") !== value) recordHistory();
     record.element.dataset[propertyName] = String(value);
     record.element.style[propertyName] = `${value}px`;
@@ -1905,6 +1939,10 @@ framePaddingAxisInputs.forEach((input) => {
     const value = Number(input.value);
     if (!record || (axis !== "x" && axis !== "y") || input.value.trim() === "" || !Number.isFinite(value) || value < 0) return;
     const sides = axis === "x" ? ["left", "right"] : ["top", "bottom"];
+    if (selectedVariantInstanceId !== null) {
+      sides.forEach((side) => setSelectedVariantStyleOverride(`padding${side[0].toUpperCase()}${side.slice(1)}`, `${value}px`));
+      return;
+    }
     const hasChange = sides.some((side) => {
       const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
       return Number(record.element.dataset[propertyName] || "10") !== value;
@@ -1940,6 +1978,10 @@ frameRadiusInput?.addEventListener("input", () => {
   if (!record || !(frameRadiusInput instanceof HTMLInputElement)) return;
   const value = Number(frameRadiusInput.value);
   if (!Number.isFinite(value) || value < 0) return;
+  if (selectedVariantInstanceId !== null) {
+    setSelectedVariantStyleOverride("borderRadius", `${value}px`);
+    return;
+  }
   if (Number(record.element.dataset.radius || "0") !== value) recordHistory();
   record.element.dataset.radius = String(value);
   record.element.style.borderRadius = `${value}px`;
@@ -1952,6 +1994,11 @@ frameDirectionOptions.forEach((option) => {
     option.focus();
     const record = getSelectedFrameRecord();
     const direction = option.getAttribute("data-frame-direction") === "vertical" ? "vertical" : "horizontal";
+    if (selectedVariantInstanceId !== null) {
+      setSelectedVariantStyleOverride("flexDirection", direction === "vertical" ? "column" : "row");
+      syncInspectorToSelectedFrame();
+      return;
+    }
     if (!record || (record.element.dataset.direction || "horizontal") === direction) return;
     recordHistory();
     record.element.dataset.direction = direction;
@@ -1969,6 +2016,12 @@ frameAlignmentOptions.forEach((option) => {
     option.focus();
     const record = getSelectedFrameRecord();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
+    if (selectedVariantInstanceId !== null) {
+      const values = getFrameAlignmentValues({ dataset: { alignment, direction: getSelectedVariantStyleOverride("flexDirection", record?.element.dataset.direction === "vertical" ? "column" : "row") === "column" ? "vertical" : "horizontal" } });
+      setSelectedVariantStyleOverride("alignItems", values.alignItems);
+      setSelectedVariantStyleOverride("justifyContent", values.justifyContent);
+      return;
+    }
     if (event.detail === 1) {
       wasSelectedAtFirstClick = Boolean(record && isFrameAlignmentOptionSelected(record.element, alignment));
     }
@@ -2037,6 +2090,16 @@ function applyFrameGapValue(normalize = true) {
   const record = getSelectedFrameRecord();
   if (!record || !(frameGapInput instanceof HTMLInputElement)) return false;
   const value = frameGapInput.value.trim();
+
+  if (selectedVariantInstanceId !== null) {
+    if (/^auto$/i.test(value)) return setSelectedVariantStyleOverride("gap", "0px");
+    const variantMatch = value.match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
+    if (!variantMatch) return false;
+    const gap = `${Math.max(0, Number(variantMatch[1]))}px`;
+    setSelectedVariantStyleOverride("gap", gap);
+    if (normalize) frameGapInput.value = gap;
+    return true;
+  }
 
   if (/^auto$/i.test(value)) {
     if (record.element.dataset.gapMode !== "auto") recordHistory();
