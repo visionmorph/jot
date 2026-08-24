@@ -8,6 +8,8 @@ const canvasRootStack = document.querySelector("[data-canvas-root-stack]");
 
 const treeView = document.querySelector("[data-tree-view]");
 
+const instanceTreeView = document.querySelector("[data-instance-tree-view]");
+
 const pageInspector = document.querySelector("[data-page-inspector]");
 
 const frameInspector = document.querySelector("[data-frame-inspector]");
@@ -104,6 +106,20 @@ const addPropButton = document.querySelector("[data-add-prop]");
 
 const propRowsContainer = document.querySelector("[data-prop-rows]");
 
+const addVariantButton = document.querySelector("[data-add-variant]");
+
+const variantInspector = document.querySelector("[data-variant-inspector]");
+
+const variantInspectorContent = document.querySelector("[data-variant-inspector-content]");
+
+const variantPropRowsContainer = document.querySelector("[data-variant-prop-rows]");
+
+const variantRuleRowsContainer = document.querySelector("[data-variant-rule-rows]");
+
+const addVariantPropButton = document.querySelector("[data-add-variant-prop]");
+
+const addVariantRuleButton = document.querySelector("[data-add-variant-rule]");
+
 const vectorImportButton = document.querySelector("[data-vector-import]");
 
 const vectorFileInput = document.querySelector("[data-vector-file-input]");
@@ -176,6 +192,20 @@ let vectorRecords = [];
 let componentProps = [];
 
 let nextComponentPropId = 1;
+
+let variantProps = [];
+
+let variantRules = [];
+
+let variantInstances = [];
+
+let nextVariantPropId = 1;
+
+let nextVariantRuleId = 1;
+
+let nextVariantInstanceId = 1;
+
+let selectedVariantInstanceId = null;
 
 let suppressNextTextCreation = false;
 
@@ -256,6 +286,13 @@ function createEmptyWorkspaceState(componentId) {
     nextLayerOrder: 1,
     componentProps: [],
     nextComponentPropId: 1,
+    variantProps: [],
+    variantRules: [],
+    variantInstances: [],
+    nextVariantPropId: 1,
+    nextVariantRuleId: 1,
+    nextVariantInstanceId: 1,
+    selectedVariantInstanceId: null,
     canvasColor: "#121619",
     canvasColorOpacity: 100,
     activeTool: "select",
@@ -372,6 +409,7 @@ function isLayerSelected(type, id) {
 function setPrimarySelectionFromKey(key) {
   const [type, rawId] = key?.split(":") ?? [];
   const id = Number(rawId);
+  selectedVariantInstanceId = null;
   selectedComponentId = null;
   selectedCanvasFrame = type === "frame" ? getFrameRecord(id)?.element ?? null : null;
   selectedCanvasText = type === "text" ? getTextRecord(id)?.element ?? null : null;
@@ -434,6 +472,13 @@ function captureWorkspaceState() {
     nextLayerOrder,
     componentProps: componentProps.map((prop) => ({ ...prop })),
     nextComponentPropId,
+    variantProps: structuredClone(variantProps),
+    variantRules: structuredClone(variantRules),
+    variantInstances: structuredClone(variantInstances),
+    nextVariantPropId,
+    nextVariantRuleId,
+    nextVariantInstanceId,
+    selectedVariantInstanceId,
     canvasColor: canvasColorValue,
     canvasColorOpacity,
     activeTool,
@@ -533,6 +578,13 @@ function restoreWorkspaceState(snapshot, options = {}) {
   nextLayerOrder = snapshot.nextLayerOrder;
   componentProps = (snapshot.componentProps ?? []).map((prop) => ({ ...prop }));
   nextComponentPropId = snapshot.nextComponentPropId ?? 1;
+  variantProps = structuredClone(snapshot.variantProps ?? []);
+  variantRules = structuredClone(snapshot.variantRules ?? []);
+  variantInstances = structuredClone(snapshot.variantInstances ?? []);
+  nextVariantPropId = snapshot.nextVariantPropId ?? 1;
+  nextVariantRuleId = snapshot.nextVariantRuleId ?? 1;
+  nextVariantInstanceId = snapshot.nextVariantInstanceId ?? 1;
+  selectedVariantInstanceId = snapshot.selectedVariantInstanceId ?? null;
   expandedFrameIds.clear();
   snapshot.expandedFrameIds.forEach((frameId) => expandedFrameIds.add(frameId));
   selectedCanvasFrame = snapshot.selectedCanvasFrame;
@@ -622,6 +674,7 @@ function activateComponent(componentId, options = {}) {
 
   if (options.selectComponent !== false) {
     selectedComponentId = component.id;
+    selectedVariantInstanceId = null;
     selectedLayerKeys.clear();
     selectedCanvasFrame = null;
     selectedCanvasText = null;
