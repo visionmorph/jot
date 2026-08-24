@@ -1002,11 +1002,18 @@ function renderComponentProps() {
     const propertyCell = createCell();
     if (isOptionProp) {
       propertyCell.append(createPropSelect(
-        [{ value: "options", label: "Options" }],
-        "options",
-        "Enum target property",
-        () => {},
-        true,
+        Object.keys(ENUM_COMPONENT_PROP_PRESETS).map((name) => ({ value: name, label: name })),
+        prop.name,
+        "Enum property",
+        (value) => {
+          if (value === prop.name || !ENUM_COMPONENT_PROP_PRESETS[value]) return;
+          recordHistory();
+          prop.name = value;
+          prop.options = [...ENUM_COMPONENT_PROP_PRESETS[value]];
+          prop.defaultValue = prop.options[0];
+          syncComponentPropVariantDefinition(prop);
+          renderComponentProps();
+        },
       ));
     } else if (prop.type === "boolean") {
       propertyCell.append(createPropSelect(
