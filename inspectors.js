@@ -553,9 +553,6 @@ function createPropSelectIcon(iconType, record = null) {
   if (iconType === "prop-string") return createSvgAssetIcon("text", "layer-type-icon prop-type-icon");
   if (iconType === "prop-action") return createSvgAssetIcon("cursor-1", "layer-type-icon prop-type-icon");
   if (iconType === "prop-enum") return createSvgAssetIcon("diamond-filled", "layer-type-icon prop-type-icon");
-  if (iconType === "prop-size") return createSvgAssetIcon("padding", "layer-type-icon prop-type-icon");
-  if (iconType === "prop-variant") return createSvgAssetIcon("diamond-filled", "layer-type-icon prop-type-icon");
-  if (iconType === "prop-shape") return createLayerTypeIcon("frame");
   if (iconType === "frame" && record) return createLayerTypeIcon("frame", record);
   if (iconType === "vector" && record) return createVectorLayerTreeIcon(record);
   return createLayerTypeIcon(iconType, record);
@@ -613,9 +610,6 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
 
 const OPTION_COMPONENT_PROP_CONFIG = {
   enum: { name: "enum", label: "Enum", options: ["option 1", "option 2"] },
-  size: { name: "size", label: "Size", options: ["small", "medium", "large"] },
-  variant: { name: "variant", label: "Variant", options: ["primary", "secondary", "tertiary"] },
-  shape: { name: "shape", label: "Shape", options: ["square", "rounded", "circle"] },
 };
 
 function isOptionComponentProp(propOrType) {
@@ -662,7 +656,7 @@ function renderComponentProps() {
     nameInput.type = "text";
     nameInput.value = prop.name;
     nameInput.setAttribute("aria-label", "Prop name");
-    nameInput.addEventListener("change", () => {
+    const commitPropName = () => {
       const fallbackName = isOptionComponentProp(prop)
         ? OPTION_COMPONENT_PROP_CONFIG[prop.type].name
         : prop.type === "string"
@@ -676,16 +670,15 @@ function renderComponentProps() {
       prop.name = name;
       nameInput.value = name;
       if (isOptionComponentProp(prop)) syncComponentPropVariantDefinition(prop);
-    });
+    };
+    nameInput.addEventListener("change", commitPropName);
+    nameInput.addEventListener("blur", commitPropName);
     nameCell.append(nameInput);
 
     const typeCell = createCell();
     typeCell.append(createPropSelect(
       [
         { value: "enum", label: "Enum", iconType: "prop-enum" },
-        { value: "size", label: "Size", iconType: "prop-size" },
-        { value: "variant", label: "Variant", iconType: "prop-variant" },
-        { value: "shape", label: "Shape", iconType: "prop-shape" },
         { value: "boolean", label: "Boolean", iconType: "prop-boolean" },
         { value: "string", label: "String", iconType: "prop-string" },
         { value: "action", label: "Action", iconType: "prop-action" },

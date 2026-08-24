@@ -16,6 +16,8 @@ const frameInspector = document.querySelector("[data-frame-inspector]");
 
 const frameInspectorHeading = document.querySelector("#frame-heading");
 
+const componentVariantsSection = document.querySelector("[data-component-variants-section]");
+
 const textInspector = document.querySelector("[data-text-inspector]");
 
 const vectorInspector = document.querySelector("[data-vector-inspector]");
@@ -470,7 +472,10 @@ function captureWorkspaceState() {
     nextTextId,
     nextVectorId,
     nextLayerOrder,
-    componentProps: componentProps.map((prop) => ({ ...prop })),
+    componentProps: componentProps.map((prop) => ({
+      ...prop,
+      ...(Array.isArray(prop.options) ? { options: [...prop.options] } : {}),
+    })),
     nextComponentPropId,
     variantProps: structuredClone(variantProps),
     variantRules: structuredClone(variantRules),
@@ -576,7 +581,18 @@ function restoreWorkspaceState(snapshot, options = {}) {
   nextTextId = snapshot.nextTextId;
   nextVectorId = snapshot.nextVectorId ?? 1;
   nextLayerOrder = snapshot.nextLayerOrder;
-  componentProps = (snapshot.componentProps ?? []).map((prop) => ({ ...prop }));
+  componentProps = (snapshot.componentProps ?? []).map((prop) => {
+    const normalizedProp = {
+      ...prop,
+      ...(Array.isArray(prop.options) ? { options: [...prop.options] } : {}),
+    };
+    if (["size", "variant", "shape"].includes(normalizedProp.type)) {
+      normalizedProp.name = normalizedProp.name || normalizedProp.type;
+      normalizedProp.type = "enum";
+      normalizedProp.property = "options";
+    }
+    return normalizedProp;
+  });
   nextComponentPropId = snapshot.nextComponentPropId ?? 1;
   variantProps = structuredClone(snapshot.variantProps ?? []);
   variantRules = structuredClone(snapshot.variantRules ?? []);
