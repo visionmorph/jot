@@ -10,6 +10,23 @@ const selectionRectangle = document.createElement("div");
 selectionRectangle.className = "selection-rectangle";
 selectionRectangle.setAttribute("aria-hidden", "true");
 
+const variantActionOverlay = document.createElement("div");
+const variantSizeTooltip = document.createElement("span");
+const variantAddButton = document.createElement("button");
+const variantAddButtonTooltip = document.createElement("span");
+variantActionOverlay.className = "variant-action-overlay";
+variantActionOverlay.hidden = true;
+variantSizeTooltip.className = "component-variant-size-tooltip";
+variantSizeTooltip.setAttribute("aria-hidden", "true");
+variantAddButton.className = "canvas-add-variant-button";
+variantAddButton.type = "button";
+variantAddButton.setAttribute("aria-label", "Add variant");
+variantAddButton.innerHTML = '<span class="plus-icon" aria-hidden="true"></span>';
+variantAddButtonTooltip.className = "canvas-add-variant-tooltip";
+variantAddButtonTooltip.setAttribute("role", "tooltip");
+variantAddButtonTooltip.textContent = "Add variant";
+variantActionOverlay.append(variantSizeTooltip, variantAddButton, variantAddButtonTooltip);
+
 let selectionDrag = null;
 
 let canvasDragSession = null;
@@ -37,6 +54,7 @@ RESIZE_HANDLE_DIRECTIONS.forEach((direction) => {
 if (canvas instanceof HTMLElement) {
   canvas.insertBefore(selectionRectangle, toolbar instanceof Node ? toolbar : null);
   canvas.insertBefore(resizeOverlay, toolbar instanceof Node ? toolbar : null);
+  canvas.insertBefore(variantActionOverlay, toolbar instanceof Node ? toolbar : null);
 }
 
 function getSelectedResizeElement() {
@@ -87,6 +105,35 @@ function positionResizeOverlay() {
   resizeOverlay.style.height = `${bounds.height}px`;
 }
 
+function syncVariantActionOverlay() {
+  if (!(canvas instanceof HTMLElement)) return;
+  const element = getSelectedResizeElement();
+  if (!(element instanceof HTMLElement) || !element.isConnected) {
+    variantActionOverlay.hidden = true;
+    return;
+  }
+  const canvasBounds = canvas.getBoundingClientRect();
+  const bounds = element.getBoundingClientRect();
+  const getDimensionLabel = (dimension) => {
+    const override = selectedVariantInstanceId !== null
+      ? getSelectedVariantStyleOverride(dimension, "")
+      : "";
+    const defaultMode = element === selectedCanvasText ? "hug" : "fixed";
+    const mode = override === "auto"
+      ? "hug"
+      : override === "100%"
+        ? "fill"
+        : override ? "fixed" : getLayerDimensionMode(element, dimension, defaultMode);
+    const value = Math.round(bounds[dimension]);
+    const suffix = mode === "hug" ? " Hug" : mode === "fill" ? " Fill" : "";
+    return `${value}${suffix}`;
+  };
+  variantSizeTooltip.textContent = `${getDimensionLabel("width")} x ${getDimensionLabel("height")}`;
+  variantActionOverlay.hidden = false;
+  variantActionOverlay.style.left = `${bounds.left - canvasBounds.left}px`;
+  variantActionOverlay.style.top = `${bounds.top - canvasBounds.top - 8}px`;
+}
+
 function syncResizeOverlay() {
   const element = getSelectedResizeElement();
   if (element !== observedResizeElement) {
@@ -96,7 +143,14 @@ function syncResizeOverlay() {
     if (canvas instanceof HTMLElement) selectedLayerResizeObserver?.observe(canvas);
   }
   positionResizeOverlay();
+  syncVariantActionOverlay();
 }
+
+variantAddButton.addEventListener("pointerdown", (event) => event.stopPropagation());
+variantAddButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  addVariantInstance();
+});
 
 function applyResizePointerPosition(clientX, clientY, proportional = false) {
   if (!resizeInteraction) return;
@@ -1117,7 +1171,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.dataset.widthMode = "fixed";
   frame.dataset.heightMode = "fixed";
   frame.dataset.radius = "0";
-  frame.dataset.frameColor = "#FFFFFF";
+  frame.dataset.frameColor = "";
   frame.dataset.frameColorOpacity = "100";
   frame.dataset.direction = "horizontal";
   frame.dataset.alignment = "top-left";
@@ -1131,7 +1185,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   frame.dataset.layerVisibility = "visible";
   frame.style.width = "100px";
   frame.style.height = "100px";
-  frame.style.backgroundColor = "#FFFFFF";
+  frame.style.backgroundColor = "";
   if (parentRecord) {
     frame.style.left = "";
     frame.style.top = "";
@@ -1390,12 +1444,47 @@ function wrapSelectedLayersInFrame() {
   )).filter((index) => index >= 0));
   if (!Number.isFinite(insertionIndex)) return false;
 
+  const positionedLayers = layers.filter((layer) => layer.record.element instanceof HTMLElement);
+  const directionCandidates = positionedLayers.filter((layer) => layer.type === "frame");
+  const nodesToMeasure = directionCandidates.length >= 2 ? directionCandidates : positionedLayers;
+  const centers = nodesToMeasure.map((layer) => {
+    const bounds = layer.record.element.getBoundingClientRect();
+    return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+  });
+  const horizontalSpread = centers.length > 1
+    ? Math.max(...centers.map(({ x }) => x)) - Math.min(...centers.map(({ x }) => x))
+    : 0;
+  const verticalSpread = centers.length > 1
+    ? Math.max(...centers.map(({ y }) => y)) - Math.min(...centers.map(({ y }) => y))
+    : 0;
+  const wrapperDirection = verticalSpread > horizontalSpread ? "vertical" : "horizontal";
+  const orderedBounds = positionedLayers
+    .map((layer) => layer.record.element.getBoundingClientRect())
+    .sort((first, second) => wrapperDirection === "vertical"
+      ? first.top - second.top
+      : first.left - second.left);
+  const gaps = orderedBounds.slice(1).map((bounds, index) => {
+    const previous = orderedBounds[index];
+    return Math.max(0, wrapperDirection === "vertical"
+      ? bounds.top - previous.bottom
+      : bounds.left - previous.right);
+  });
+  const averageGap = gaps.length > 0
+    ? Math.round((gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length) * 100) / 100
+    : 0;
+
   recordHistory();
   isBatchingHistory = true;
   try {
     const parentRecord = parentId === null ? currentComponent.frameRecord : getFrameRecord(parentId);
     const wrapper = createCanvasFrame(0, 0, parentRecord, { recordHistory: false, select: false });
     if (!wrapper) return false;
+    wrapper.element.dataset.direction = wrapperDirection;
+    wrapper.element.style.flexDirection = wrapperDirection === "vertical" ? "column" : "row";
+    wrapper.element.dataset.gapMode = "fixed";
+    wrapper.element.dataset.gap = String(averageGap);
+    wrapper.element.style.gap = `${averageGap}px`;
+    applyFrameAlignment(wrapper.element);
     wrapper.element.dataset.widthMode = "hug";
     wrapper.element.dataset.heightMode = "hug";
     applyLayerSizing("frame", wrapper);

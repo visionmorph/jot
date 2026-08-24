@@ -726,7 +726,7 @@ function renderComponentProps() {
     const typeCell = createCell();
     typeCell.append(createPropSelect(
       [
-        { value: "enum", label: "Enum", iconType: "prop-enum" },
+        { value: "enum", label: "Variant", iconType: "prop-enum" },
         { value: "boolean", label: "Boolean", iconType: "prop-boolean" },
         { value: "string", label: "String", iconType: "prop-string" },
         { value: "action", label: "Action", iconType: "prop-action" },
@@ -736,8 +736,8 @@ function renderComponentProps() {
       (value) => {
         if (value === prop.type) return;
         recordHistory();
-        const wasOptionProp = isOptionComponentProp(prop);
-        if (wasOptionProp && !isOptionComponentProp(value)) unlinkComponentPropVariantDefinition(prop);
+        const wasVariantBoundProp = isVariantBoundComponentProp(prop);
+        if (wasVariantBoundProp && value !== "enum" && value !== "boolean") unlinkComponentPropVariantDefinition(prop);
         if (isOptionComponentProp(value)) {
           configureOptionComponentProp(prop, value);
         } else if (value === "string") {
@@ -759,17 +759,17 @@ function renderComponentProps() {
           prop.targetVectorId = null;
           prop.property = "onClick";
         } else {
-          const target = compatibleTargets[0];
-          prop.name = "disabled";
+          const target = getAllTargetableLayers()[0];
+          prop.name = "visible";
           prop.type = "boolean";
-          prop.defaultValue = false;
-          prop.targetFrameId = target?.id ?? null;
-          prop.targetTextId = null;
-          prop.targetVectorId = null;
-          prop.property = "disabled";
+          prop.defaultValue = true;
+          prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
+          prop.targetTextId = target?.type === "text" ? target.record.id : null;
+          prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
+          prop.property = "visibility";
         }
         if (!isOptionComponentProp(value)) delete prop.options;
-        else syncComponentPropVariantDefinition(prop);
+        if (value === "enum" || value === "boolean") syncComponentPropVariantDefinition(prop);
         renderComponentProps();
       },
     ));
@@ -850,6 +850,12 @@ function renderComponentProps() {
       });
       const addValueButton = document.createElement("button");
       const addValueIcon = document.createElement("span");
+      const addValueTooltip = document.createElement("span");
+      const addValueTooltipContent = document.createElement("span");
+      addValueTooltip.className = "tooltip";
+      addValueTooltipContent.className = "tooltip-content";
+      addValueTooltipContent.setAttribute("role", "tooltip");
+      addValueTooltipContent.textContent = "Add variant";
       addValueButton.className = "prop-tag-add-button";
       addValueButton.type = "button";
       addValueButton.setAttribute("aria-label", `Add ${prop.name} value`);
@@ -875,7 +881,40 @@ function renderComponentProps() {
           }
         });
       });
-      defaultCell.append(addValueButton);
+      addValueTooltip.append(addValueButton, addValueTooltipContent);
+      defaultCell.append(addValueTooltip);
+    } else if (prop.type === "boolean" && prop.variantPropId != null) {
+      const currentValue = instance
+        ? normalizeVariantPropValue(
+          variantProps.find((variantProp) => variantProp.id === prop.variantPropId),
+          instance.propValues[prop.variantPropId],
+        )
+        : Boolean(prop.defaultValue);
+      [false, true].forEach((optionValue) => {
+        const valueButton = document.createElement("button");
+        valueButton.className = "prop-value-tag prop-value-tag--editable";
+        valueButton.type = "button";
+        valueButton.textContent = String(optionValue);
+        valueButton.classList.toggle("is-active", optionValue === currentValue);
+        valueButton.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
+        valueButton.addEventListener("click", () => {
+          if (instance) {
+            if (Boolean(instance.propValues[prop.variantPropId]) === optionValue) return;
+            recordHistory();
+            instance.propValues[prop.variantPropId] = optionValue;
+          } else {
+            if (Boolean(prop.defaultValue) === optionValue) return;
+            recordHistory();
+            prop.defaultValue = optionValue;
+            syncComponentPropVariantDefinition(prop);
+          }
+          defaultCell.querySelectorAll(".prop-value-tag--editable").forEach((tag) => {
+            tag.classList.toggle("is-active", tag.textContent === String(optionValue));
+          });
+          renderVariantInstances();
+        });
+        defaultCell.append(valueButton);
+      });
     } else {
       const valueTag = document.createElement("span");
       valueTag.className = "prop-value-tag";
@@ -1019,13 +1058,11 @@ function renderComponentProps() {
       ));
     } else if (prop.type === "boolean") {
       propertyCell.append(createPropSelect(
-        [
-          { value: "disabled", label: "Disabled" },
-          { value: "visibility", label: "Visibility" },
-        ],
-        prop.property,
+        [{ value: "visibility", label: "Visibility" }],
+        "visibility",
         "Target property",
-        (value) => setBooleanPropProperty(prop, value),
+        () => {},
+        true,
       ));
     } else {
       propertyCell.append(createPropSelect(
@@ -1057,7 +1094,7 @@ function renderComponentProps() {
     removeButton.append(removeIcon);
     removeButton.addEventListener("click", () => {
       recordHistory();
-      if (isOptionComponentProp(prop)) unlinkComponentPropVariantDefinition(prop);
+      if (isVariantBoundComponentProp(prop)) unlinkComponentPropVariantDefinition(prop);
       componentProps = componentProps.filter((componentProp) => componentProp.id !== prop.id);
       renderComponentProps();
     });

@@ -62,35 +62,48 @@ function unlinkComponentPropVariantDefinition(componentProp) {
   renderVariantSystem();
 }
 
+function isVariantBoundComponentProp(componentProp) {
+  return componentProp?.type === "enum" || componentProp?.type === "boolean";
+}
+
 function syncComponentPropVariantDefinition(componentProp) {
-  if (!isOptionComponentProp(componentProp)) {
+  if (!isVariantBoundComponentProp(componentProp)) {
     unlinkComponentPropVariantDefinition(componentProp);
     return;
   }
+  const isBoolean = componentProp.type === "boolean";
   const options = [...getComponentPropOptions(componentProp)];
   let variantProp = variantProps.find((prop) => prop.id === componentProp.variantPropId);
   if (!variantProp) {
     variantProp = {
       id: nextVariantPropId++,
       name: componentProp.name,
-      type: "enum",
-      options,
-      defaultValue: componentProp.defaultValue,
+      type: isBoolean ? "boolean" : "enum",
+      ...(isBoolean ? {} : { options }),
+      defaultValue: isBoolean ? Boolean(componentProp.defaultValue) : componentProp.defaultValue,
       sourceComponentPropId: componentProp.id,
     };
     componentProp.variantPropId = variantProp.id;
     variantProps.push(variantProp);
   } else {
     variantProp.name = componentProp.name;
-    variantProp.options = options;
-    variantProp.defaultValue = options.includes(componentProp.defaultValue) ? componentProp.defaultValue : options[0];
+    variantProp.type = isBoolean ? "boolean" : "enum";
+    if (isBoolean) {
+      delete variantProp.options;
+      variantProp.defaultValue = Boolean(componentProp.defaultValue);
+    } else {
+      variantProp.options = options;
+      variantProp.defaultValue = options.includes(componentProp.defaultValue) ? componentProp.defaultValue : options[0];
+    }
   }
   componentProp.defaultValue = variantProp.defaultValue;
   variantInstances.forEach((instance) => {
-    if (!options.includes(instance.propValues[variantProp.id])) instance.propValues[variantProp.id] = variantProp.defaultValue;
+    if (!isBoolean && !options.includes(instance.propValues[variantProp.id])) {
+      instance.propValues[variantProp.id] = variantProp.defaultValue;
+    }
   });
   variantRules.forEach((rule) => {
-    if (Object.prototype.hasOwnProperty.call(rule.conditions, variantProp.id)
+    if (!isBoolean && Object.prototype.hasOwnProperty.call(rule.conditions, variantProp.id)
       && !options.includes(rule.conditions[variantProp.id])) delete rule.conditions[variantProp.id];
   });
   variantRules = variantRules.filter((rule) => Object.keys(rule.conditions).length > 0);
@@ -198,6 +211,33 @@ function variantRuleMatches(rule, instance) {
   });
 }
 
+function getComponentPropVariantTarget(componentProp) {
+  if (componentProp.targetFrameId != null) {
+    return componentProp.targetFrameId === currentComponent?.frameRecord?.id
+      ? "component:0"
+      : `frame:${componentProp.targetFrameId}`;
+  }
+  if (componentProp.targetTextId != null) return `text:${componentProp.targetTextId}`;
+  if (componentProp.targetVectorId != null) return `vector:${componentProp.targetVectorId}`;
+  return "component:0";
+}
+
+function getBooleanVisibilityOperations(instance) {
+  return componentProps
+    .filter((prop) => prop.type === "boolean" && prop.property === "visibility" && prop.variantPropId != null)
+    .map((prop) => {
+      const variantProp = variantProps.find((entry) => entry.id === prop.variantPropId);
+      return variantProp
+        ? {
+            target: getComponentPropVariantTarget(prop),
+            property: "visibility",
+            value: normalizeVariantPropValue(variantProp, instance.propValues?.[variantProp.id]),
+          }
+        : null;
+    })
+    .filter(Boolean);
+}
+
 function resolveVariantOperations(instance) {
   const matchingRules = variantRules
     .map((rule, row) => ({ rule, row, specificity: Object.keys(rule.conditions ?? {}).length }))
@@ -209,6 +249,7 @@ function resolveVariantOperations(instance) {
   return [
     ...individuals.map(({ rule }) => rule),
     ...compounds.map(({ rule }) => rule),
+    ...getBooleanVisibilityOperations(instance),
     ...(instance.overrides ?? []),
   ];
 }
@@ -298,6 +339,11 @@ function renderBaseComponentLabel() {
   if (!(label instanceof HTMLElement)) return;
   label.textContent = getBaseVariantLabel();
   setVariantLabelTooltip(label, label.textContent);
+  label.onpointerdown = (event) => {
+    if (event.button !== 0 || activeTool !== "select" || !currentComponent) return;
+    event.stopPropagation();
+    selectComponentTreeNode(currentComponent.id);
+  };
 }
 
 function renderVariantInstances() {
@@ -374,25 +420,17 @@ function selectVariantInstance(instanceId, options = {}) {
   return true;
 }
 
-function seedVariantProps() {
-  if (variantProps.length > 0) return;
-  variantProps = [
-    { id: nextVariantPropId++, name: "type", type: "enum", options: ["primary", "secondary", "tertiary"], defaultValue: "primary" },
-    { id: nextVariantPropId++, name: "size", type: "enum", options: ["small", "medium", "large"], defaultValue: "medium" },
-    { id: nextVariantPropId++, name: "disabled", type: "boolean", defaultValue: false },
-  ];
-}
-
 function addVariantInstance() {
   if (!currentComponent) return null;
   recordHistory();
-  seedVariantProps();
   const index = variantInstances.length;
   const instance = {
     id: nextVariantInstanceId++,
     name: `Preview ${index + 1}`,
     componentId: currentComponent.id,
-    propValues: Object.fromEntries(variantProps.map((prop) => [prop.id, prop.defaultValue])),
+    propValues: Object.fromEntries(variantProps
+      .filter((prop) => prop.type !== "boolean")
+      .map((prop) => [prop.id, prop.defaultValue])),
     overrides: [],
   };
   variantInstances.push(instance);

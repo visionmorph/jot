@@ -139,6 +139,7 @@ textarea:focus-visible {
 .add-prop-button:hover,
 .prop-remove-button:hover {
   background: var(--layer-hover-01);
+  color: var(--icon-on-color);
 }
 
 .add-prop-button:focus-visible,
@@ -225,7 +226,6 @@ textarea:focus-visible {
   width: 32px;
   min-width: 32px;
   height: 32px;
-  align-self: center;
 }
 
 .props-table-header .props-table-action-cell {
@@ -245,7 +245,6 @@ textarea:focus-visible {
 
 .props-property-row .props-table-cell {
   display: flex;
-  align-items: center;
   padding: 0;
 }
 
@@ -317,7 +316,7 @@ textarea:focus-visible {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .prop-select-selected-value .layer-type-icon,
@@ -380,7 +379,7 @@ textarea:focus-visible {
   align-items: flex-start;
   justify-content: flex-start;
   padding: 7px 16px;
-  row-gap: 0;
+  row-gap: 4px;
   column-gap: 4px;
   flex-wrap: wrap;
 }
@@ -408,8 +407,10 @@ textarea:focus-visible {
 .prop-value-tag--editable {
   min-width: 4ch;
   height: 18px;
+  flex: 0 0 auto;
   margin: 0;
   border: 0;
+  box-sizing: content-box;
   outline: 0;
   text-align: center;
   white-space: nowrap;
@@ -448,7 +449,7 @@ textarea:focus-visible {
 
 .prop-tag-add-button:hover {
   background: var(--layer-hover-01);
-  color: var(--icon-primary);
+  color: var(--icon-on-color);
 }
 
 .prop-tag-add-button:focus-visible {
@@ -457,9 +458,9 @@ textarea:focus-visible {
 }
 
 .prop-tag-add-button .plus-icon {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
 }
 
 .sr-only {
@@ -667,6 +668,7 @@ textarea:focus-visible {
 
 .variant-row-remove:hover {
   background: var(--layer-hover-01);
+  color: var(--icon-on-color);
 }
 
 .variant-empty-state {
@@ -1116,7 +1118,7 @@ textarea:focus-visible {
   padding: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--text-secondary);
+  color: #D1A8FF;
   font-size: 10px;
   line-height: 12px;
   white-space: normal;
@@ -1171,6 +1173,81 @@ textarea:focus-visible {
 .variant-preview .canvas-text,
 .variant-preview .canvas-vector {
   pointer-events: none;
+}
+
+.variant-action-overlay {
+  position: absolute;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  transform: translateY(-100%);
+}
+
+.variant-action-overlay[hidden] {
+  display: none;
+}
+
+.component-variant-size-tooltip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 16px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  background: #8A3FFC;
+  color: var(--icon-on-color);
+  font-family: Inter, sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 12px;
+  letter-spacing: 0;
+  text-align: center;
+  user-select: none;
+}
+
+.canvas-add-variant-button {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: #8A3FFC;
+  color: var(--icon-on-color);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.canvas-add-variant-button .plus-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: currentColor;
+}
+
+.canvas-add-variant-tooltip {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  display: none;
+  width: max-content;
+  padding: 4px 8px;
+  border-radius: 2px;
+  background: var(--layer-01);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 16px;
+  pointer-events: none;
+}
+
+.canvas-add-variant-button:hover + .canvas-add-variant-tooltip,
+.canvas-add-variant-button:focus-visible + .canvas-add-variant-tooltip {
+  display: block;
 }
 
 .variant-instance-panel {
@@ -2108,6 +2185,14 @@ textarea:focus-visible {
   display: none;
 }
 
+.component-inspector-title-row [data-add-variant-action] .tooltip-content {
+  top: calc(100% + 4px);
+  right: 0;
+  bottom: auto;
+  left: auto;
+  transform: none;
+}
+
 .paint-section-title-row .inspector-section-title {
   width: auto;
   flex: 1 1 auto;
@@ -2180,6 +2265,7 @@ textarea:focus-visible {
 
 .padding-mode-toggle:hover {
   background: var(--layer-hover-01);
+  color: var(--icon-on-color);
 }
 
 .padding-mode-toggle[aria-pressed="true"] {
