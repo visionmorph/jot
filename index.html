@@ -55,12 +55,6 @@
           <button class="export-button" type="button" data-export-components>Export</button>
         </section>
 
-        <section class="sidebar-panel instances-tree-panel" aria-labelledby="instances-heading">
-          <div class="components-heading-row">
-            <h2 class="panel-heading" id="instances-heading">Layers</h2>
-          </div>
-          <div class="tree-view" role="tree" aria-label="Component instances" data-instance-tree-view></div>
-        </section>
       </aside>
 
       <div class="canvas-properties-wrapper">
@@ -90,13 +84,6 @@
         </section>
 
         <aside class="right-sidebar" aria-label="Inspector">
-        <span class="tooltip add-variant-tooltip">
-          <button class="add-variant-button" type="button" aria-label="Add variant preview" data-add-variant>
-            <span class="svg-icon svg-icon--diamond-filled" aria-hidden="true"></span>
-            <span class="plus-icon" aria-hidden="true"></span>
-          </button>
-          <span class="tooltip-content" role="tooltip">Add preview</span>
-        </span>
         <section class="sidebar-panel page-panel" aria-labelledby="page-heading" data-page-inspector>
           <div class="panel-heading-wrap">
             <h2 class="panel-heading" id="page-heading">Page</h2>
@@ -123,6 +110,19 @@
         <section class="sidebar-panel frame-panel" aria-labelledby="frame-heading" data-frame-inspector hidden>
           <div class="panel-heading-wrap">
             <h2 class="panel-heading" id="frame-heading">Frame</h2>
+          </div>
+
+          <div class="inspector-section-group component-variants-section" data-component-variants-section>
+            <div class="inspector-section-divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Variants</h3>
+              <span class="tooltip">
+                <button class="paint-section-action" type="button" aria-label="Add variant preview" data-add-variant>
+                  <span class="svg-icon svg-icon--diamond-filled" aria-hidden="true"></span>
+                </button>
+                <span class="tooltip-content" role="tooltip">Add variant</span>
+              </span>
+            </div>
           </div>
 
           <div class="inspector-section-group">
@@ -541,15 +541,33 @@
             <h2 class="panel-heading" id="variant-instance-heading">Instance</h2>
           </div>
           <div data-variant-inspector-content></div>
+          <div class="variant-authoring" data-variant-authoring>
+            <section class="variant-authoring-section" aria-labelledby="variant-properties-heading">
+              <div class="section-title-row variant-authoring-title-row">
+                <h3 class="inspector-section-title" id="variant-properties-heading">Variant properties</h3>
+                <span class="tooltip">
+                  <button class="paint-section-action" type="button" aria-label="Add variant property" data-add-variant-prop><span class="plus-icon" aria-hidden="true"></span></button>
+                  <span class="tooltip-content" role="tooltip">Add property</span>
+                </span>
+              </div>
+              <div class="variant-grid-body" data-variant-prop-rows></div>
+            </section>
+            <section class="variant-authoring-section variant-rules-section" aria-labelledby="variant-rules-heading">
+              <div class="section-title-row variant-authoring-title-row">
+                <h3 class="inspector-section-title" id="variant-rules-heading">Style rules</h3>
+                <span class="tooltip">
+                  <button class="paint-section-action" type="button" aria-label="Add variant rule" data-add-variant-rule><span class="plus-icon" aria-hidden="true"></span></button>
+                  <span class="tooltip-content" role="tooltip">Add rule</span>
+                </span>
+              </div>
+              <div class="variant-grid-body" data-variant-rule-rows></div>
+            </section>
+          </div>
         </section>
         </aside>
 
       <section class="props-panel" aria-label="Component properties">
-        <div class="props-panel-tabs" role="tablist" aria-label="Component authoring data">
-          <button class="props-panel-tab is-selected" type="button" role="tab" aria-selected="true" data-props-tab="props">Props</button>
-          <button class="props-panel-tab" type="button" role="tab" aria-selected="false" data-props-tab="variants">Variants</button>
-        </div>
-        <div class="props-table props-tab-content" role="table" aria-label="Props" data-props-tab-content="props">
+        <div class="props-table" role="table" aria-label="Props">
           <div class="props-table-row props-table-header" role="row">
             <div class="props-table-cell" role="columnheader">Name</div>
             <div class="props-table-cell" role="columnheader">Type</div>
@@ -567,28 +585,6 @@
             </div>
           </div>
           <div class="props-table-body" role="rowgroup" data-prop-rows></div>
-        </div>
-        <div class="variant-authoring props-tab-content" data-props-tab-content="variants" hidden>
-          <section class="variant-authoring-section" aria-labelledby="variant-properties-heading">
-            <div class="variant-authoring-title-row">
-              <h3 id="variant-properties-heading">Variant properties</h3>
-              <button class="variant-small-button" type="button" data-add-variant-prop>Add property</button>
-            </div>
-            <div class="variant-grid variant-props-grid variant-grid-header" aria-hidden="true">
-              <span>Name</span><span>Type</span><span>Options</span><span>Default</span><span></span>
-            </div>
-            <div class="variant-grid-body" data-variant-prop-rows></div>
-          </section>
-          <section class="variant-authoring-section variant-rules-section" aria-labelledby="variant-rules-heading">
-            <div class="variant-authoring-title-row">
-              <h3 id="variant-rules-heading">Style rules</h3>
-              <button class="variant-small-button" type="button" data-add-variant-rule>Add rule</button>
-            </div>
-            <div class="variant-grid variant-rules-grid variant-grid-header" aria-hidden="true">
-              <span>When</span><span>Target</span><span>Property</span><span>Value</span><span></span>
-            </div>
-            <div class="variant-grid-body" data-variant-rule-rows></div>
-          </section>
         </div>
       </section>
       </div>
