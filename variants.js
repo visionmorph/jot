@@ -1,11 +1,8 @@
 /* Component variant properties, delta resolution, canvas previews, and instance overrides. */
 
-const propsTabButtons = Array.from(document.querySelectorAll("[data-props-tab]"));
-const propsTabContents = Array.from(document.querySelectorAll("[data-props-tab-content]"));
-
 const VARIANT_PROPERTY_OPTIONS = {
-  component: ["backgroundColor", "color", "borderColor", "borderWidth", "borderRadius", "padding", "gap", "opacity", "visibility", "disabled"],
-  frame: ["backgroundColor", "color", "borderColor", "borderWidth", "borderRadius", "padding", "gap", "opacity", "visibility", "disabled"],
+  component: ["backgroundColor", "color", "borderColor", "borderWidth", "borderRadius", "padding", "gap", "width", "height", "flexDirection", "alignItems", "justifyContent", "flexWrap", "opacity", "visibility", "disabled"],
+  frame: ["backgroundColor", "color", "borderColor", "borderWidth", "borderRadius", "padding", "gap", "width", "height", "flexDirection", "alignItems", "justifyContent", "flexWrap", "flex", "alignSelf", "opacity", "visibility", "disabled"],
   text: ["textContent", "color", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "opacity", "visibility"],
   vector: ["fill", "stroke", "width", "height", "opacity", "visibility"],
 };
@@ -30,9 +27,14 @@ const VARIANT_PROPERTY_DEFAULTS = {
   stroke: "#ffffff",
   width: "24px",
   height: "24px",
+  flexDirection: "row",
+  alignItems: "flex-start",
+  justifyContent: "flex-start",
+  flexWrap: "nowrap",
+  flex: "0 0 auto",
+  alignSelf: "auto",
 };
 
-let activePropsTab = "props";
 let variantRenderFrame = null;
 let variantDragState = null;
 
@@ -153,6 +155,30 @@ function getVariantInstanceLabel(instance) {
   return values.length ? `${instance.name} · ${values.join(", ")}` : instance.name;
 }
 
+function getVariantPropSchemaTitle(instance) {
+  const values = variantProps
+    .filter((prop) => prop.type !== "action")
+    .map((prop) => `${prop.name}=${String(normalizeVariantPropValue(prop, instance.propValues?.[prop.id]))}`);
+  return values.join(", ") || instance.name;
+}
+
+function syncVariantFlexbox(root) {
+  if (!(root instanceof HTMLElement)) return;
+  [root, ...root.querySelectorAll(".canvas-frame")].forEach((container) => {
+    if (!(container instanceof HTMLElement)) return;
+    container.style.display = "flex";
+    if (!container.style.flexDirection && container.dataset.direction) {
+      container.style.flexDirection = container.dataset.direction === "vertical" ? "column" : "row";
+    }
+    Array.from(container.children).forEach((child) => {
+      if (!(child instanceof HTMLElement) || !child.matches(".canvas-frame, .canvas-text, .canvas-vector")) return;
+      child.style.position = "relative";
+      child.style.left = "";
+      child.style.top = "";
+    });
+  });
+}
+
 function namespaceVariantCloneIds(clone, instanceId) {
   const idMap = new Map();
   clone.querySelectorAll("[id]").forEach((element) => {
@@ -203,15 +229,22 @@ function renderVariantInstances() {
     preview.style.left = `${instance.x}px`;
     preview.style.top = `${instance.y}px`;
     preview.setAttribute("role", "group");
+    preview.setAttribute("tabindex", "0");
     preview.setAttribute("aria-label", getVariantInstanceLabel(instance));
     label.className = "variant-preview-label";
-    label.textContent = getVariantInstanceLabel(instance);
+    label.textContent = getVariantPropSchemaTitle(instance);
     content.className = "variant-preview-content";
     prepareVariantClone(clone, instance.id);
     resolveVariantOperations(instance).forEach((operation) => applyVariantOperation(clone, operation));
+    syncVariantFlexbox(clone);
     content.append(clone);
     preview.append(label, content);
     preview.addEventListener("pointerdown", startVariantDrag);
+    preview.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      selectVariantInstance(instance.id);
+    });
     canvas.insertBefore(preview, toolbar instanceof Node ? toolbar : null);
   });
 }
@@ -292,7 +325,7 @@ function finishVariantDrag(event) {
 function seedVariantProps() {
   if (variantProps.length > 0) return;
   variantProps = [
-    { id: nextVariantPropId++, name: "type", type: "enum", options: ["primary", "secondary"], defaultValue: "primary" },
+    { id: nextVariantPropId++, name: "type", type: "enum", options: ["primary", "secondary", "tertiary"], defaultValue: "primary" },
     { id: nextVariantPropId++, name: "size", type: "enum", options: ["small", "medium", "large"], defaultValue: "medium" },
     { id: nextVariantPropId++, name: "disabled", type: "boolean", defaultValue: false },
   ];
@@ -808,14 +841,6 @@ function renderVariantLayersTree() {
 }
 
 function renderVariantAuthoring() {
-  propsTabButtons.forEach((button) => {
-    const isActive = button.dataset.propsTab === activePropsTab;
-    button.classList.toggle("is-selected", isActive);
-    button.setAttribute("aria-selected", String(isActive));
-  });
-  propsTabContents.forEach((content) => {
-    content.hidden = content.dataset.propsTabContent !== activePropsTab;
-  });
   renderVariantPropAuthoring();
   renderVariantRuleAuthoring();
 }
@@ -826,13 +851,6 @@ function renderVariantSystem() {
   renderVariantAuthoring();
   renderVariantInspector();
 }
-
-propsTabButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    activePropsTab = button.dataset.propsTab;
-    renderVariantAuthoring();
-  });
-});
 
 addVariantButton?.addEventListener("click", addVariantInstance);
 addVariantPropButton?.addEventListener("click", addVariantProp);
