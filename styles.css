@@ -385,6 +385,10 @@ textarea:focus-visible {
   flex-wrap: wrap;
 }
 
+.props-property-row .props-table-value-cell--control {
+  padding: 0;
+}
+
 .prop-value-tag {
   display: inline-flex;
   align-items: center;
@@ -399,6 +403,63 @@ textarea:focus-visible {
   line-height: 16px;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.prop-value-tag--editable {
+  min-width: 4ch;
+  height: 18px;
+  margin: 0;
+  border: 0;
+  outline: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.prop-value-tag--editable:hover {
+  background: var(--layer-hover-01);
+  color: var(--text-primary);
+}
+
+.prop-value-tag--editable.is-active {
+  background: var(--background-selected);
+  color: var(--text-primary);
+}
+
+.prop-value-tag--editable:focus {
+  outline: 1px solid var(--background-brand);
+  outline-offset: -1px;
+}
+
+.prop-tag-add-button {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--layer-01);
+  color: var(--icon-secondary);
+  cursor: pointer;
+}
+
+.prop-tag-add-button:hover {
+  background: var(--layer-hover-01);
+  color: var(--icon-primary);
+}
+
+.prop-tag-add-button:focus-visible {
+  outline: 1px solid var(--background-brand);
+  outline-offset: -1px;
+}
+
+.prop-tag-add-button .plus-icon {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
 }
 
 .sr-only {
@@ -2004,7 +2065,15 @@ textarea:focus-visible {
   flex: 1 1 auto;
 }
 
-.component-variants-section[hidden] {
+.component-inspector-title-row {
+  padding-left: 8px;
+}
+
+.component-inspector-title-row .panel-heading {
+  flex: 1 1 auto;
+}
+
+.component-inspector-title-row [data-add-variant-action][hidden] {
   display: none;
 }
 

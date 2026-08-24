@@ -290,7 +290,7 @@ function syncInspectorToSelectedFrame() {
       ? currentComponent?.name || "Component"
       : "Frame";
   }
-  if (componentVariantsSection instanceof HTMLElement) componentVariantsSection.hidden = !record.isComponent;
+  if (addVariantAction instanceof HTMLElement) addVariantAction.hidden = !record.isComponent;
 
   frameDirectionOptions.forEach((option) => {
     const isSelected = option.getAttribute("data-frame-direction") === (element.dataset.direction || "horizontal");
@@ -448,14 +448,14 @@ function syncInspectorToSelectedVector() {
 function updateInspector() {
   const isVariantSelected = selectedVariantInstanceId !== null;
   const isTextSelected = selectedCanvasText !== null;
-  const isFrameSelected = selectedCanvasFrame !== null || selectedComponentId === currentComponent?.id;
+  const isFrameSelected = selectedCanvasFrame !== null
+    || selectedComponentId === currentComponent?.id
+    || isVariantSelected;
   const isVectorSelected = selectedCanvasVector !== null;
-  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isVariantSelected || isTextSelected || isFrameSelected || isVectorSelected;
-  if (frameInspector instanceof HTMLElement) frameInspector.hidden = isVariantSelected || !isFrameSelected;
-  if (textInspector instanceof HTMLElement) textInspector.hidden = isVariantSelected || !isTextSelected;
-  if (vectorInspector instanceof HTMLElement) vectorInspector.hidden = isVariantSelected || !isVectorSelected;
-  if (variantInspector instanceof HTMLElement) variantInspector.hidden = !isVariantSelected;
-  if (isVariantSelected) renderVariantInspector();
+  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected || isFrameSelected || isVectorSelected;
+  if (frameInspector instanceof HTMLElement) frameInspector.hidden = !isFrameSelected;
+  if (textInspector instanceof HTMLElement) textInspector.hidden = !isTextSelected;
+  if (vectorInspector instanceof HTMLElement) vectorInspector.hidden = !isVectorSelected;
   if (isTextSelected) syncInspectorToSelectedText();
   if (isFrameSelected) syncInspectorToSelectedFrame();
   if (isVectorSelected) syncInspectorToSelectedVector();
@@ -608,8 +608,14 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
   return wrap;
 }
 
+const ENUM_COMPONENT_PROP_PRESETS = {
+  size: ["small", "medium", "large"],
+  variant: ["primary", "secondary", "tertiary"],
+  shape: ["square", "rounded", "circle"],
+};
+
 const OPTION_COMPONENT_PROP_CONFIG = {
-  enum: { name: "enum", label: "Enum", options: ["option 1", "option 2"] },
+  enum: { name: "size", label: "Enum", options: ENUM_COMPONENT_PROP_PRESETS.size },
 };
 
 function isOptionComponentProp(propOrType) {
@@ -622,12 +628,19 @@ function getComponentPropOptions(prop) {
   return Array.isArray(prop.options) && prop.options.length > 0 ? prop.options : fallbackOptions;
 }
 
+function getAvailableEnumPropName(currentProp = null) {
+  const usedNames = new Set(componentProps
+    .filter((prop) => prop !== currentProp && isOptionComponentProp(prop))
+    .map((prop) => prop.name));
+  return Object.keys(ENUM_COMPONENT_PROP_PRESETS).find((name) => !usedNames.has(name)) || "size";
+}
+
 function configureOptionComponentProp(prop, type) {
   const config = OPTION_COMPONENT_PROP_CONFIG[type];
   if (!config) return;
-  prop.name = config.name;
+  prop.name = getAvailableEnumPropName(prop);
   prop.type = type;
-  prop.options = [...config.options];
+  prop.options = [...ENUM_COMPONENT_PROP_PRESETS[prop.name]];
   prop.defaultValue = prop.options[0];
   prop.targetFrameId = null;
   prop.targetTextId = null;
@@ -651,29 +664,50 @@ function renderComponentProps() {
     };
 
     const nameCell = createCell();
-    const nameInput = document.createElement("input");
-    nameInput.className = "prop-control";
-    nameInput.type = "text";
-    nameInput.value = prop.name;
-    nameInput.setAttribute("aria-label", "Prop name");
-    const commitPropName = () => {
-      const fallbackName = isOptionComponentProp(prop)
-        ? OPTION_COMPONENT_PROP_CONFIG[prop.type].name
-        : prop.type === "string"
+    if (isOptionComponentProp(prop)) {
+      const usedNames = new Set(componentProps
+        .filter((candidate) => candidate !== prop && isOptionComponentProp(candidate))
+        .map((candidate) => candidate.name));
+      nameCell.append(createPropSelect(
+        Object.keys(ENUM_COMPONENT_PROP_PRESETS).map((name) => ({
+          value: name,
+          label: name,
+          disabled: usedNames.has(name),
+        })),
+        Object.prototype.hasOwnProperty.call(ENUM_COMPONENT_PROP_PRESETS, prop.name) ? prop.name : "size",
+        "Enum property",
+        (value) => {
+          if (value === prop.name || !ENUM_COMPONENT_PROP_PRESETS[value]) return;
+          recordHistory();
+          prop.name = value;
+          prop.options = [...ENUM_COMPONENT_PROP_PRESETS[value]];
+          prop.defaultValue = prop.options[0];
+          syncComponentPropVariantDefinition(prop);
+          renderComponentProps();
+        },
+      ));
+    } else {
+      const nameInput = document.createElement("input");
+      nameInput.className = "prop-control";
+      nameInput.type = "text";
+      nameInput.value = prop.name;
+      nameInput.setAttribute("aria-label", "Prop name");
+      const commitPropName = () => {
+        const fallbackName = prop.type === "string"
           ? "label"
           : prop.type === "action"
             ? "onClick"
             : prop.property === "visibility" ? "visible" : "disabled";
-      const name = nameInput.value.trim() || fallbackName;
-      if (name === prop.name) return;
-      recordHistory();
-      prop.name = name;
-      nameInput.value = name;
-      if (isOptionComponentProp(prop)) syncComponentPropVariantDefinition(prop);
-    };
-    nameInput.addEventListener("change", commitPropName);
-    nameInput.addEventListener("blur", commitPropName);
-    nameCell.append(nameInput);
+        const name = nameInput.value.trim() || fallbackName;
+        if (name === prop.name) return;
+        recordHistory();
+        prop.name = name;
+        nameInput.value = name;
+      };
+      nameInput.addEventListener("change", commitPropName);
+      nameInput.addEventListener("blur", commitPropName);
+      nameCell.append(nameInput);
+    }
 
     const typeCell = createCell();
     typeCell.append(createPropSelect(
@@ -730,19 +764,102 @@ function renderComponentProps() {
     defaultCell.classList.add("props-table-value-cell");
     if (isOptionComponentProp(prop)) {
       const options = getComponentPropOptions(prop);
-      defaultCell.classList.add("props-table-value-cell--control");
-      defaultCell.append(createPropSelect(
-        options.map((value) => ({ value, label: value })),
-        options.includes(prop.defaultValue) ? prop.defaultValue : options[0],
-        `Default ${OPTION_COMPONENT_PROP_CONFIG[prop.type].label} value`,
-        (value) => {
-          if (value === prop.defaultValue) return;
+      const instance = getVariantInstance();
+      const currentValue = instance && prop.variantPropId != null
+        ? instance.propValues[prop.variantPropId]
+        : prop.defaultValue;
+      const setActiveOption = (value) => {
+        if (instance && prop.variantPropId != null) {
+          if (instance.propValues[prop.variantPropId] === value) return;
+          recordHistory();
+          instance.propValues[prop.variantPropId] = value;
+        } else {
+          if (prop.defaultValue === value) return;
           recordHistory();
           prop.defaultValue = value;
           syncComponentPropVariantDefinition(prop);
+        }
+        defaultCell.querySelectorAll(".prop-value-tag--editable").forEach((tag) => {
+          tag.classList.toggle("is-active", tag.value === value);
+        });
+        renderVariantInstances();
+      };
+      options.forEach((optionValue) => {
+        const valueInput = document.createElement("input");
+        valueInput.className = "prop-value-tag prop-value-tag--editable";
+        valueInput.type = "text";
+        valueInput.value = optionValue;
+        valueInput.style.width = `${Math.max(4, optionValue.length + 2)}ch`;
+        valueInput.classList.toggle("is-active", optionValue === currentValue);
+        valueInput.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
+        valueInput.addEventListener("pointerdown", () => setActiveOption(optionValue));
+        valueInput.addEventListener("focus", () => setActiveOption(optionValue));
+        valueInput.addEventListener("input", () => {
+          valueInput.style.width = `${Math.max(4, valueInput.value.length + 2)}ch`;
+        });
+        valueInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") valueInput.blur();
+          if (event.key === "Escape") {
+            valueInput.value = optionValue;
+            valueInput.blur();
+          }
+        });
+        valueInput.addEventListener("blur", () => {
+          const nextValue = valueInput.value.trim();
+          if (!nextValue || nextValue === optionValue) {
+            valueInput.value = optionValue;
+            return;
+          }
+          if (getComponentPropOptions(prop).some((value) => value !== optionValue && value === nextValue)) {
+            valueInput.value = optionValue;
+            return;
+          }
+          recordHistory();
+          prop.options = getComponentPropOptions(prop).map((value) => value === optionValue ? nextValue : value);
+          if (prop.defaultValue === optionValue) prop.defaultValue = nextValue;
+          if (prop.variantPropId != null) {
+            variantInstances.forEach((variantInstance) => {
+              if (variantInstance.propValues[prop.variantPropId] === optionValue) {
+                variantInstance.propValues[prop.variantPropId] = nextValue;
+              }
+            });
+            variantRules.forEach((rule) => {
+              if (rule.conditions[prop.variantPropId] === optionValue) rule.conditions[prop.variantPropId] = nextValue;
+            });
+          }
+          syncComponentPropVariantDefinition(prop);
           renderComponentProps();
-        },
-      ));
+        });
+        defaultCell.append(valueInput);
+      });
+      const addValueButton = document.createElement("button");
+      const addValueIcon = document.createElement("span");
+      addValueButton.className = "prop-tag-add-button";
+      addValueButton.type = "button";
+      addValueButton.setAttribute("aria-label", `Add ${prop.name} value`);
+      addValueIcon.className = "plus-icon";
+      addValueIcon.setAttribute("aria-hidden", "true");
+      addValueButton.append(addValueIcon);
+      addValueButton.addEventListener("click", () => {
+        recordHistory();
+        const existing = new Set(getComponentPropOptions(prop));
+        let index = existing.size + 1;
+        let nextValue = `value ${index}`;
+        while (existing.has(nextValue)) nextValue = `value ${index += 1}`;
+        prop.options = [...getComponentPropOptions(prop), nextValue];
+        if (instance && prop.variantPropId != null) instance.propValues[prop.variantPropId] = nextValue;
+        syncComponentPropVariantDefinition(prop);
+        renderComponentProps();
+        requestAnimationFrame(() => {
+          const tags = propRowsContainer.querySelectorAll(".prop-value-tag--editable");
+          const lastTag = tags[tags.length - 1];
+          if (lastTag instanceof HTMLInputElement) {
+            lastTag.focus();
+            lastTag.select();
+          }
+        });
+      });
+      defaultCell.append(addValueButton);
     } else {
       const valueTag = document.createElement("span");
       valueTag.className = "prop-value-tag";
@@ -870,27 +987,13 @@ function renderComponentProps() {
 
     const propertyCell = createCell();
     if (isOptionProp) {
-      const optionsInput = document.createElement("input");
-      optionsInput.className = "prop-control";
-      optionsInput.type = "text";
-      optionsInput.value = getComponentPropOptions(prop).join(", ");
-      optionsInput.setAttribute("aria-label", `${OPTION_COMPONENT_PROP_CONFIG[prop.type].label} options`);
-      const commitOptions = () => {
-        const options = [...new Set(optionsInput.value.split(",").map((value) => value.trim()).filter(Boolean))];
-        if (options.length === 0) {
-          optionsInput.value = getComponentPropOptions(prop).join(", ");
-          return;
-        }
-        if (options.join("\u0000") === getComponentPropOptions(prop).join("\u0000")) return;
-        recordHistory();
-        prop.options = options;
-        if (!options.includes(prop.defaultValue)) prop.defaultValue = options[0];
-        syncComponentPropVariantDefinition(prop);
-        renderComponentProps();
-      };
-      optionsInput.addEventListener("change", commitOptions);
-      optionsInput.addEventListener("blur", commitOptions);
-      propertyCell.append(optionsInput);
+      propertyCell.append(createPropSelect(
+        [{ value: "options", label: "Options" }],
+        "options",
+        "Enum target property",
+        () => {},
+        true,
+      ));
     } else if (prop.type === "boolean") {
       propertyCell.append(createPropSelect(
         [
@@ -947,12 +1050,14 @@ function renderComponentProps() {
 
 function addComponentProp() {
   recordHistory();
+  const name = getAvailableEnumPropName();
+  const options = [...ENUM_COMPONENT_PROP_PRESETS[name]];
   componentProps.push({
     id: nextComponentPropId,
-    name: "enum",
+    name,
     type: "enum",
-    options: ["option 1", "option 2"],
-    defaultValue: "option 1",
+    options,
+    defaultValue: options[0],
     targetFrameId: null,
     targetTextId: null,
     targetVectorId: null,

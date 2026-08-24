@@ -108,26 +108,17 @@
         </section>
 
         <section class="sidebar-panel frame-panel" aria-labelledby="frame-heading" data-frame-inspector hidden>
-          <div class="panel-heading-wrap">
+          <div class="panel-heading-wrap section-title-row component-inspector-title-row">
             <h2 class="panel-heading" id="frame-heading">Frame</h2>
-          </div>
-
-          <div class="inspector-section-group component-variants-section" data-component-variants-section>
-            <div class="inspector-section-divider" aria-hidden="true"></div>
-            <div class="section-title-row">
-              <h3 class="inspector-section-title">Variants</h3>
-              <span class="tooltip">
-                <button class="paint-section-action" type="button" aria-label="Add variant preview" data-add-variant>
-                  <span class="svg-icon svg-icon--diamond-filled" aria-hidden="true"></span>
-                </button>
-                <span class="tooltip-content" role="tooltip">Add variant</span>
-              </span>
-            </div>
+            <span class="tooltip" data-add-variant-action>
+              <button class="paint-section-action" type="button" aria-label="Add variant preview" data-add-variant>
+                <span class="svg-icon svg-icon--diamond-filled" aria-hidden="true"></span>
+              </button>
+              <span class="tooltip-content" role="tooltip">Add variant</span>
+            </span>
           </div>
 
           <div class="inspector-section-group">
-            <div class="inspector-divider" aria-hidden="true"></div>
-
             <h3 class="inspector-section-title">Layout</h3>
 
           <div class="frame-direction-field">
@@ -536,34 +527,6 @@
           </div>
         </section>
 
-        <section class="sidebar-panel variant-instance-panel" aria-labelledby="variant-instance-heading" data-variant-inspector hidden>
-          <div class="panel-heading-wrap variant-instance-heading-row">
-            <h2 class="panel-heading" id="variant-instance-heading">Instance</h2>
-          </div>
-          <div data-variant-inspector-content></div>
-          <div class="variant-authoring" data-variant-authoring>
-            <section class="variant-authoring-section" aria-labelledby="variant-properties-heading">
-              <div class="section-title-row variant-authoring-title-row">
-                <h3 class="inspector-section-title" id="variant-properties-heading">Variant properties</h3>
-                <span class="tooltip">
-                  <button class="paint-section-action" type="button" aria-label="Add variant property" data-add-variant-prop><span class="plus-icon" aria-hidden="true"></span></button>
-                  <span class="tooltip-content" role="tooltip">Add property</span>
-                </span>
-              </div>
-              <div class="variant-grid-body" data-variant-prop-rows></div>
-            </section>
-            <section class="variant-authoring-section variant-rules-section" aria-labelledby="variant-rules-heading">
-              <div class="section-title-row variant-authoring-title-row">
-                <h3 class="inspector-section-title" id="variant-rules-heading">Style rules</h3>
-                <span class="tooltip">
-                  <button class="paint-section-action" type="button" aria-label="Add variant rule" data-add-variant-rule><span class="plus-icon" aria-hidden="true"></span></button>
-                  <span class="tooltip-content" role="tooltip">Add rule</span>
-                </span>
-              </div>
-              <div class="variant-grid-body" data-variant-rule-rows></div>
-            </section>
-          </div>
-        </section>
         </aside>
 
       <section class="props-panel" aria-label="Component properties">

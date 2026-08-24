@@ -16,7 +16,7 @@ const frameInspector = document.querySelector("[data-frame-inspector]");
 
 const frameInspectorHeading = document.querySelector("#frame-heading");
 
-const componentVariantsSection = document.querySelector("[data-component-variants-section]");
+const addVariantAction = document.querySelector("[data-add-variant-action]");
 
 const textInspector = document.querySelector("[data-text-inspector]");
 
@@ -730,6 +730,7 @@ function getSelectedTextRecord() {
 
 function getSelectedFrameRecord() {
   if (selectedComponentId === currentComponent?.id) return currentComponent.frameRecord;
+  if (selectedVariantInstanceId !== null) return currentComponent?.frameRecord;
   return selectedCanvasFrame
     ? frameRecords.find((record) => record.element === selectedCanvasFrame)
     : undefined;

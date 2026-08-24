@@ -286,6 +286,9 @@ function renderVariantInstances() {
     content.append(clone);
     preview.append(label, content);
     preview.addEventListener("pointerdown", startVariantDrag);
+    preview.addEventListener("pointermove", moveVariantDrag);
+    preview.addEventListener("pointerup", finishVariantDrag);
+    preview.addEventListener("pointercancel", finishVariantDrag);
     preview.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
@@ -366,6 +369,8 @@ function finishVariantDrag(event) {
   if (preview.hasPointerCapture(event.pointerId)) preview.releasePointerCapture(event.pointerId);
   variantDragState = null;
   saveCurrentComponentWorkspace();
+  renderVariantInstances();
+  renderComponentProps();
 }
 
 function seedVariantProps() {
