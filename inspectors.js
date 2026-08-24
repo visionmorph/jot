@@ -290,6 +290,7 @@ function syncInspectorToSelectedFrame() {
       ? currentComponent?.name || "Component"
       : "Frame";
   }
+  if (componentVariantsSection instanceof HTMLElement) componentVariantsSection.hidden = !record.isComponent;
 
   frameDirectionOptions.forEach((option) => {
     const isSelected = option.getAttribute("data-frame-direction") === (element.dataset.direction || "horizontal");
@@ -445,17 +446,20 @@ function syncInspectorToSelectedVector() {
 }
 
 function updateInspector() {
+  const isVariantSelected = selectedVariantInstanceId !== null;
   const isTextSelected = selectedCanvasText !== null;
   const isFrameSelected = selectedCanvasFrame !== null || selectedComponentId === currentComponent?.id;
   const isVectorSelected = selectedCanvasVector !== null;
-  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected || isFrameSelected || isVectorSelected;
-  if (frameInspector instanceof HTMLElement) frameInspector.hidden = !isFrameSelected;
-  if (textInspector instanceof HTMLElement) textInspector.hidden = !isTextSelected;
-  if (vectorInspector instanceof HTMLElement) vectorInspector.hidden = !isVectorSelected;
+  if (pageInspector instanceof HTMLElement) pageInspector.hidden = isVariantSelected || isTextSelected || isFrameSelected || isVectorSelected;
+  if (frameInspector instanceof HTMLElement) frameInspector.hidden = isVariantSelected || !isFrameSelected;
+  if (textInspector instanceof HTMLElement) textInspector.hidden = isVariantSelected || !isTextSelected;
+  if (vectorInspector instanceof HTMLElement) vectorInspector.hidden = isVariantSelected || !isVectorSelected;
+  if (variantInspector instanceof HTMLElement) variantInspector.hidden = !isVariantSelected;
+  if (isVariantSelected) renderVariantInspector();
   if (isTextSelected) syncInspectorToSelectedText();
   if (isFrameSelected) syncInspectorToSelectedFrame();
   if (isVectorSelected) syncInspectorToSelectedVector();
-  if (!isTextSelected && !isFrameSelected && !isVectorSelected && colorPicker instanceof HTMLInputElement) {
+  if (!isVariantSelected && !isTextSelected && !isFrameSelected && !isVectorSelected && colorPicker instanceof HTMLInputElement) {
     syncCustomColorControl(colorPicker, canvasColorValue, canvasColorOpacity);
   }
   requestAnimationFrame(syncResizeOverlay);
@@ -548,6 +552,10 @@ function createPropSelectIcon(iconType, record = null) {
   if (iconType === "prop-boolean") return createSvgAssetIcon("toggle-on", "layer-type-icon prop-type-icon");
   if (iconType === "prop-string") return createSvgAssetIcon("text", "layer-type-icon prop-type-icon");
   if (iconType === "prop-action") return createSvgAssetIcon("cursor-1", "layer-type-icon prop-type-icon");
+  if (iconType === "prop-enum") return createSvgAssetIcon("diamond-filled", "layer-type-icon prop-type-icon");
+  if (iconType === "prop-size") return createSvgAssetIcon("padding", "layer-type-icon prop-type-icon");
+  if (iconType === "prop-variant") return createSvgAssetIcon("diamond-filled", "layer-type-icon prop-type-icon");
+  if (iconType === "prop-shape") return createLayerTypeIcon("frame");
   if (iconType === "frame" && record) return createLayerTypeIcon("frame", record);
   if (iconType === "vector" && record) return createVectorLayerTreeIcon(record);
   return createLayerTypeIcon(iconType, record);
@@ -603,6 +611,36 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
   return wrap;
 }
 
+const OPTION_COMPONENT_PROP_CONFIG = {
+  enum: { name: "enum", label: "Enum", options: ["option 1", "option 2"] },
+  size: { name: "size", label: "Size", options: ["small", "medium", "large"] },
+  variant: { name: "variant", label: "Variant", options: ["primary", "secondary", "tertiary"] },
+  shape: { name: "shape", label: "Shape", options: ["square", "rounded", "circle"] },
+};
+
+function isOptionComponentProp(propOrType) {
+  const type = typeof propOrType === "string" ? propOrType : propOrType?.type;
+  return Object.prototype.hasOwnProperty.call(OPTION_COMPONENT_PROP_CONFIG, type);
+}
+
+function getComponentPropOptions(prop) {
+  const fallbackOptions = OPTION_COMPONENT_PROP_CONFIG[prop.type]?.options ?? ["default"];
+  return Array.isArray(prop.options) && prop.options.length > 0 ? prop.options : fallbackOptions;
+}
+
+function configureOptionComponentProp(prop, type) {
+  const config = OPTION_COMPONENT_PROP_CONFIG[type];
+  if (!config) return;
+  prop.name = config.name;
+  prop.type = type;
+  prop.options = [...config.options];
+  prop.defaultValue = prop.options[0];
+  prop.targetFrameId = null;
+  prop.targetTextId = null;
+  prop.targetVectorId = null;
+  prop.property = "options";
+}
+
 function renderComponentProps() {
   if (!(propRowsContainer instanceof HTMLElement)) return;
   const compatibleTargets = getCompatibleDisabledTargets();
@@ -625,22 +663,29 @@ function renderComponentProps() {
     nameInput.value = prop.name;
     nameInput.setAttribute("aria-label", "Prop name");
     nameInput.addEventListener("change", () => {
-      const fallbackName = prop.type === "string"
-        ? "label"
-        : prop.type === "action"
-          ? "onClick"
-          : prop.property === "visibility" ? "visible" : "disabled";
+      const fallbackName = isOptionComponentProp(prop)
+        ? OPTION_COMPONENT_PROP_CONFIG[prop.type].name
+        : prop.type === "string"
+          ? "label"
+          : prop.type === "action"
+            ? "onClick"
+            : prop.property === "visibility" ? "visible" : "disabled";
       const name = nameInput.value.trim() || fallbackName;
       if (name === prop.name) return;
       recordHistory();
       prop.name = name;
       nameInput.value = name;
+      if (isOptionComponentProp(prop)) syncComponentPropVariantDefinition(prop);
     });
     nameCell.append(nameInput);
 
     const typeCell = createCell();
     typeCell.append(createPropSelect(
       [
+        { value: "enum", label: "Enum", iconType: "prop-enum" },
+        { value: "size", label: "Size", iconType: "prop-size" },
+        { value: "variant", label: "Variant", iconType: "prop-variant" },
+        { value: "shape", label: "Shape", iconType: "prop-shape" },
         { value: "boolean", label: "Boolean", iconType: "prop-boolean" },
         { value: "string", label: "String", iconType: "prop-string" },
         { value: "action", label: "Action", iconType: "prop-action" },
@@ -650,7 +695,11 @@ function renderComponentProps() {
       (value) => {
         if (value === prop.type) return;
         recordHistory();
-        if (value === "string") {
+        const wasOptionProp = isOptionComponentProp(prop);
+        if (wasOptionProp && !isOptionComponentProp(value)) unlinkComponentPropVariantDefinition(prop);
+        if (isOptionComponentProp(value)) {
+          configureOptionComponentProp(prop, value);
+        } else if (value === "string") {
           const target = textRecords[0];
           prop.name = "label";
           prop.type = "string";
@@ -678,37 +727,66 @@ function renderComponentProps() {
           prop.targetVectorId = null;
           prop.property = "disabled";
         }
+        if (!isOptionComponentProp(value)) delete prop.options;
+        else syncComponentPropVariantDefinition(prop);
         renderComponentProps();
       },
     ));
 
     const defaultCell = createCell();
     defaultCell.classList.add("props-table-value-cell");
-    const valueTag = document.createElement("span");
-    valueTag.className = "prop-value-tag";
-    if (prop.type === "boolean") {
-      valueTag.textContent = Boolean(prop.defaultValue) ? "True" : "False";
-      valueTag.setAttribute("aria-label", `Default Boolean value: ${valueTag.textContent}`);
-    } else if (prop.type === "string") {
-      const stringValue = String(prop.defaultValue);
-      valueTag.textContent = stringValue || '""';
-      valueTag.setAttribute("aria-label", `Default string value: ${stringValue || "empty string"}`);
+    if (isOptionComponentProp(prop)) {
+      const options = getComponentPropOptions(prop);
+      defaultCell.classList.add("props-table-value-cell--control");
+      defaultCell.append(createPropSelect(
+        options.map((value) => ({ value, label: value })),
+        options.includes(prop.defaultValue) ? prop.defaultValue : options[0],
+        `Default ${OPTION_COMPONENT_PROP_CONFIG[prop.type].label} value`,
+        (value) => {
+          if (value === prop.defaultValue) return;
+          recordHistory();
+          prop.defaultValue = value;
+          syncComponentPropVariantDefinition(prop);
+          renderComponentProps();
+        },
+      ));
     } else {
-      valueTag.classList.add("prop-empty-value");
-      valueTag.textContent = "—";
-      valueTag.setAttribute("aria-label", "No default value");
+      const valueTag = document.createElement("span");
+      valueTag.className = "prop-value-tag";
+      if (prop.type === "boolean") {
+        valueTag.textContent = Boolean(prop.defaultValue) ? "True" : "False";
+        valueTag.setAttribute("aria-label", `Default Boolean value: ${valueTag.textContent}`);
+      } else if (prop.type === "string") {
+        const stringValue = String(prop.defaultValue);
+        valueTag.textContent = stringValue || '""';
+        valueTag.setAttribute("aria-label", `Default string value: ${stringValue || "empty string"}`);
+      } else {
+        valueTag.classList.add("prop-empty-value");
+        valueTag.textContent = "—";
+        valueTag.setAttribute("aria-label", "No default value");
+      }
+      defaultCell.append(valueTag);
     }
-    defaultCell.append(valueTag);
 
     const targetCell = createCell();
     const isStringProp = prop.type === "string";
+    const isOptionProp = isOptionComponentProp(prop);
     const isVisibilityProp = prop.type === "boolean" && prop.property === "visibility";
     let targetOptions;
     let currentValue;
     let hasCurrentTarget;
     let targetsEmpty;
 
-    if (isStringProp) {
+    if (isOptionProp) {
+      hasCurrentTarget = true;
+      currentValue = "component:0";
+      targetsEmpty = false;
+      targetOptions = [{
+        value: "component:0",
+        label: currentComponent?.name || "Component",
+        iconType: "component",
+      }];
+    } else if (isStringProp) {
       hasCurrentTarget = textRecords.some((record) => record.id === prop.targetTextId);
       currentValue = hasCurrentTarget ? String(prop.targetTextId) : "";
       targetsEmpty = textRecords.length === 0;
@@ -771,7 +849,9 @@ function renderComponentProps() {
       (value) => {
         if (!value || value === currentValue) return;
         recordHistory();
-        if (isStringProp) {
+        if (isOptionProp) {
+          return;
+        } else if (isStringProp) {
           const targetId = Number(value);
           const target = getTextRecord(targetId);
           prop.targetTextId = targetId;
@@ -796,7 +876,29 @@ function renderComponentProps() {
     ));
 
     const propertyCell = createCell();
-    if (prop.type === "boolean") {
+    if (isOptionProp) {
+      const optionsInput = document.createElement("input");
+      optionsInput.className = "prop-control";
+      optionsInput.type = "text";
+      optionsInput.value = getComponentPropOptions(prop).join(", ");
+      optionsInput.setAttribute("aria-label", `${OPTION_COMPONENT_PROP_CONFIG[prop.type].label} options`);
+      const commitOptions = () => {
+        const options = [...new Set(optionsInput.value.split(",").map((value) => value.trim()).filter(Boolean))];
+        if (options.length === 0) {
+          optionsInput.value = getComponentPropOptions(prop).join(", ");
+          return;
+        }
+        if (options.join("\u0000") === getComponentPropOptions(prop).join("\u0000")) return;
+        recordHistory();
+        prop.options = options;
+        if (!options.includes(prop.defaultValue)) prop.defaultValue = options[0];
+        syncComponentPropVariantDefinition(prop);
+        renderComponentProps();
+      };
+      optionsInput.addEventListener("change", commitOptions);
+      optionsInput.addEventListener("blur", commitOptions);
+      propertyCell.append(optionsInput);
+    } else if (prop.type === "boolean") {
       propertyCell.append(createPropSelect(
         [
           { value: "disabled", label: "Disabled" },
@@ -836,6 +938,7 @@ function renderComponentProps() {
     removeButton.append(removeIcon);
     removeButton.addEventListener("click", () => {
       recordHistory();
+      if (isOptionComponentProp(prop)) unlinkComponentPropVariantDefinition(prop);
       componentProps = componentProps.filter((componentProp) => componentProp.id !== prop.id);
       renderComponentProps();
     });
@@ -849,19 +952,20 @@ function renderComponentProps() {
   propRowsContainer.replaceChildren(...rows);
 }
 
-function addDisabledProp() {
+function addComponentProp() {
   recordHistory();
-  const target = getCompatibleDisabledTargets()[0];
   componentProps.push({
     id: nextComponentPropId,
-    name: "disabled",
-    type: "boolean",
-    defaultValue: false,
-    targetFrameId: target?.id ?? null,
+    name: "enum",
+    type: "enum",
+    options: ["option 1", "option 2"],
+    defaultValue: "option 1",
+    targetFrameId: null,
     targetTextId: null,
     targetVectorId: null,
-    property: "disabled",
+    property: "options",
   });
+  syncComponentPropVariantDefinition(componentProps[componentProps.length - 1]);
   nextComponentPropId += 1;
   renderComponentProps();
 }
@@ -1041,6 +1145,7 @@ function renderColorPicker() {
   const hueColor = hsvToHex(pickerHue, 1, 1);
   colorPickerPopup.style.setProperty("--picker-color", currentColor);
   colorPickerPopup.style.setProperty("--picker-hue", hueColor);
+  colorPickerPopup.style.setProperty("--picker-opacity", `${pickerOpacity}%`);
   const svKnob = colorPickerSv?.querySelector(".color-picker-knob");
   const hueKnob = colorPickerHue?.querySelector(".color-picker-knob");
   const opacityKnob = colorPickerOpacity?.querySelector(".color-picker-knob");
@@ -1922,7 +2027,7 @@ frameHtmlTagInput?.addEventListener("change", () => {
   renderComponentProps();
 });
 
-addPropButton?.addEventListener("click", addDisabledProp);
+addPropButton?.addEventListener("click", addComponentProp);
 
 const addPropTooltip = addPropButton?.closest(".props-action-tooltip");
 if (addPropTooltip instanceof HTMLElement && addPropButton instanceof HTMLButtonElement) {

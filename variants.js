@@ -52,6 +52,52 @@ function normalizeVariantPropValue(prop, value) {
   return values.includes(value) ? value : prop.defaultValue ?? values[0] ?? "default";
 }
 
+function unlinkComponentPropVariantDefinition(componentProp) {
+  if (componentProp.variantPropId == null) return;
+  const variantPropId = componentProp.variantPropId;
+  variantProps = variantProps.filter((prop) => prop.id !== variantPropId);
+  variantInstances.forEach((instance) => { delete instance.propValues[variantPropId]; });
+  variantRules.forEach((rule) => { delete rule.conditions[variantPropId]; });
+  variantRules = variantRules.filter((rule) => Object.keys(rule.conditions).length > 0);
+  delete componentProp.variantPropId;
+  renderVariantSystem();
+}
+
+function syncComponentPropVariantDefinition(componentProp) {
+  if (!isOptionComponentProp(componentProp)) {
+    unlinkComponentPropVariantDefinition(componentProp);
+    return;
+  }
+  const options = [...getComponentPropOptions(componentProp)];
+  let variantProp = variantProps.find((prop) => prop.id === componentProp.variantPropId);
+  if (!variantProp) {
+    variantProp = {
+      id: nextVariantPropId++,
+      name: componentProp.name,
+      type: "enum",
+      options,
+      defaultValue: componentProp.defaultValue,
+      sourceComponentPropId: componentProp.id,
+    };
+    componentProp.variantPropId = variantProp.id;
+    variantProps.push(variantProp);
+  } else {
+    variantProp.name = componentProp.name;
+    variantProp.options = options;
+    variantProp.defaultValue = options.includes(componentProp.defaultValue) ? componentProp.defaultValue : options[0];
+  }
+  componentProp.defaultValue = variantProp.defaultValue;
+  variantInstances.forEach((instance) => {
+    if (!options.includes(instance.propValues[variantProp.id])) instance.propValues[variantProp.id] = variantProp.defaultValue;
+  });
+  variantRules.forEach((rule) => {
+    if (Object.prototype.hasOwnProperty.call(rule.conditions, variantProp.id)
+      && !options.includes(rule.conditions[variantProp.id])) delete rule.conditions[variantProp.id];
+  });
+  variantRules = variantRules.filter((rule) => Object.keys(rule.conditions).length > 0);
+  renderVariantSystem();
+}
+
 function getVariantInstance(instanceId = selectedVariantInstanceId) {
   return variantInstances.find((instance) => instance.id === instanceId) ?? null;
 }
@@ -371,15 +417,18 @@ function createVariantControl(tagName, value, ariaLabel) {
 
 function renderVariantPropAuthoring() {
   if (!(variantPropRowsContainer instanceof HTMLElement)) return;
-  if (variantProps.length === 0) {
+  const authorableProps = variantProps.filter((prop) => prop.sourceComponentPropId == null);
+  if (authorableProps.length === 0) {
     const empty = document.createElement("div");
     empty.className = "variant-empty-state";
-    empty.textContent = "Add an enum, boolean, string, or action property. Enum options drive reusable visual states.";
+    empty.textContent = variantProps.length > 0
+      ? "Option properties created in the Props table are managed there."
+      : "Add an enum, boolean, string, or action property. Enum options drive reusable visual states.";
     variantPropRowsContainer.replaceChildren(empty);
     return;
   }
 
-  const rows = variantProps.map((prop) => {
+  const rows = authorableProps.map((prop) => {
     const row = document.createElement("div");
     const nameInput = createVariantControl("input", prop.name, "Variant property name");
     const typeSelect = createVariantControl("select", prop.type, "Variant property type");
