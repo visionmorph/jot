@@ -783,8 +783,9 @@ function renderComponentProps() {
         ? instance.propValues[prop.variantPropId]
         : prop.defaultValue;
       const setActiveOption = (value) => {
-        if (instance && prop.variantPropId != null) {
-          if (instance.propValues[prop.variantPropId] === value) return;
+        if (instance) {
+          if (prop.variantPropId == null) syncComponentPropVariantDefinition(prop);
+          if (prop.variantPropId == null || instance.propValues[prop.variantPropId] === value) return;
           recordHistory();
           instance.propValues[prop.variantPropId] = value;
         } else {
@@ -807,6 +808,7 @@ function renderComponentProps() {
         valueInput.classList.toggle("is-active", optionValue === currentValue);
         valueInput.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
         valueInput.addEventListener("pointerdown", () => setActiveOption(optionValue));
+        valueInput.addEventListener("click", () => setActiveOption(optionValue));
         valueInput.addEventListener("focus", () => setActiveOption(optionValue));
         valueInput.addEventListener("input", () => {
           valueInput.style.width = `${Math.max(4, valueInput.value.length + 2)}ch`;

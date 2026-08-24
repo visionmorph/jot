@@ -107,7 +107,7 @@ function getSelectedVariantStyleOverride(property, fallback = "") {
   return override ? String(override.value ?? "") : fallback;
 }
 
-function setSelectedVariantStyleOverride(property, value) {
+function setSelectedVariantStyleOverride(property, value, { render = true } = {}) {
   const instance = getVariantInstance();
   if (!instance) return false;
   const nextValue = String(value ?? "");
@@ -117,7 +117,7 @@ function setSelectedVariantStyleOverride(property, value) {
   recordHistory();
   if (override) override.value = nextValue;
   else overrides.push({ target: "component:0", property, value: nextValue });
-  renderVariantInstances();
+  if (render) renderVariantInstances();
   return true;
 }
 
@@ -324,12 +324,14 @@ function renderVariantInstances() {
     syncVariantFlexbox(clone);
     content.append(clone);
     preview.append(label, content);
-    preview.addEventListener("pointerdown", (event) => {
+    const selectPreview = (event) => {
       if (event.button !== 0 || activeTool !== "select") return;
       event.stopPropagation();
       selectVariantInstance(instance.id, { render: false });
       renderComponentProps();
-    });
+    };
+    label.addEventListener("pointerdown", selectPreview);
+    preview.addEventListener("pointerdown", selectPreview);
     preview.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();

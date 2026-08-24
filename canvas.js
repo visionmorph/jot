@@ -40,11 +40,18 @@ if (canvas instanceof HTMLElement) {
 }
 
 function getSelectedResizeElement() {
+  if (selectedVariantInstanceId !== null) {
+    const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+    return preview?.querySelector(".canvas-root-stack") ?? null;
+  }
   if (selectedComponentId === currentComponent?.id) return currentComponent.frameRecord.element;
   return selectedCanvasFrame || selectedCanvasText || selectedCanvasVector;
 }
 
 function getSelectedResizeRecord() {
+  if (selectedVariantInstanceId !== null && currentComponent?.frameRecord) {
+    return { type: "variant", record: currentComponent.frameRecord, parentId: null };
+  }
   const frameRecord = getSelectedFrameRecord();
   if (frameRecord) return { type: "frame", record: frameRecord, parentId: frameRecord.parentId };
   const textRecord = getSelectedTextRecord();
@@ -126,6 +133,18 @@ function applyResizePointerPosition(clientX, clientY, proportional = false) {
   const heightChanged = changesHeight && nextHeight !== Number(element.dataset.height || resizeInteraction.height);
 
   if (!widthChanged && !heightChanged) return;
+  if (layer.type === "variant") {
+    if (changesWidth) {
+      setSelectedVariantStyleOverride("width", `${nextWidth}px`, { render: false });
+      element.style.width = `${nextWidth}px`;
+    }
+    if (changesHeight) {
+      setSelectedVariantStyleOverride("height", `${nextHeight}px`, { render: false });
+      element.style.height = `${nextHeight}px`;
+    }
+    positionResizeOverlay();
+    return;
+  }
   if (!resizeInteraction.hasRecordedHistory) {
     recordHistory();
     resizeInteraction.hasRecordedHistory = true;
@@ -195,6 +214,7 @@ resizeOverlay.addEventListener("pointerup", (event) => {
   if (!(event.target instanceof HTMLButtonElement) || !event.target.hasPointerCapture(event.pointerId)) return;
   applyResizePointerPosition(event.clientX, event.clientY, event.shiftKey);
   event.target.releasePointerCapture(event.pointerId);
+  if (resizeInteraction?.layer.type === "variant") renderVariantInstances();
   if (resizeInteraction?.layer.type === "text") resizeInteraction.element.draggable = true;
   resizeInteraction = null;
   syncResizeOverlay();
@@ -204,6 +224,7 @@ resizeOverlay.addEventListener("pointercancel", (event) => {
   if (event.target instanceof HTMLButtonElement && event.target.hasPointerCapture(event.pointerId)) {
     event.target.releasePointerCapture(event.pointerId);
   }
+  if (resizeInteraction?.layer.type === "variant") renderVariantInstances();
   if (resizeInteraction?.layer.type === "text") resizeInteraction.element.draggable = true;
   resizeInteraction = null;
   syncResizeOverlay();
@@ -371,9 +392,10 @@ function selectCanvasVector(vectorElement, additive = false) {
 }
 
 function clearLayerSelection() {
-  if (selectedLayerKeys.size === 0 && selectedComponentId === null) return;
+  if (selectedLayerKeys.size === 0 && selectedComponentId === null && selectedVariantInstanceId === null) return;
   selectedLayerKeys.clear();
   selectedComponentId = null;
+  selectedVariantInstanceId = null;
   clearElementSelection();
   selectedCanvasFrame = null;
   selectedCanvasText = null;
