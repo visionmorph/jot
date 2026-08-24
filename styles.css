@@ -1037,10 +1037,25 @@ textarea:focus-visible {
   cursor: text;
 }
 
-.canvas-root-stack {
+.component-set {
   position: absolute;
   top: 50%;
   left: 50%;
+  z-index: 1;
+  display: flex;
+  width: max-content;
+  max-width: calc(100% - 64px);
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 32px;
+  transform: translate(-50%, -50%);
+}
+
+.canvas-root-stack {
+  position: relative;
+  top: auto;
+  left: auto;
   z-index: 1;
   display: flex;
   flex-direction: row;
@@ -1053,9 +1068,14 @@ textarea:focus-visible {
   border-radius: 0;
   background: transparent;
   box-sizing: border-box;
-  transform: translate(-50%, -50%);
+  transform: none;
   pointer-events: auto;
   outline: none;
+}
+
+.component-set > .canvas-root-stack {
+  margin-top: 20px;
+  flex: 0 0 auto;
 }
 
 .canvas-root-stack.is-selected {
@@ -1067,7 +1087,7 @@ textarea:focus-visible {
 }
 
 .variant-preview {
-  position: absolute;
+  position: relative;
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -1076,13 +1096,14 @@ textarea:focus-visible {
   min-width: 24px;
   padding: 0;
   text-align: left;
-  cursor: grab;
-  touch-action: none;
+  flex: 0 0 auto;
+  cursor: default;
+  touch-action: auto;
   user-select: none;
 }
 
 .variant-preview:active {
-  cursor: grabbing;
+  cursor: default;
 }
 
 .variant-preview-label {

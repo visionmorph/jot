@@ -36,7 +36,6 @@ const VARIANT_PROPERTY_DEFAULTS = {
 };
 
 let variantRenderFrame = null;
-let variantDragState = null;
 
 function getVariantPropValues(prop) {
   if (prop.type === "boolean") return [false, true];
@@ -261,8 +260,8 @@ function prepareVariantClone(clone, instanceId) {
 }
 
 function renderVariantInstances() {
-  if (!(canvas instanceof HTMLElement) || !(canvasRootStack instanceof HTMLElement)) return;
-  canvas.querySelectorAll(":scope > .variant-preview").forEach((preview) => preview.remove());
+  if (!(componentSet instanceof HTMLElement) || !(canvasRootStack instanceof HTMLElement)) return;
+  componentSet.querySelectorAll(":scope > .variant-preview").forEach((preview) => preview.remove());
 
   variantInstances.forEach((instance) => {
     const preview = document.createElement("div");
@@ -272,8 +271,6 @@ function renderVariantInstances() {
     preview.className = "variant-preview";
     preview.classList.toggle("is-selected", instance.id === selectedVariantInstanceId);
     preview.dataset.variantInstanceId = String(instance.id);
-    preview.style.left = `${instance.x}px`;
-    preview.style.top = `${instance.y}px`;
     preview.setAttribute("role", "group");
     preview.setAttribute("tabindex", "0");
     preview.setAttribute("aria-label", getVariantInstanceLabel(instance));
@@ -285,16 +282,18 @@ function renderVariantInstances() {
     syncVariantFlexbox(clone);
     content.append(clone);
     preview.append(label, content);
-    preview.addEventListener("pointerdown", startVariantDrag);
-    preview.addEventListener("pointermove", moveVariantDrag);
-    preview.addEventListener("pointerup", finishVariantDrag);
-    preview.addEventListener("pointercancel", finishVariantDrag);
+    preview.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || activeTool !== "select") return;
+      event.stopPropagation();
+      selectVariantInstance(instance.id, { render: false });
+      renderComponentProps();
+    });
     preview.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       selectVariantInstance(instance.id);
     });
-    canvas.insertBefore(preview, toolbar instanceof Node ? toolbar : null);
+    componentSet.append(preview);
   });
 }
 
@@ -330,49 +329,6 @@ function selectVariantInstance(instanceId, options = {}) {
   return true;
 }
 
-function startVariantDrag(event) {
-  if (event.button !== 0 || activeTool !== "select") return;
-  const preview = event.currentTarget;
-  const instanceId = Number(preview.dataset.variantInstanceId);
-  const instance = getVariantInstance(instanceId);
-  if (!instance) return;
-  event.preventDefault();
-  event.stopPropagation();
-  selectVariantInstance(instanceId, { render: false });
-  recordHistory();
-  variantDragState = {
-    pointerId: event.pointerId,
-    preview,
-    instance,
-    startX: event.clientX,
-    startY: event.clientY,
-    originX: instance.x,
-    originY: instance.y,
-  };
-  preview.setPointerCapture(event.pointerId);
-}
-
-function moveVariantDrag(event) {
-  if (!variantDragState || event.pointerId !== variantDragState.pointerId) return;
-  const canvasBounds = canvas.getBoundingClientRect();
-  const nextX = variantDragState.originX + event.clientX - variantDragState.startX;
-  const nextY = variantDragState.originY + event.clientY - variantDragState.startY;
-  variantDragState.instance.x = Math.max(0, Math.min(canvasBounds.width - 24, Math.round(nextX)));
-  variantDragState.instance.y = Math.max(0, Math.min(canvasBounds.height - 24, Math.round(nextY)));
-  variantDragState.preview.style.left = `${variantDragState.instance.x}px`;
-  variantDragState.preview.style.top = `${variantDragState.instance.y}px`;
-}
-
-function finishVariantDrag(event) {
-  if (!variantDragState || event.pointerId !== variantDragState.pointerId) return;
-  const { preview } = variantDragState;
-  if (preview.hasPointerCapture(event.pointerId)) preview.releasePointerCapture(event.pointerId);
-  variantDragState = null;
-  saveCurrentComponentWorkspace();
-  renderVariantInstances();
-  renderComponentProps();
-}
-
 function seedVariantProps() {
   if (variantProps.length > 0) return;
   variantProps = [
@@ -393,8 +349,6 @@ function addVariantInstance() {
     componentId: currentComponent.id,
     propValues: Object.fromEntries(variantProps.map((prop) => [prop.id, prop.defaultValue])),
     overrides: [],
-    x: 32 + (index % 3) * 180,
-    y: 48 + Math.floor(index / 3) * 150,
   };
   variantInstances.push(instance);
   selectedVariantInstanceId = instance.id;
@@ -909,10 +863,6 @@ function renderVariantSystem() {
 addVariantButton?.addEventListener("click", addVariantInstance);
 addVariantPropButton?.addEventListener("click", addVariantProp);
 addVariantRuleButton?.addEventListener("click", addVariantRule);
-
-canvas?.addEventListener("pointermove", moveVariantDrag);
-canvas?.addEventListener("pointerup", finishVariantDrag);
-canvas?.addEventListener("pointercancel", finishVariantDrag);
 
 if (canvasRootStack instanceof HTMLElement) {
   const variantSchemaObserver = new MutationObserver(() => scheduleVariantInstanceRender());

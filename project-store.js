@@ -4,6 +4,8 @@ const canvas = document.querySelector("#canvas");
 
 const toolbar = document.querySelector(".toolbar");
 
+const componentSet = document.querySelector("[data-component-set]");
+
 const canvasRootStack = document.querySelector("[data-canvas-root-stack]");
 
 const treeView = document.querySelector("[data-tree-view]");
