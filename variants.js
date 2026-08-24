@@ -227,6 +227,13 @@ function getVariantPropSchemaTitle(instance) {
   return values.join(", ") || instance.name;
 }
 
+function getBaseVariantLabel() {
+  const values = variantProps
+    .filter((prop) => prop.type !== "action")
+    .map((prop) => `${prop.name}=${String(normalizeVariantPropValue(prop, prop.defaultValue))}`);
+  return values.join(", ") || currentComponent?.name || "Component";
+}
+
 function setVariantLabelTooltip(label, fullLabel) {
   const isTruncated = label.scrollHeight > label.clientHeight || label.scrollWidth > label.clientWidth;
   label.title = isTruncated ? fullLabel : "";
@@ -289,7 +296,7 @@ function renderBaseComponentLabel() {
   if (!(canvasRootStack instanceof HTMLElement)) return;
   const label = canvasRootStack.querySelector("[data-component-preview-label]");
   if (!(label instanceof HTMLElement)) return;
-  label.textContent = currentComponent?.name || "Component";
+  label.textContent = getBaseVariantLabel();
   setVariantLabelTooltip(label, label.textContent);
 }
 

@@ -1074,7 +1074,6 @@ textarea:focus-visible {
 }
 
 .component-set > .canvas-root-stack {
-  margin-top: 20px;
   flex: 0 0 auto;
 }
 
