@@ -112,6 +112,9 @@ function syncVariantActionOverlay() {
     variantActionOverlay.hidden = true;
     return;
   }
+  const isVariantLayerSelected = selectedVariantInstanceId !== null && selectedVariantLayerTarget !== null;
+  variantAddButton.hidden = isVariantLayerSelected;
+  variantAddButtonTooltip.hidden = isVariantLayerSelected;
   const canvasBounds = canvas.getBoundingClientRect();
   const bounds = element.getBoundingClientRect();
   const getDimensionLabel = (dimension) => {
@@ -197,6 +200,7 @@ function applyResizePointerPosition(clientX, clientY, proportional = false) {
       element.style.height = `${nextHeight}px`;
     }
     positionResizeOverlay();
+    syncVariantActionOverlay();
     return;
   }
   if (!resizeInteraction.hasRecordedHistory) {
@@ -226,6 +230,7 @@ function applyResizePointerPosition(clientX, clientY, proportional = false) {
   else if (layer.type === "text") syncSelectedTextSizeInputs();
   else syncInspectorToSelectedVector();
   positionResizeOverlay();
+  syncVariantActionOverlay();
 }
 
 resizeOverlay.addEventListener("pointerdown", (event) => {

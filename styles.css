@@ -1159,7 +1159,7 @@ textarea:focus-visible {
   top: auto !important;
   left: auto !important;
   transform: none !important;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .variant-preview .canvas-root-stack:hover,
@@ -1171,7 +1171,7 @@ textarea:focus-visible {
 
 .variant-preview .canvas-frame,
 .variant-preview .canvas-vector {
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .variant-preview .canvas-text {
@@ -1225,6 +1225,11 @@ textarea:focus-visible {
   color: var(--icon-on-color);
   cursor: pointer;
   pointer-events: auto;
+}
+
+.canvas-add-variant-button[hidden],
+.canvas-add-variant-tooltip[hidden] {
+  display: none;
 }
 
 .canvas-add-variant-button .plus-icon {

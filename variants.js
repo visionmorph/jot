@@ -37,6 +37,8 @@ const VARIANT_PROPERTY_DEFAULTS = {
 
 let variantRenderFrame = null;
 
+let selectedVariantLayerTarget = null;
+
 function getVariantPropValues(prop) {
   if (prop.type === "boolean") return [false, true];
   if (prop.type === "enum") return prop.options?.length ? prop.options : ["default"];
@@ -347,7 +349,8 @@ function renderBaseComponentLabel() {
   if (!(canvasRootStack instanceof HTMLElement)) return;
   const label = canvasRootStack.querySelector("[data-component-preview-label]");
   if (!(label instanceof HTMLElement)) return;
-  label.textContent = getBaseVariantLabel();
+  const nextLabel = getBaseVariantLabel();
+  if (label.textContent !== nextLabel) label.textContent = nextLabel;
   setVariantLabelTooltip(label, label.textContent);
   label.onpointerdown = (event) => {
     if (event.button !== 0 || activeTool !== "select" || !currentComponent) return;
@@ -378,20 +381,50 @@ function renderVariantInstances() {
     prepareVariantClone(clone, instance.id);
     resolveVariantOperations(instance).forEach((operation) => applyVariantOperation(clone, operation));
     syncVariantFlexbox(clone);
-    clone.querySelectorAll(".canvas-text").forEach((text) => {
-      const textId = Number(text.dataset.textId);
-      if (!Number.isFinite(textId)) return;
-      text.addEventListener("pointerdown", (event) => {
+    clone.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((layerElement) => {
+      const type = layerElement.classList.contains("canvas-frame")
+        ? "frame"
+        : layerElement.classList.contains("canvas-text") ? "text" : "vector";
+      const id = Number(layerElement.dataset[`${type}Id`]);
+      if (!Number.isFinite(id)) return;
+      const target = `${type}:${id}`;
+      const isSelectedLayer = instance.id === selectedVariantInstanceId && target === selectedVariantLayerTarget;
+      layerElement.classList.toggle("is-selected", isSelectedLayer);
+      layerElement.setAttribute("aria-selected", String(isSelectedLayer));
+      layerElement.tabIndex = 0;
+      layerElement.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 || activeTool !== "select") return;
         event.stopPropagation();
         selectVariantInstance(instance.id, { render: false });
+        selectedVariantLayerTarget = target;
+        preview.querySelectorAll(".canvas-frame.is-selected, .canvas-text.is-selected, .canvas-vector.is-selected").forEach((element) => {
+          element.classList.remove("is-selected");
+          element.setAttribute("aria-selected", "false");
+        });
+        layerElement.classList.add("is-selected");
+        layerElement.setAttribute("aria-selected", "true");
       });
-      text.addEventListener("dblclick", (event) => {
+      if (type !== "text") return;
+      const text = layerElement;
+      const textId = id;
+      const beginEditing = (event) => {
         if (activeTool !== "select") return;
         event.preventDefault();
         event.stopPropagation();
+        selectedVariantLayerTarget = target;
+        text.classList.add("is-selected");
+        text.setAttribute("aria-selected", "true");
         text.contentEditable = "true";
         text.focus();
+        const range = document.createRange();
+        range.selectNodeContents(text);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      };
+      text.addEventListener("dblclick", beginEditing);
+      text.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !text.isContentEditable) beginEditing(event);
       });
       text.addEventListener("input", () => {
         recordHistory();
@@ -442,6 +475,9 @@ function clearMasterSelectionForVariant() {
 function selectVariantInstance(instanceId, options = {}) {
   if (!getVariantInstance(instanceId)) return false;
   clearMasterSelectionForVariant();
+  if (selectedVariantInstanceId !== instanceId || options.preserveLayerSelection !== true) {
+    selectedVariantLayerTarget = null;
+  }
   selectedVariantInstanceId = instanceId;
   if (options.render !== false) renderTree();
   else {
@@ -458,17 +494,21 @@ function addVariantInstance() {
   if (!currentComponent) return null;
   recordHistory();
   const index = variantInstances.length;
+  const sourceInstance = getVariantInstance();
   const instance = {
     id: nextVariantInstanceId++,
     name: `Preview ${index + 1}`,
     componentId: currentComponent.id,
-    propValues: Object.fromEntries(variantProps
-      .filter((prop) => prop.type !== "boolean")
-      .map((prop) => [prop.id, prop.defaultValue])),
-    overrides: [],
+    propValues: sourceInstance
+      ? structuredClone(sourceInstance.propValues ?? {})
+      : Object.fromEntries(variantProps
+        .filter((prop) => prop.type !== "boolean")
+        .map((prop) => [prop.id, prop.defaultValue])),
+    overrides: sourceInstance ? structuredClone(sourceInstance.overrides ?? []) : [],
   };
   variantInstances.push(instance);
   selectedVariantInstanceId = instance.id;
+  selectedVariantLayerTarget = null;
   clearMasterSelectionForVariant();
   renderTree();
   return instance;
@@ -988,6 +1028,6 @@ if (canvasRootStack instanceof HTMLElement) {
     childList: true,
     characterData: true,
     attributes: true,
-    attributeFilter: ["style", "class", "data-frame-color", "data-text-color", "data-vector-color"],
+    attributeFilter: ["style", "data-layer-visibility", "data-frame-color", "data-text-color", "data-vector-color"],
   });
 }
