@@ -390,7 +390,7 @@ function renderFrameTreeNode(record, depth, component, hasHiddenAncestor = false
   if (isActiveComponent && isLayerSelected("frame", record.id)) node.classList.add("is-selected");
   if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
 
-  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "frame", record, event.ctrlKey));
+  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "frame", record, event.shiftKey || event.ctrlKey || event.metaKey));
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
@@ -467,7 +467,7 @@ function renderTextTreeNode(record, depth, component, hasHiddenAncestor = false)
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isActiveComponent && isLayerSelected("text", record.id)) node.classList.add("is-selected");
 
-  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "text", record, event.ctrlKey));
+  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "text", record, event.shiftKey || event.ctrlKey || event.metaKey));
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
@@ -519,7 +519,7 @@ function renderVectorTreeNode(record, depth, component, hasHiddenAncestor = fals
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isActiveComponent && isLayerSelected("vector", record.id)) node.classList.add("is-selected");
 
-  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "vector", record, event.ctrlKey));
+  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "vector", record, event.shiftKey || event.ctrlKey || event.metaKey));
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
@@ -571,11 +571,16 @@ function selectComponentTreeNode(componentId = currentComponent?.id) {
   selectedLayerKeys.clear();
   clearElementSelection();
   selectedComponentId = componentId;
+  selectedVariantInstanceId = null;
   selectedCanvasFrame = null;
   selectedCanvasText = null;
   selectedCanvasVector = null;
   syncElementSelectionStyles();
   renderTree();
+  requestAnimationFrame(() => {
+    syncElementSelectionStyles();
+    syncResizeOverlay();
+  });
 }
 
 function renderComponentTreeNode(component) {
@@ -661,6 +666,7 @@ function renderTree() {
   treeView.replaceChildren(...components.map(renderComponentTreeNode));
   updateInspector();
   renderComponentProps();
+  renderVariantSystem();
 }
 
 addComponentButton?.addEventListener("click", () => {

@@ -130,7 +130,7 @@ function syncVariantActionOverlay() {
   };
   variantSizeTooltip.textContent = `${getDimensionLabel("width")} x ${getDimensionLabel("height")}`;
   variantActionOverlay.hidden = false;
-  variantActionOverlay.style.left = `${bounds.left - canvasBounds.left}px`;
+  variantActionOverlay.style.left = `${bounds.left - canvasBounds.left + bounds.width / 2}px`;
   variantActionOverlay.style.top = `${bounds.top - canvasBounds.top - 8}px`;
 }
 
@@ -1000,7 +1000,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
       suppressNextCanvasSurfaceClick = false;
       return;
     }
-    selectCanvasVector(vector, event.ctrlKey);
+    selectCanvasVector(vector, event.shiftKey || event.ctrlKey || event.metaKey);
   });
   vector.addEventListener("dragstart", (event) => {
     event.stopPropagation();
@@ -1078,7 +1078,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
       return;
     }
     if (activeTool === "text") startEditingText(text);
-    else selectCanvasText(text, event.ctrlKey);
+    else selectCanvasText(text, event.shiftKey || event.ctrlKey || event.metaKey);
   });
   text.addEventListener("dblclick", (event) => {
     event.stopPropagation();
@@ -1216,7 +1216,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
       return;
     }
 
-    selectCanvasFrame(frame, event.ctrlKey);
+    selectCanvasFrame(frame, event.shiftKey || event.ctrlKey || event.metaKey);
   });
   frame.addEventListener("dragstart", (event) => {
     event.stopPropagation();
@@ -1481,6 +1481,10 @@ function wrapSelectedLayersInFrame() {
     if (!wrapper) return false;
     wrapper.element.dataset.direction = wrapperDirection;
     wrapper.element.style.flexDirection = wrapperDirection === "vertical" ? "column" : "row";
+    ["Left", "Top", "Right", "Bottom"].forEach((side) => {
+      wrapper.element.dataset[`padding${side}`] = "0";
+    });
+    wrapper.element.style.padding = "0";
     wrapper.element.dataset.gapMode = "fixed";
     wrapper.element.dataset.gap = String(averageGap);
     wrapper.element.style.gap = `${averageGap}px`;
