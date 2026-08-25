@@ -508,6 +508,7 @@ function removeCanvasText(textElement, suppressCreationForCurrentClick = false) 
 
 function startEditingText(textElement, selectText = true) {
   if (selectText) selectCanvasText(textElement);
+  beginHistoryGesture(textElement);
   textElement.draggable = false;
   textElement.contentEditable = "true";
   textElement.focus();
@@ -1113,6 +1114,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
     startEditingText(text);
   });
   text.addEventListener("input", () => {
+    if (!record.isNew) recordHistoryForGesture(text);
     const hasContent = (text.textContent ?? "").length > 0;
     componentProps.forEach((prop) => {
       if (prop.type === "string" && prop.targetTextId === record.id) {
@@ -1133,6 +1135,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   });
   text.addEventListener("blur", () => {
     if (isRestoringHistory) return;
+    endHistoryGesture(text);
     if (record.isNew && (text.textContent ?? "").length === 0) {
       selectTool("select");
       removeCanvasText(text, true);

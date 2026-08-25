@@ -293,7 +293,7 @@ function createEmptyWorkspaceState(componentId) {
     variantProps: [],
     variantRules: [],
     variantInstances: [],
-    variantModelVersion: 2,
+    variantModelVersion: 3,
     nextVariantPropId: 1,
     nextVariantRuleId: 1,
     nextVariantInstanceId: 1,
@@ -483,7 +483,7 @@ function captureWorkspaceState() {
     variantProps: structuredClone(variantProps),
     variantRules: structuredClone(variantRules),
     variantInstances: structuredClone(variantInstances),
-    variantModelVersion: 2,
+    variantModelVersion: 3,
     nextVariantPropId,
     nextVariantRuleId,
     nextVariantInstanceId,
@@ -595,6 +595,15 @@ function restoreWorkspaceState(snapshot, options = {}) {
       normalizedProp.type = "enum";
       normalizedProp.property = "options";
     }
+    if (normalizedProp.type === "enum") {
+      const options = Array.isArray(normalizedProp.options) && normalizedProp.options.length > 0
+        ? normalizedProp.options
+        : ["default"];
+      normalizedProp.options = options;
+      normalizedProp.defaultValue = options[0];
+    } else if (normalizedProp.type === "boolean") {
+      normalizedProp.defaultValue = normalizedProp.defaultValue === true || normalizedProp.defaultValue === "true";
+    }
     return normalizedProp;
   });
   nextComponentPropId = snapshot.nextComponentPropId ?? 1;
@@ -604,15 +613,15 @@ function restoreWorkspaceState(snapshot, options = {}) {
   nextVariantPropId = snapshot.nextVariantPropId ?? 1;
   nextVariantRuleId = snapshot.nextVariantRuleId ?? 1;
   nextVariantInstanceId = snapshot.nextVariantInstanceId ?? 1;
-  if (variantInstances.length > 0 && snapshot.variantModelVersion !== 2) {
+  if (variantInstances.length > 0 && (snapshot.variantModelVersion ?? 0) < 2) {
     variantInstances.unshift({
       id: nextVariantInstanceId++,
-      name: "Default",
+      name: "Variant 1",
       componentId: currentComponent?.id ?? snapshot.componentId,
-      isDefault: true,
+      parentVariantId: null,
       propValues: Object.fromEntries(variantProps
-        .filter((prop) => prop.type !== "boolean")
-        .map((prop) => [prop.id, prop.defaultValue])),
+        .filter((prop) => prop.type !== "action")
+        .map((prop) => [prop.id, getVariantPropDefaultValue(prop)])),
       overrides: [],
     });
   }
@@ -661,15 +670,52 @@ function restoreWorkspaceState(snapshot, options = {}) {
 }
 
 function recordHistory() {
-  if (isRestoringHistory || isBatchingHistory) return;
+  if (isRestoringHistory || isBatchingHistory) return false;
   undoHistory.push(captureWorkspaceState());
   if (undoHistory.length > HISTORY_LIMIT) undoHistory.shift();
   redoHistory.length = 0;
+  return true;
+}
+
+let recordedHistoryGestureOwners = new WeakSet();
+
+function beginHistoryGesture(owner) {
+  if ((typeof owner !== "object" && typeof owner !== "function") || owner === null) return;
+  recordedHistoryGestureOwners.delete(owner);
+}
+
+function recordHistoryForGesture(owner) {
+  if ((typeof owner !== "object" && typeof owner !== "function") || owner === null) {
+    recordHistory();
+    return;
+  }
+  if (recordedHistoryGestureOwners.has(owner)) return;
+  if (recordHistory()) recordedHistoryGestureOwners.add(owner);
+}
+
+function endHistoryGesture(owner) {
+  if ((typeof owner !== "object" && typeof owner !== "function") || owner === null) return;
+  recordedHistoryGestureOwners.delete(owner);
+}
+
+function bindHistoryGesture(owner) {
+  if (!(owner instanceof HTMLElement)) return;
+  owner.addEventListener("focus", () => beginHistoryGesture(owner));
+  owner.addEventListener("blur", () => {
+    queueMicrotask(() => endHistoryGesture(owner));
+  });
+  owner.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") queueMicrotask(() => endHistoryGesture(owner));
+  });
+  owner.addEventListener("keyup", (event) => {
+    if (event.key === "ArrowUp" || event.key === "ArrowDown") endHistoryGesture(owner);
+  });
 }
 
 function undoWorkspaceChange() {
   const snapshot = undoHistory.pop();
   if (!snapshot) return;
+  recordedHistoryGestureOwners = new WeakSet();
   redoHistory.push(captureWorkspaceState());
   restoreWorkspaceState(snapshot);
 }
@@ -677,6 +723,7 @@ function undoWorkspaceChange() {
 function redoWorkspaceChange() {
   const snapshot = redoHistory.pop();
   if (!snapshot) return;
+  recordedHistoryGestureOwners = new WeakSet();
   undoHistory.push(captureWorkspaceState());
   restoreWorkspaceState(snapshot);
 }

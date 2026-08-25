@@ -33,6 +33,8 @@ document.addEventListener("keydown", (event) => {
       activeText.blur();
     } else if (selectedCanvasText) {
       clearLayerSelection();
+    } else if (selectedVariantInstanceId !== null) {
+      clearLayerSelection();
     }
     return;
   }
@@ -127,6 +129,47 @@ document.addEventListener("keydown", (event) => {
     (target instanceof HTMLElement && (target.isContentEditable || Boolean(target.closest(".props-panel"))))
   ) return;
 
+  let activeVariantLayerTarget = selectedVariantLayerTarget;
+  const eventVariantLayer = target instanceof HTMLElement
+    ? target.closest(".variant-preview .canvas-frame, .variant-preview .canvas-text, .variant-preview .canvas-vector")
+    : null;
+  if (eventVariantLayer instanceof HTMLElement) {
+    const type = eventVariantLayer.classList.contains("canvas-frame")
+      ? "frame"
+      : eventVariantLayer.classList.contains("canvas-text") ? "text" : "vector";
+    const id = Number(eventVariantLayer.dataset[`${type}Id`]);
+    if (Number.isFinite(id)) activeVariantLayerTarget = `${type}:${id}`;
+    const previewId = Number(eventVariantLayer.closest(".variant-preview")?.dataset.variantInstanceId);
+    if (Number.isFinite(previewId)) selectedVariantInstanceId = previewId;
+  }
+  if (selectedVariantInstanceId !== null && activeVariantLayerTarget === null) {
+    const selectedLayer = componentSet?.querySelector(
+      ".canvas-frame.is-selected, .canvas-text.is-selected, .canvas-vector.is-selected",
+    );
+    if (selectedLayer instanceof HTMLElement) {
+      const type = selectedLayer.classList.contains("canvas-frame")
+        ? "frame"
+        : selectedLayer.classList.contains("canvas-text") ? "text" : "vector";
+      const id = Number(selectedLayer.dataset[`${type}Id`]);
+      if (Number.isFinite(id)) activeVariantLayerTarget = `${type}:${id}`;
+    }
+  }
+
+  if (selectedVariantInstanceId !== null && activeVariantLayerTarget === null) {
+    event.preventDefault();
+    removeVariantInstance(selectedVariantInstanceId);
+    return;
+  }
+
+  if (selectedVariantInstanceId !== null && activeVariantLayerTarget !== null) {
+    const [type, rawId] = activeVariantLayerTarget.split(":");
+    const id = Number(rawId);
+    if (!["frame", "text", "vector"].includes(type) || !Number.isFinite(id)) return;
+    selectedLayerKeys.clear();
+    selectedLayerKeys.add(getLayerKey(type, id));
+    selectedVariantLayerTarget = null;
+  }
+
   if (selectedComponentId !== null) {
     event.preventDefault();
     deleteSelectedComponent();
@@ -158,6 +201,36 @@ document.addEventListener("keydown", (event) => {
       vectorIdsToDelete.add(record.id);
     }
   });
+
+  const deletedTargets = new Set([
+    ...[...frameIdsToDelete].map((id) => `frame:${id}`),
+    ...[...textIdsToDelete].map((id) => `text:${id}`),
+    ...[...vectorIdsToDelete].map((id) => `vector:${id}`),
+  ]);
+  variantInstances.forEach((instance) => {
+    instance.overrides = (instance.overrides ?? []).filter((override) => !deletedTargets.has(override.target));
+  });
+  variantRules = variantRules.filter((rule) => !deletedTargets.has(rule.target));
+
+  const removedComponentProps = componentProps.filter((prop) => (
+    (prop.targetFrameId != null && frameIdsToDelete.has(prop.targetFrameId))
+    || (prop.targetTextId != null && textIdsToDelete.has(prop.targetTextId))
+    || (prop.targetVectorId != null && vectorIdsToDelete.has(prop.targetVectorId))
+  ));
+  const removedVariantPropIds = new Set(removedComponentProps
+    .map((prop) => prop.variantPropId)
+    .filter((id) => id != null));
+  componentProps = componentProps.filter((prop) => !removedComponentProps.includes(prop));
+  if (removedVariantPropIds.size > 0) {
+    variantProps = variantProps.filter((prop) => !removedVariantPropIds.has(prop.id));
+    variantInstances.forEach((instance) => {
+      removedVariantPropIds.forEach((id) => { delete instance.propValues[id]; });
+    });
+    variantRules.forEach((rule) => {
+      removedVariantPropIds.forEach((id) => { delete rule.conditions[id]; });
+    });
+    variantRules = variantRules.filter((rule) => Object.keys(rule.conditions).length > 0);
+  }
 
   frameRecords.forEach((record) => {
     if (frameIdsToDelete.has(record.id)) record.element.remove();

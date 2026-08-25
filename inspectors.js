@@ -786,32 +786,29 @@ function renderComponentProps() {
       const instance = getVariantInstance();
       const currentValue = instance && prop.variantPropId != null
         ? instance.propValues[prop.variantPropId]
-        : prop.defaultValue;
+        : options[0];
       const setActiveOption = (value) => {
         if (instance) {
           if (prop.variantPropId == null) syncComponentPropVariantDefinition(prop);
           if (prop.variantPropId == null || instance.propValues[prop.variantPropId] === value) return;
           recordHistory();
           instance.propValues[prop.variantPropId] = value;
-        } else {
-          if (prop.defaultValue === value) return;
-          recordHistory();
-          prop.defaultValue = value;
-          syncComponentPropVariantDefinition(prop);
-        }
+        } else return;
         defaultCell.querySelectorAll(".prop-value-tag--editable").forEach((tag) => {
           tag.classList.toggle("is-active", tag.value === value);
         });
         renderVariantInstances();
       };
-      options.forEach((optionValue) => {
+      options.forEach((optionValue, optionIndex) => {
         const valueInput = document.createElement("input");
         valueInput.className = "prop-value-tag prop-value-tag--editable";
         valueInput.type = "text";
         valueInput.value = optionValue;
         valueInput.style.width = `${Math.max(1, optionValue.length)}ch`;
         valueInput.classList.toggle("is-active", optionValue === currentValue);
+        valueInput.classList.toggle("is-default", optionIndex === 0);
         valueInput.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
+        if (optionIndex === 0) valueInput.title = "Default value";
         valueInput.addEventListener("pointerdown", () => setActiveOption(optionValue));
         valueInput.addEventListener("click", () => setActiveOption(optionValue));
         valueInput.addEventListener("focus", () => setActiveOption(optionValue));
@@ -904,23 +901,37 @@ function renderComponentProps() {
         valueButton.classList.toggle("is-active", optionValue === currentValue);
         valueButton.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
         valueButton.addEventListener("click", () => {
-          if (instance) {
-            if (currentValue === optionValue) return;
-            recordHistory();
-            instance.propValues[prop.variantPropId] = optionValue;
-          } else {
-            if (Boolean(prop.defaultValue) === optionValue) return;
-            recordHistory();
-            prop.defaultValue = optionValue;
-            syncComponentPropVariantDefinition(prop);
-          }
-          defaultCell.querySelectorAll(".prop-value-tag--editable").forEach((tag) => {
-            tag.classList.toggle("is-active", tag.textContent === String(optionValue));
-          });
+          if (!instance || currentValue === optionValue) return;
+          recordHistory();
+          instance.propValues[prop.variantPropId] = optionValue;
           renderVariantInstances();
+          renderComponentProps();
         });
         defaultCell.append(valueButton);
       });
+      const booleanDefaultLabel = document.createElement("label");
+      const booleanDefaultSelect = document.createElement("select");
+      booleanDefaultLabel.className = "prop-boolean-default";
+      booleanDefaultLabel.textContent = "Default";
+      booleanDefaultSelect.className = "prop-boolean-default-select";
+      booleanDefaultSelect.setAttribute("aria-label", `Default ${prop.name} value`);
+      [false, true].forEach((optionValue) => {
+        const option = document.createElement("option");
+        option.value = String(optionValue);
+        option.textContent = String(optionValue);
+        booleanDefaultSelect.append(option);
+      });
+      booleanDefaultSelect.value = String(Boolean(prop.defaultValue));
+      booleanDefaultSelect.addEventListener("change", () => {
+        const nextDefault = booleanDefaultSelect.value === "true";
+        if (Boolean(prop.defaultValue) === nextDefault) return;
+        recordHistory();
+        prop.defaultValue = nextDefault;
+        syncComponentPropVariantDefinition(prop);
+        renderComponentProps();
+      });
+      booleanDefaultLabel.append(booleanDefaultSelect);
+      defaultCell.append(booleanDefaultLabel);
     } else if (prop.type === "string" && prop.property === "textContent") {
       const valueInput = document.createElement("input");
       valueInput.className = "prop-control";
@@ -1215,14 +1226,15 @@ function applyCustomColorValue(control, color, opacity) {
   const normalizedOpacity = normalizeColorOpacity(opacity);
   if (selectedVariantInstanceId !== null && state.property === "frame-background") {
     if (normalizedColor) control.dataset.lastColor = normalizedColor;
-    setSelectedVariantFrameStyleOverride("backgroundColor", getColorWithOpacity(normalizedColor, normalizedOpacity));
+    if (state.color !== normalizedColor || state.opacity !== normalizedOpacity) recordHistoryForGesture(control);
+    setSelectedVariantFrameStyleOverride("backgroundColor", getColorWithOpacity(normalizedColor, normalizedOpacity), { record: false });
     syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
     return true;
   }
   if (selectedVariantInstanceId !== null && state.property === "text" && state.record.isVariantInstance) {
     if (normalizedColor) control.dataset.lastColor = normalizedColor;
     const renderedColor = getColorWithOpacity(normalizedColor, normalizedOpacity);
-    if (state.color !== normalizedColor || state.opacity !== normalizedOpacity) recordHistory();
+    if (state.color !== normalizedColor || state.opacity !== normalizedOpacity) recordHistoryForGesture(control);
     state.record.element.dataset.textColor = normalizedColor;
     state.record.element.dataset.textColorOpacity = String(normalizedOpacity);
     state.record.element.style.color = renderedColor;
@@ -1236,7 +1248,7 @@ function applyCustomColorValue(control, color, opacity) {
     return true;
   }
 
-  recordHistory();
+  recordHistoryForGesture(control);
   const renderedColor = getColorWithOpacity(normalizedColor, normalizedOpacity);
   if (state.property === "canvas") {
     canvasColorValue = normalizedColor;
@@ -1395,6 +1407,7 @@ function openColorPicker(control) {
 }
 
 function closeColorPicker() {
+  if (activeColorControl) endHistoryGesture(activeColorControl);
   colorPickerPopup.hidden = true;
   activeColorControl = null;
 }
@@ -1418,12 +1431,19 @@ function bindColorPickerPointer(surface, update) {
   };
   surface.addEventListener("pointerdown", (event) => {
     event.preventDefault();
+    if (activeColorControl) beginHistoryGesture(activeColorControl);
     surface.setPointerCapture(event.pointerId);
     move(event);
   });
   surface.addEventListener("pointermove", (event) => {
     if (surface.hasPointerCapture(event.pointerId)) move(event);
   });
+  const endPointerGesture = () => {
+    if (activeColorControl) endHistoryGesture(activeColorControl);
+  };
+  surface.addEventListener("pointerup", endPointerGesture);
+  surface.addEventListener("pointercancel", endPointerGesture);
+  surface.addEventListener("lostpointercapture", endPointerGesture);
 }
 
 bindColorPickerPointer(colorPickerSv, (x, y) => {
@@ -1445,11 +1465,23 @@ colorPickerHex?.addEventListener("input", () => {
   pickerValue = hsv.value;
   applyPickerColor();
 });
+colorPickerHex?.addEventListener("focus", () => {
+  if (activeColorControl) beginHistoryGesture(activeColorControl);
+});
+colorPickerHex?.addEventListener("blur", () => {
+  if (activeColorControl) endHistoryGesture(activeColorControl);
+});
 
 colorPickerOpacityInput?.addEventListener("input", () => {
   if (!(colorPickerOpacityInput instanceof HTMLInputElement) || colorPickerOpacityInput.value.trim() === "" || !Number.isFinite(Number(colorPickerOpacityInput.value))) return;
   pickerOpacity = normalizeColorOpacity(colorPickerOpacityInput.value);
   applyPickerColor();
+});
+colorPickerOpacityInput?.addEventListener("focus", () => {
+  if (activeColorControl) beginHistoryGesture(activeColorControl);
+});
+colorPickerOpacityInput?.addEventListener("blur", () => {
+  if (activeColorControl) endHistoryGesture(activeColorControl);
 });
 
 document.addEventListener("pointerdown", (event) => {
@@ -1499,8 +1531,12 @@ colorControls.forEach((control) => {
     if (!state) return;
     applyCustomColorValue(control, picker.value, state.opacity);
   });
+  picker?.addEventListener("focus", () => beginHistoryGesture(control));
+  picker?.addEventListener("change", () => endHistoryGesture(control));
+  picker?.addEventListener("blur", () => endHistoryGesture(control));
 
   hexInput?.addEventListener("focus", () => {
+    beginHistoryGesture(control);
     if (hexInput instanceof HTMLInputElement) hexInput.select();
   });
   const commitHexInput = () => {
@@ -1527,9 +1563,13 @@ colorControls.forEach((control) => {
     commitHexInput();
     if (hexInput instanceof HTMLInputElement) hexInput.select();
   });
-  hexInput?.addEventListener("blur", commitHexInput);
+  hexInput?.addEventListener("blur", () => {
+    commitHexInput();
+    endHistoryGesture(control);
+  });
 
   opacityInput?.addEventListener("focus", () => {
+    beginHistoryGesture(control);
     if (opacityInput instanceof HTMLInputElement) opacityInput.select();
   });
   opacityInput?.addEventListener("input", () => {
@@ -1551,6 +1591,7 @@ colorControls.forEach((control) => {
     if (state && state.picker instanceof HTMLInputElement) {
       syncCustomColorControl(state.picker, state.color, state.opacity);
     }
+    endHistoryGesture(control);
   });
 
   actionButton?.addEventListener("click", () => {
@@ -1566,12 +1607,18 @@ colorControls.forEach((control) => {
     const nextColor = normalizeHexColor(control.dataset.lastColor)
       || fallbackColors[control.dataset.colorControl]
       || "#000000";
+    beginHistoryGesture(control);
     applyCustomColorValue(control, nextColor, state.opacity);
+    endHistoryGesture(control);
   });
 
   removeButton?.addEventListener("click", () => {
     const state = getCustomColorState(control);
-    if (state?.color) applyCustomColorValue(control, "", state.opacity);
+    if (state?.color) {
+      beginHistoryGesture(control);
+      applyCustomColorValue(control, "", state.opacity);
+      endHistoryGesture(control);
+    }
   });
 });
 
@@ -1638,7 +1685,7 @@ function applyTextSizeValue(rawValue = sizeSelect?.value, normalize = true) {
   if (!/^\d+(?:\.\d+)?$/.test(value)) return false;
   const numberValue = Math.max(0, Number(value));
   const normalizedValue = String(numberValue);
-  if ((record.element.dataset.fontSize || "14") !== normalizedValue) recordHistory();
+  if ((record.element.dataset.fontSize || "14") !== normalizedValue) recordHistoryForGesture(sizeSelect);
   record.element.dataset.fontSize = normalizedValue;
   record.element.style.fontSize = `${normalizedValue}px`;
   persistVariantTextStyle(record, "fontSize", `${normalizedValue}px`);
@@ -1687,6 +1734,7 @@ sizeSelect?.addEventListener("keydown", (event) => {
   setTextSizeComboboxOpen(false);
   sizeSelect.select();
 });
+if (sizeSelect instanceof HTMLElement) bindHistoryGesture(sizeSelect);
 
 textSizeToggle?.addEventListener("click", () => {
   if (!(textSizeMenu instanceof HTMLElement) || !(sizeSelect instanceof HTMLInputElement)) return;
@@ -1717,7 +1765,7 @@ function applyLineHeightValue() {
   if (!record || !(lineHeightInput instanceof HTMLInputElement)) return false;
   const value = lineHeightInput.value.trim();
   if (/^(?:a|auto)$/i.test(value)) {
-    if ((record.element.dataset.lineHeight || "Auto") !== "Auto") recordHistory();
+    if ((record.element.dataset.lineHeight || "Auto") !== "Auto") recordHistoryForGesture(lineHeightInput);
     lineHeightInput.value = "Auto";
     record.element.dataset.lineHeight = "Auto";
     record.element.style.lineHeight = "normal";
@@ -1728,7 +1776,7 @@ function applyLineHeightValue() {
 
   if (!/^\d+(?:\.\d+)?$/.test(value)) return false;
   const numberValue = Math.max(0, Number(value));
-  if ((record.element.dataset.lineHeight || "Auto") !== String(numberValue)) recordHistory();
+  if ((record.element.dataset.lineHeight || "Auto") !== String(numberValue)) recordHistoryForGesture(lineHeightInput);
   lineHeightInput.value = String(numberValue);
   record.element.dataset.lineHeight = String(numberValue);
   record.element.style.lineHeight = `${numberValue}px`;
@@ -1775,6 +1823,7 @@ lineHeightInput?.addEventListener("keydown", (event) => {
   lineHeightInput.value = String(Math.max(0, base + direction));
   applyLineHeightValue();
 });
+if (lineHeightInput instanceof HTMLElement) bindHistoryGesture(lineHeightInput);
 
 function applyLetterSpacingValue(normalizeDisplay = true) {
   const record = getSelectedTextRecord();
@@ -1783,7 +1832,7 @@ function applyLetterSpacingValue(normalizeDisplay = true) {
   if (!match) return false;
   const unit = match[2]?.toLowerCase() || "%";
   const value = `${Number(match[1])}${unit}`;
-  if ((record.element.dataset.letterSpacing || "0%") !== value) recordHistory();
+  if ((record.element.dataset.letterSpacing || "0%") !== value) recordHistoryForGesture(letterSpacingInput);
   if (normalizeDisplay) letterSpacingInput.value = value;
   record.element.dataset.letterSpacing = value;
   record.element.style.letterSpacing = unit === "%"
@@ -1820,6 +1869,7 @@ letterSpacingInput?.addEventListener("keydown", (event) => {
   letterSpacingInput.value = `${Number(match[1]) + direction}${match[2]?.toLowerCase() || "%"}`;
   applyLetterSpacingValue();
 });
+if (letterSpacingInput instanceof HTMLElement) bindHistoryGesture(letterSpacingInput);
 
 textAlignmentOptions.forEach((option) => {
   option.addEventListener("click", () => {
@@ -1846,7 +1896,7 @@ vectorSizeInputs.forEach((input) => {
     const value = Number(input.value);
     if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value) || value < 0) return;
     if (record.isVariantInstance) {
-      recordHistory();
+      recordHistoryForGesture(input);
       record.element.dataset[`${dimension}Mode`] = "fixed";
       record.element.dataset[dimension] = String(value);
       record.element.style[dimension] = `${value}px`;
@@ -1854,13 +1904,14 @@ vectorSizeInputs.forEach((input) => {
       requestAnimationFrame(syncResizeOverlay);
       return;
     }
-    if (Number(record.element.dataset[dimension] || "24") !== value) recordHistory();
+    if (Number(record.element.dataset[dimension] || "24") !== value) recordHistoryForGesture(input);
     record.element.dataset[`${dimension}Mode`] = "fixed";
     record.element.dataset[dimension] = String(value);
     applyLayerSizing("vector", record);
     requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", syncInspectorToSelectedVector);
+  bindHistoryGesture(input);
 });
 
 function getSizeInputContext(input) {
@@ -1921,7 +1972,8 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
     const value = numberMatch
       ? `${numberMatch[0]}px`
       : requestedMode === "fill" ? "100%" : "auto";
-    setSelectedVariantFrameStyleOverride(dimension, value);
+    recordHistoryForGesture(input);
+    setSelectedVariantFrameStyleOverride(dimension, value, { record: false });
     if (normalize) input.value = numberMatch ? numberMatch[0] : requestedMode === "fill" ? "Fill" : "Hug";
     return true;
   }
@@ -1929,7 +1981,7 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
     const value = numberMatch
       ? `${Math.max(0, Number(numberMatch[0]))}px`
       : requestedMode === "fill" ? "100%" : "auto";
-    recordHistory();
+    recordHistoryForGesture(input);
     element.style[dimension] = value;
     element.dataset[`${dimension}Mode`] = numberMatch ? "fixed" : requestedMode;
     if (numberMatch) element.dataset[dimension] = String(Math.max(0, Number(numberMatch[0])));
@@ -1950,7 +2002,7 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
   }
   const hasChange = currentMode !== mode
     || (mode === "fixed" && Number(element.dataset[dimension]) !== fixedValue);
-  if (hasChange) recordHistory();
+  if (hasChange) recordHistoryForGesture(input);
 
   element.dataset[`${dimension}Mode`] = mode;
   if (mode === "fixed") element.dataset[dimension] = String(fixedValue);
@@ -2000,6 +2052,7 @@ sizeModeComboboxes.forEach((wrapper) => {
     }
     setSizeComboboxOpen(wrapper, false);
   });
+  bindHistoryGesture(input);
 
   toggle?.addEventListener("click", () => {
     setSizeComboboxOpen(wrapper, menu.hidden);
@@ -2034,24 +2087,28 @@ framePaddingInputs.forEach((input) => {
     if (!record || !side || !Number.isFinite(value) || value < 0) return;
     const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
     if (selectedVariantInstanceId !== null) {
-      setSelectedVariantFrameStyleOverride(propertyName, `${value}px`);
+      if (getSelectedVariantTargetStyleOverride(propertyName, `${record.element.dataset[propertyName] || "10"}px`) === `${value}px`) return;
+      recordHistoryForGesture(input);
+      setSelectedVariantFrameStyleOverride(propertyName, `${value}px`, { record: false });
       syncFramePaddingAxisInputs(record.element);
       return;
     }
-    if (Number(record.element.dataset[propertyName] || "10") !== value) recordHistory();
+    if (Number(record.element.dataset[propertyName] || "10") !== value) recordHistoryForGesture(input);
     record.element.dataset[propertyName] = String(value);
     record.element.style[propertyName] = `${value}px`;
     syncFramePaddingAxisInputs(record.element);
     requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", syncInspectorToSelectedFrame);
+  bindHistoryGesture(input);
 });
 
 framePaddingAxisInputs.forEach((input) => {
   if (!(input instanceof HTMLInputElement)) return;
+  const wrapper = input.closest(".prefixed-number-control");
   input.addEventListener("focus", () => {
     input.select();
-    wrapper.classList.add("is-selection-focused");
+    wrapper?.classList.add("is-selection-focused");
   });
   input.addEventListener("input", () => {
     const record = getSelectedFrameRecord();
@@ -2060,14 +2117,20 @@ framePaddingAxisInputs.forEach((input) => {
     if (!record || (axis !== "x" && axis !== "y") || input.value.trim() === "" || !Number.isFinite(value) || value < 0) return;
     const sides = axis === "x" ? ["left", "right"] : ["top", "bottom"];
     if (selectedVariantInstanceId !== null) {
-      sides.forEach((side) => setSelectedVariantFrameStyleOverride(`padding${side[0].toUpperCase()}${side.slice(1)}`, `${value}px`));
+      const hasVariantChange = sides.some((side) => {
+        const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+        return getSelectedVariantTargetStyleOverride(propertyName, `${record.element.dataset[propertyName] || "10"}px`) !== `${value}px`;
+      });
+      if (!hasVariantChange) return;
+      recordHistoryForGesture(input);
+      sides.forEach((side) => setSelectedVariantFrameStyleOverride(`padding${side[0].toUpperCase()}${side.slice(1)}`, `${value}px`, { record: false }));
       return;
     }
     const hasChange = sides.some((side) => {
       const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
       return Number(record.element.dataset[propertyName] || "10") !== value;
     });
-    if (hasChange) recordHistory();
+    if (hasChange) recordHistoryForGesture(input);
     sides.forEach((side) => {
       const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
       record.element.dataset[propertyName] = String(value);
@@ -2077,7 +2140,11 @@ framePaddingAxisInputs.forEach((input) => {
     });
     requestAnimationFrame(syncResizeOverlay);
   });
-  input.addEventListener("blur", syncInspectorToSelectedFrame);
+  input.addEventListener("blur", () => {
+    syncInspectorToSelectedFrame();
+    wrapper?.classList.remove("is-selection-focused");
+  });
+  bindHistoryGesture(input);
 });
 
 framePaddingModeToggle?.addEventListener("click", () => {
@@ -2099,15 +2166,18 @@ frameRadiusInput?.addEventListener("input", () => {
   const value = Number(frameRadiusInput.value);
   if (!Number.isFinite(value) || value < 0) return;
   if (selectedVariantInstanceId !== null) {
-    setSelectedVariantFrameStyleOverride("borderRadius", `${value}px`);
+    if (getSelectedVariantTargetStyleOverride("borderRadius", `${record.element.dataset.radius || "0"}px`) === `${value}px`) return;
+    recordHistoryForGesture(frameRadiusInput);
+    setSelectedVariantFrameStyleOverride("borderRadius", `${value}px`, { record: false });
     return;
   }
-  if (Number(record.element.dataset.radius || "0") !== value) recordHistory();
+  if (Number(record.element.dataset.radius || "0") !== value) recordHistoryForGesture(frameRadiusInput);
   record.element.dataset.radius = String(value);
   record.element.style.borderRadius = `${value}px`;
 });
 
 frameRadiusInput?.addEventListener("blur", syncInspectorToSelectedFrame);
+if (frameRadiusInput instanceof HTMLElement) bindHistoryGesture(frameRadiusInput);
 
 frameDirectionOptions.forEach((option) => {
   option.addEventListener("click", () => {
@@ -2138,8 +2208,13 @@ frameAlignmentOptions.forEach((option) => {
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
     if (selectedVariantInstanceId !== null) {
       const values = getFrameAlignmentValues({ dataset: { alignment, direction: getSelectedVariantTargetStyleOverride("flexDirection", record?.element.dataset.direction === "vertical" ? "column" : "row") === "column" ? "vertical" : "horizontal" } });
-      setSelectedVariantFrameStyleOverride("alignItems", values.alignItems);
-      setSelectedVariantFrameStyleOverride("justifyContent", values.justifyContent);
+      if (
+        getSelectedVariantTargetStyleOverride("alignItems", record?.element.style.alignItems || "flex-start") === values.alignItems
+        && getSelectedVariantTargetStyleOverride("justifyContent", record?.element.style.justifyContent || "flex-start") === values.justifyContent
+      ) return;
+      recordHistory();
+      setSelectedVariantFrameStyleOverride("alignItems", values.alignItems, { record: false });
+      setSelectedVariantFrameStyleOverride("justifyContent", values.justifyContent, { record: false });
       return;
     }
     if (event.detail === 1) {
@@ -2192,12 +2267,13 @@ frameOutlineWeightInput?.addEventListener("input", () => {
   if (!record || !(frameOutlineWeightInput instanceof HTMLInputElement)) return;
   const weight = Number(frameOutlineWeightInput.value);
   if (!Number.isFinite(weight) || weight < 0) return;
-  if (Number(record.element.dataset.outlineWeight || "1") !== weight) recordHistory();
+  if (Number(record.element.dataset.outlineWeight || "1") !== weight) recordHistoryForGesture(frameOutlineWeightInput);
   record.element.dataset.outlineWeight = String(weight);
   applyFrameOutline(record.element);
 });
 
 frameOutlineWeightInput?.addEventListener("blur", syncInspectorToSelectedFrame);
+if (frameOutlineWeightInput instanceof HTMLElement) bindHistoryGesture(frameOutlineWeightInput);
 
 function setFrameGapMenuOpen(isOpen) {
   if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;
@@ -2212,17 +2288,21 @@ function applyFrameGapValue(normalize = true) {
   const value = frameGapInput.value.trim();
 
   if (selectedVariantInstanceId !== null) {
-    if (/^auto$/i.test(value)) return setSelectedVariantFrameStyleOverride("gap", "0px");
+    if (/^auto$/i.test(value)) {
+      recordHistoryForGesture(frameGapInput);
+      return setSelectedVariantFrameStyleOverride("gap", "0px", { record: false });
+    }
     const variantMatch = value.match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
     if (!variantMatch) return false;
     const gap = `${Math.max(0, Number(variantMatch[1]))}px`;
-    setSelectedVariantFrameStyleOverride("gap", gap);
+    recordHistoryForGesture(frameGapInput);
+    setSelectedVariantFrameStyleOverride("gap", gap, { record: false });
     if (normalize) frameGapInput.value = gap;
     return true;
   }
 
   if (/^auto$/i.test(value)) {
-    if (record.element.dataset.gapMode !== "auto") recordHistory();
+    if (record.element.dataset.gapMode !== "auto") recordHistoryForGesture(frameGapInput);
     record.element.dataset.gapMode = "auto";
     record.element.style.gap = "0px";
     applyFrameAlignment(record.element);
@@ -2235,7 +2315,7 @@ function applyFrameGapValue(normalize = true) {
   if (!match) return false;
   const gap = Math.max(0, Number(match[1]));
   if (record.element.dataset.gapMode !== "fixed" || Number(record.element.dataset.gap || "10") !== gap) {
-    recordHistory();
+    recordHistoryForGesture(frameGapInput);
   }
   record.element.dataset.gapMode = "fixed";
   record.element.dataset.gap = String(gap);
@@ -2276,6 +2356,7 @@ frameGapInput?.addEventListener("keydown", (event) => {
   if (!applyFrameGapValue()) syncInspectorToSelectedFrame();
   setFrameGapMenuOpen(false);
 });
+if (frameGapInput instanceof HTMLElement) bindHistoryGesture(frameGapInput);
 
 frameGapToggle?.addEventListener("click", () => {
   if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;

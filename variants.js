@@ -45,12 +45,23 @@ function getVariantPropValues(prop) {
   return [];
 }
 
+function getVariantPropDefaultValue(prop) {
+  if (prop.type === "boolean") return prop.defaultValue === true || prop.defaultValue === "true";
+  if (prop.type === "enum") return getVariantPropValues(prop)[0] ?? "default";
+  if (prop.type === "string") return String(prop.defaultValue ?? "");
+  return null;
+}
+
 function normalizeVariantPropValue(prop, value) {
-  if (prop.type === "boolean") return value === true || value === "true";
+  if (prop.type === "boolean") {
+    const hasValidValue = value === true || value === false || value === "true" || value === "false";
+    const resolvedValue = hasValidValue ? value : getVariantPropDefaultValue(prop);
+    return resolvedValue === true || resolvedValue === "true";
+  }
   if (prop.type === "string") return String(value ?? "");
   if (prop.type === "action") return null;
   const values = getVariantPropValues(prop);
-  return values.includes(value) ? value : prop.defaultValue ?? values[0] ?? "default";
+  return values.includes(value) ? value : getVariantPropDefaultValue(prop);
 }
 
 function unlinkComponentPropVariantDefinition(componentProp) {
@@ -74,7 +85,9 @@ function syncComponentPropVariantDefinition(componentProp) {
     return;
   }
   const isBoolean = componentProp.type === "boolean";
+  const booleanDefault = componentProp.defaultValue === true || componentProp.defaultValue === "true";
   const options = [...getComponentPropOptions(componentProp)];
+  const defaultValue = isBoolean ? booleanDefault : options[0];
   let variantProp = variantProps.find((prop) => prop.id === componentProp.variantPropId);
   if (!variantProp) {
     variantProp = {
@@ -82,7 +95,7 @@ function syncComponentPropVariantDefinition(componentProp) {
       name: componentProp.name,
       type: isBoolean ? "boolean" : "enum",
       ...(isBoolean ? {} : { options }),
-      defaultValue: isBoolean ? Boolean(componentProp.defaultValue) : componentProp.defaultValue,
+      defaultValue,
       sourceComponentPropId: componentProp.id,
     };
     componentProp.variantPropId = variantProp.id;
@@ -92,16 +105,23 @@ function syncComponentPropVariantDefinition(componentProp) {
     variantProp.type = isBoolean ? "boolean" : "enum";
     if (isBoolean) {
       delete variantProp.options;
-      variantProp.defaultValue = Boolean(componentProp.defaultValue);
+      variantProp.defaultValue = booleanDefault;
     } else {
       variantProp.options = options;
-      variantProp.defaultValue = options.includes(componentProp.defaultValue) ? componentProp.defaultValue : options[0];
+      variantProp.defaultValue = options[0];
     }
   }
-  componentProp.defaultValue = variantProp.defaultValue;
+  componentProp.defaultValue = getVariantPropDefaultValue(variantProp);
   variantInstances.forEach((instance) => {
+    instance.propValues ??= {};
+    const booleanValue = instance.propValues[variantProp.id];
+    const hasValidBooleanValue = booleanValue === true || booleanValue === false
+      || booleanValue === "true" || booleanValue === "false";
+    if (isBoolean && !hasValidBooleanValue) {
+      instance.propValues[variantProp.id] = getVariantPropDefaultValue(variantProp);
+    }
     if (!isBoolean && !options.includes(instance.propValues[variantProp.id])) {
-      instance.propValues[variantProp.id] = variantProp.defaultValue;
+      instance.propValues[variantProp.id] = getVariantPropDefaultValue(variantProp);
     }
   });
   variantRules.forEach((rule) => {
@@ -116,29 +136,104 @@ function getVariantInstance(instanceId = selectedVariantInstanceId) {
   return variantInstances.find((instance) => instance.id === instanceId) ?? null;
 }
 
+function getAuthoredDefaultVariantInstance() {
+  if (variantInstances.length === 0) return null;
+  const axes = variantProps.filter((prop) => prop.type === "enum" || prop.type === "boolean");
+  if (axes.length === 0) return variantInstances[0];
+  return variantInstances.find((instance) => axes.every((prop) => (
+    normalizeVariantPropValue(prop, instance.propValues?.[prop.id]) === getVariantPropDefaultValue(prop)
+  ))) ?? null;
+}
+
 function getDefaultVariantInstance() {
-  return variantInstances.find((instance) => instance.isDefault) ?? variantInstances[0] ?? null;
+  return getAuthoredDefaultVariantInstance() ?? variantInstances[0] ?? null;
 }
 
 function normalizeDefaultVariantInstance() {
-  if (variantInstances.length === 0) return null;
-  const defaultInstance = getDefaultVariantInstance();
-  variantInstances.forEach((instance) => {
-    instance.isDefault = instance === defaultInstance;
+  variantProps.forEach((prop) => {
+    if (prop.type === "enum") prop.defaultValue = getVariantPropDefaultValue(prop);
+    else if (prop.type === "boolean") prop.defaultValue = getVariantPropDefaultValue(prop);
   });
-  return defaultInstance;
+  variantInstances.forEach((instance) => {
+    delete instance.isDefault;
+    instance.propValues ??= {};
+    variantProps.filter((prop) => prop.type !== "action").forEach((prop) => {
+      instance.propValues[prop.id] = normalizeVariantPropValue(prop, instance.propValues[prop.id]);
+    });
+    if (instance.parentVariantId == null
+      || instance.parentVariantId === instance.id
+      || !getVariantInstance(instance.parentVariantId)) {
+      instance.parentVariantId = null;
+    }
+  });
+  variantInstances.forEach((instance) => {
+    const visited = new Set([instance.id]);
+    let parent = instance.parentVariantId == null ? null : getVariantInstance(instance.parentVariantId);
+    while (parent) {
+      if (visited.has(parent.id)) {
+        instance.parentVariantId = null;
+        break;
+      }
+      visited.add(parent.id);
+      parent = getVariantInstance(parent.parentVariantId);
+    }
+  });
+  return getDefaultVariantInstance();
+}
+
+function isSoleAuthoredDefaultVariantInstance(instance) {
+  const authoredDefault = getAuthoredDefaultVariantInstance();
+  if (!instance || instance !== authoredDefault) return false;
+  const axes = variantProps.filter((prop) => prop.type === "enum" || prop.type === "boolean");
+  const matchingInstances = axes.length === 0
+    ? variantInstances
+    : variantInstances.filter((candidate) => axes.every((prop) => (
+      normalizeVariantPropValue(prop, candidate.propValues?.[prop.id]) === getVariantPropDefaultValue(prop)
+    )));
+  return matchingInstances.length === 1;
+}
+
+function canRemoveVariantInstance(instance) {
+  return Boolean(instance) && variantInstances.length > 1 && !isSoleAuthoredDefaultVariantInstance(instance);
+}
+
+function getVariantInheritanceChain(instance) {
+  const chain = [];
+  const visited = new Set();
+  let current = instance;
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id);
+    chain.unshift(current);
+    current = current.parentVariantId == null ? null : getVariantInstance(current.parentVariantId);
+  }
+  return chain;
+}
+
+function getCascadedVariantOverrides(instance, { includeSelf = true } = {}) {
+  const chain = getVariantInheritanceChain(instance);
+  if (!includeSelf) chain.pop();
+  return chain.flatMap((entry) => entry.overrides ?? []);
+}
+
+function getEffectiveVariantOverride(instance, target, property, { includeSelf = true } = {}) {
+  const overrides = getCascadedVariantOverrides(instance, { includeSelf });
+  for (let index = overrides.length - 1; index >= 0; index -= 1) {
+    const override = overrides[index];
+    if (override.target === target && override.property === property) return override;
+  }
+  return null;
 }
 
 function getSelectedVariantStyleOverride(property, fallback = "") {
   const instance = getVariantInstance();
-  const override = instance?.overrides?.find((entry) => entry.target === "component:0" && entry.property === property);
+  const override = instance ? getEffectiveVariantOverride(instance, "component:0", property) : null;
   return override ? String(override.value ?? "") : fallback;
 }
 
 function getSelectedVariantTargetStyleOverride(property, fallback = "") {
   const instance = getVariantInstance();
   const target = selectedVariantLayerTarget || "component:0";
-  const override = instance?.overrides?.find((entry) => entry.target === target && entry.property === property);
+  const override = instance ? getEffectiveVariantOverride(instance, target, property) : null;
   return override ? String(override.value ?? "") : fallback;
 }
 
@@ -306,7 +401,7 @@ function resolveVariantOperations(instance) {
     ...individuals.map(({ rule }) => rule),
     ...compounds.map(({ rule }) => rule),
     ...getBooleanVisibilityOperations(instance),
-    ...(instance.overrides ?? []),
+    ...getCascadedVariantOverrides(instance),
   ];
 }
 
@@ -327,7 +422,7 @@ function getVariantPropSchemaTitle(instance) {
 function getBaseVariantLabel() {
   const values = variantProps
     .filter((prop) => prop.type !== "action")
-    .map((prop) => `${prop.name}=${String(normalizeVariantPropValue(prop, prop.defaultValue))}`);
+    .map((prop) => `${prop.name}=${String(getVariantPropDefaultValue(prop))}`);
   return values.join(", ") || currentComponent?.name || "Component";
 }
 
@@ -464,7 +559,9 @@ function renderVariantInstances() {
     preview.setAttribute("tabindex", "0");
     preview.setAttribute("aria-label", getVariantInstanceLabel(instance));
     label.className = "variant-preview-label";
-    label.textContent = getVariantPropSchemaTitle(instance);
+    const schemaTitle = getVariantPropSchemaTitle(instance);
+    const isAuthoredDefault = instance === getAuthoredDefaultVariantInstance();
+    label.textContent = isAuthoredDefault ? `${schemaTitle} · Default` : schemaTitle;
     content.className = "variant-preview-content";
     prepareVariantClone(clone, instance.id);
     resolveVariantOperations(instance).forEach((operation) => applyVariantOperation(clone, operation));
@@ -510,6 +607,7 @@ function renderVariantInstances() {
         event.preventDefault();
         event.stopPropagation();
         selectedVariantLayerTarget = target;
+        beginHistoryGesture(text);
         text.classList.add("is-selected");
         text.setAttribute("aria-selected", "true");
         text.contentEditable = "true";
@@ -531,10 +629,11 @@ function renderVariantInstances() {
         if (event.key === "Enter" && !text.isContentEditable) beginEditing(event);
       });
       text.addEventListener("input", () => {
-        recordHistory();
+        recordHistoryForGesture(text);
         setVariantTextOverride(instance, textId, text.textContent ?? "", { render: false });
       });
       text.addEventListener("blur", () => {
+        endHistoryGesture(text);
         text.contentEditable = "false";
         renderVariantInstances();
       });
@@ -601,12 +700,12 @@ function addVariantInstance() {
   if (variantInstances.length === 0) {
     variantInstances.push({
       id: nextVariantInstanceId++,
-      name: "Default",
+      name: "Variant 1",
       componentId: currentComponent.id,
-      isDefault: true,
+      parentVariantId: null,
       propValues: Object.fromEntries(variantProps
-        .filter((prop) => prop.type !== "boolean")
-        .map((prop) => [prop.id, prop.defaultValue])),
+        .filter((prop) => prop.type !== "action")
+        .map((prop) => [prop.id, getVariantPropDefaultValue(prop)])),
       overrides: [],
     });
   }
@@ -616,13 +715,13 @@ function addVariantInstance() {
     id: nextVariantInstanceId++,
     name: `Variant ${index + 1}`,
     componentId: currentComponent.id,
-    isDefault: false,
+    parentVariantId: sourceInstance?.id ?? null,
     propValues: sourceInstance
       ? structuredClone(sourceInstance.propValues ?? {})
       : Object.fromEntries(variantProps
-        .filter((prop) => prop.type !== "boolean")
-        .map((prop) => [prop.id, prop.defaultValue])),
-    overrides: sourceInstance ? structuredClone(sourceInstance.overrides ?? []) : [],
+        .filter((prop) => prop.type !== "action")
+        .map((prop) => [prop.id, getVariantPropDefaultValue(prop)])),
+    overrides: [],
   };
   variantInstances.push(instance);
   selectedVariantInstanceId = instance.id;
@@ -634,11 +733,21 @@ function addVariantInstance() {
 
 function removeVariantInstance(instanceId) {
   const index = variantInstances.findIndex((instance) => instance.id === instanceId);
-  if (index < 0 || variantInstances.length <= 1) return false;
+  if (index < 0) return false;
+  const instance = variantInstances[index];
+  if (!canRemoveVariantInstance(instance)) return false;
   recordHistory();
-  const removedDefault = Boolean(variantInstances[index].isDefault);
+  const removedInstance = instance;
+  variantInstances.forEach((instance) => {
+    if (instance.parentVariantId !== removedInstance.id) return;
+    const localKeys = new Set((instance.overrides ?? []).map((override) => `${override.target}\u0000${override.property}`));
+    const inheritedFromRemoved = (removedInstance.overrides ?? [])
+      .filter((override) => !localKeys.has(`${override.target}\u0000${override.property}`))
+      .map((override) => structuredClone(override));
+    instance.overrides = [...inheritedFromRemoved, ...(instance.overrides ?? [])];
+    instance.parentVariantId = removedInstance.parentVariantId ?? null;
+  });
   variantInstances.splice(index, 1);
-  if (removedDefault) variantInstances[0].isDefault = true;
   normalizeDefaultVariantInstance();
   selectedVariantInstanceId = variantInstances[Math.min(index, variantInstances.length - 1)]?.id ?? null;
   selectedVariantLayerTarget = null;
@@ -672,7 +781,7 @@ function renderVariantPropAuthoring() {
     const typeSelect = createVariantControl("select", prop.type, "Variant property type");
     const optionsInput = createVariantControl("input", prop.type === "enum" ? prop.options.join(", ") : prop.type === "boolean" ? "false, true" : "—", "Variant options");
     const defaultControl = prop.type === "enum" || prop.type === "boolean"
-      ? createVariantControl("select", String(prop.defaultValue), "Default variant value")
+      ? createVariantControl("select", String(getVariantPropDefaultValue(prop)), "Default variant value")
       : createVariantControl("input", prop.type === "action" ? "" : prop.defaultValue, "Default variant value");
     const removeButton = document.createElement("button");
     row.className = "variant-grid variant-props-grid variant-grid-row";
@@ -694,9 +803,10 @@ function renderVariantPropAuthoring() {
       defaultControl.append(option);
     });
     typeSelect.value = prop.type;
-    defaultControl.value = String(prop.defaultValue ?? "");
+    defaultControl.value = String(getVariantPropDefaultValue(prop) ?? "");
     optionsInput.disabled = prop.type !== "enum";
-    defaultControl.disabled = prop.type === "action";
+    defaultControl.disabled = prop.type === "enum" || prop.type === "action";
+    if (prop.type === "enum") defaultControl.title = "The first value is the default.";
     removeButton.className = "variant-row-remove";
     removeButton.type = "button";
     removeButton.setAttribute("aria-label", `Remove ${prop.name}`);
@@ -727,7 +837,7 @@ function renderVariantPropAuthoring() {
       if (options.length === 0 || options.join("|") === prop.options.join("|")) return;
       recordHistory();
       prop.options = options;
-      if (!options.includes(prop.defaultValue)) prop.defaultValue = options[0];
+      prop.defaultValue = options[0];
       variantInstances.forEach((instance) => {
         if (!options.includes(instance.propValues[prop.id])) instance.propValues[prop.id] = prop.defaultValue;
       });
@@ -740,7 +850,7 @@ function renderVariantPropAuthoring() {
     });
     defaultControl.addEventListener("change", () => {
       const value = normalizeVariantPropValue(prop, defaultControl.value);
-      if (value === prop.defaultValue) return;
+      if (value === getVariantPropDefaultValue(prop)) return;
       recordHistory();
       prop.defaultValue = value;
       renderVariantSystem();
@@ -851,10 +961,11 @@ function renderVariantRuleAuthoring() {
     });
     valueInput.addEventListener("input", () => {
       if (valueInput.value === rule.value) return;
-      recordHistory();
+      recordHistoryForGesture(valueInput);
       rule.value = valueInput.value;
       renderVariantInstances();
     });
+    bindHistoryGesture(valueInput);
     removeButton.addEventListener("click", () => {
       recordHistory();
       variantRules = variantRules.filter((entry) => entry.id !== rule.id);
@@ -879,7 +990,7 @@ function addVariantProp() {
   });
   variantInstances.forEach((instance) => {
     const prop = variantProps[variantProps.length - 1];
-    instance.propValues[prop.id] = prop.defaultValue;
+    instance.propValues[prop.id] = getVariantPropDefaultValue(prop);
   });
   renderVariantSystem();
 }
@@ -892,7 +1003,7 @@ function addVariantRule() {
   }
   recordHistory();
   const values = getVariantPropValues(conditionProp);
-  const conditionValue = values.find((value) => value !== conditionProp.defaultValue) ?? values[0];
+  const conditionValue = values.find((value) => value !== getVariantPropDefaultValue(conditionProp)) ?? values[0];
   variantRules.push({
     id: nextVariantRuleId++,
     conditions: { [conditionProp.id]: conditionValue },
@@ -965,10 +1076,11 @@ function renderVariantOverrideRows(instance, section) {
     });
     valueInput.addEventListener("input", () => {
       if (override.value === valueInput.value) return;
-      recordHistory();
+      recordHistoryForGesture(valueInput);
       override.value = valueInput.value;
       renderVariantInstances();
     });
+    bindHistoryGesture(valueInput);
     removeButton.addEventListener("click", () => {
       recordHistory();
       instance.overrides.splice(index, 1);
@@ -1000,6 +1112,13 @@ function renderVariantInspector() {
     renderVariantSystem();
   });
   variantInspectorContent.replaceChildren(makeVariantInspectorField("Name", nameInput));
+  const parentInstance = instance.parentVariantId == null ? null : getVariantInstance(instance.parentVariantId);
+  if (parentInstance) {
+    const inheritanceNote = document.createElement("div");
+    inheritanceNote.className = "variant-empty-state";
+    inheritanceNote.textContent = `Inherits styles from ${parentInstance.name}. Local overrides take precedence.`;
+    variantInspectorContent.append(inheritanceNote);
+  }
 
   variantProps.forEach((prop) => {
     let control;
@@ -1032,9 +1151,12 @@ function renderVariantInspector() {
     } else if (prop.type === "string") {
       control = createVariantControl("input", value, prop.name);
       control.addEventListener("input", () => {
+        if (instance.propValues[prop.id] === control.value) return;
+        recordHistoryForGesture(control);
         instance.propValues[prop.id] = control.value;
         renderVariantInstances();
       });
+      bindHistoryGesture(control);
     } else {
       control = document.createElement("span");
       control.className = "variant-inspector-label";
@@ -1059,7 +1181,7 @@ function renderVariantInspector() {
   });
   resetButton.className = "variant-small-button";
   resetButton.type = "button";
-  resetButton.textContent = "Reset all";
+  resetButton.textContent = parentInstance ? "Reset local" : "Reset all";
   resetButton.disabled = instance.overrides.length === 0;
   resetButton.addEventListener("click", () => {
     if (instance.overrides.length === 0) return;
@@ -1073,8 +1195,11 @@ function renderVariantInspector() {
   deleteButton.className = "variant-small-button variant-danger-button";
   deleteButton.type = "button";
   deleteButton.textContent = "Delete instance";
-  deleteButton.disabled = variantInstances.length <= 1;
-  if (deleteButton.disabled) deleteButton.title = "A component must keep at least one variant.";
+  deleteButton.disabled = !canRemoveVariantInstance(instance);
+  if (variantInstances.length <= 1) deleteButton.title = "A component must keep at least one variant.";
+  else if (isSoleAuthoredDefaultVariantInstance(instance)) {
+    deleteButton.title = "The variant matching the property defaults must remain.";
+  }
   deleteButton.addEventListener("click", () => removeVariantInstance(instance.id));
   const actions = makeInspectorSection("Instance");
   actions.section.append(deleteButton);
@@ -1129,8 +1254,9 @@ function renderVariantLayersTree() {
   }
   const nodes = document.createDocumentFragment();
   variantInstances.forEach((instance) => {
+    const isAuthoredDefault = instance === getAuthoredDefaultVariantInstance();
     nodes.append(createInstanceTreeRow(
-      instance.name,
+      isAuthoredDefault ? `${instance.name} · Default` : instance.name,
       1,
       createLayerTypeIcon("component"),
       instance.id === selectedVariantInstanceId && selectedVariantLayerTarget === null,

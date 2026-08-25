@@ -28,7 +28,8 @@ function getExportOpacity(element) {
 
 function getExportSizingStyle(type, record) {
   const element = record.element;
-  const { parentId, parentDirection } = getLayerSizingContext(type, record);
+  const { parentId, parentDirection: sizingParentDirection } = getLayerSizingContext(type, record);
+  const parentDirection = record.exportParentDirection ?? sizingParentDirection;
   const isRoot = Boolean(record.isComponent);
   const widthMode = getLayerDimensionMode(element, "width", type === "text" ? "hug" : "fixed");
   const heightMode = getLayerDimensionMode(element, "height", type === "text" ? "hug" : "fixed");
@@ -251,9 +252,10 @@ function renderExportVector(record, depth, exportProps) {
   return serializeSvgElementToJsx(parsed.documentElement, depth, style, rawProperties);
 }
 
-function getExportComponentProps() {
-  const usedNames = new Set();
+function getExportComponentProps({ reservedNames = [], excludedVariantPropIds = new Set() } = {}) {
+  const usedNames = new Set(reservedNames);
   return componentProps.flatMap((prop, index) => {
+    if (prop.variantPropId != null && excludedVariantPropIds.has(prop.variantPropId)) return [];
     const targetFrame = getFrameRecord(prop.targetFrameId);
     const targetText = getTextRecord(prop.targetTextId);
     const targetVector = getVectorRecord(prop.targetVectorId);
@@ -284,37 +286,179 @@ function getExportComponentProps() {
   });
 }
 
-function renderExportLayer(layer, depth, exportProps) {
+function toReactStyleProperty(property) {
+  return property.replace(/-([a-z])/g, (_, character) => character.toUpperCase());
+}
+
+function getVariantExportStyle(exportContext, target) {
+  const operations = exportContext?.operationsByTarget.get(target) ?? [];
+  return Object.fromEntries(operations.flatMap((operation) => {
+    if (["textContent", "disabled", "fill", "stroke"].includes(operation.property)) return [];
+    if (operation.property === "visibility") {
+      return [["visibility", variantBoolean(operation.value) ? "visible" : "hidden"]];
+    }
+    return [[toReactStyleProperty(operation.property), String(operation.value ?? "")]];
+  }));
+}
+
+function createVariantExportContext(instance) {
+  if (!instance || !(canvasRootStack instanceof HTMLElement)) return null;
+  const root = canvasRootStack.cloneNode(true);
+  const operations = resolveVariantOperations(instance);
+  operations.forEach((operation) => applyVariantOperation(root, operation));
+  const operationsByTarget = new Map();
+  operations.forEach((operation) => {
+    const targetOperations = operationsByTarget.get(operation.target) ?? [];
+    const existingIndex = targetOperations.findIndex((entry) => entry.property === operation.property);
+    if (existingIndex >= 0) targetOperations.splice(existingIndex, 1);
+    targetOperations.push(operation);
+    operationsByTarget.set(operation.target, targetOperations);
+  });
+  return { instance, root, operationsByTarget };
+}
+
+function getVariantExportRecord(type, record, exportContext) {
+  if (!exportContext) return record;
+  const target = record.isComponent ? "component:0" : `${type}:${record.id}`;
+  const element = findVariantTarget(exportContext.root, target);
+  if (!(element instanceof HTMLElement)) return record;
+  const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+  const parentTarget = parentId === null ? "component:0" : `frame:${parentId}`;
+  const parentElement = record.isComponent ? null : findVariantTarget(exportContext.root, parentTarget);
+  return {
+    ...record,
+    element,
+    ...(parentElement instanceof HTMLElement
+      ? { exportParentDirection: parentElement.style.flexDirection === "column" ? "vertical" : "horizontal" }
+      : {}),
+  };
+}
+
+function getExportVariants() {
+  const usedKeys = new Set();
+  return variantInstances.map((instance, index) => {
+    const baseKey = instance.name.trim() || `Variant ${index + 1}`;
+    let key = baseKey;
+    let suffix = 2;
+    while (usedKeys.has(key)) key = `${baseKey} ${suffix++}`;
+    usedKeys.add(key);
+    return { instance, key };
+  });
+}
+
+function getExportVariantAxes() {
+  const usedNames = new Set(["variant"]);
+  return variantProps
+    .filter((prop) => prop.type === "enum" || prop.type === "boolean")
+    .map((prop, index) => {
+      let exportName = prop.name.trim().replace(/[^a-zA-Z0-9_$]/g, "");
+      if (!/^[a-zA-Z_$]/.test(exportName)) exportName = `variantProp${index + 1}`;
+      const baseName = exportName || `variantProp${index + 1}`;
+      let suffix = 2;
+      while (usedNames.has(exportName)) exportName = `${baseName}${suffix++}`;
+      usedNames.add(exportName);
+      return { ...prop, exportName };
+    });
+}
+
+function getExportVariantAxisValue(instance, axis) {
+  return normalizeVariantPropValue(axis, instance?.propValues?.[axis.id]);
+}
+
+function getExportVariantAxisDefaultValue(axis) {
+  return getVariantPropDefaultValue(axis);
+}
+
+function getExportVariantCombinationKey(instance, axes) {
+  return JSON.stringify(axes.map((axis) => getExportVariantAxisValue(instance, axis)));
+}
+
+function getExportVariantEntries(axes) {
+  return getExportVariants().map((entry) => ({
+    ...entry,
+    combinationKey: getExportVariantCombinationKey(entry.instance, axes),
+  }));
+}
+
+function renderExportLayer(layer, depth, exportProps, exportContext = null) {
   const indent = "  ".repeat(depth);
-  if (layer.type === "vector") return renderExportVector(layer.record, depth, exportProps);
+  const record = getVariantExportRecord(layer.type, layer.record, exportContext);
+  const target = record.isComponent ? "component:0" : `${layer.type}:${record.id}`;
+  if (layer.type === "vector") {
+    const variantStyle = getVariantExportStyle(exportContext, target);
+    const parsed = new DOMParser().parseFromString(record.svgSource, "image/svg+xml");
+    const renderedSvg = record.element.querySelector("svg");
+    const svgElement = renderedSvg instanceof SVGElement ? renderedSvg : parsed.documentElement;
+    const visibilityProp = findVisibilityProp(exportProps, "vector", record.id);
+    const { style, rawProperties } = withVisibilityStyle({ ...getExportVectorStyle(record), ...variantStyle }, visibilityProp);
+    return serializeSvgElementToJsx(svgElement, depth, style, rawProperties);
+  }
   if (layer.type === "text") {
-    const value = layer.record.element.textContent || "";
-    const stringProp = exportProps.find((prop) => prop.targetTextId === layer.record.id && prop.property === "textContent");
+    const value = record.element.textContent || "";
+    const stringProp = exportProps.find((prop) => prop.targetTextId === record.id && prop.property === "textContent");
     const content = stringProp ? stringProp.exportName : JSON.stringify(value);
-    const textVisibilityProp = findVisibilityProp(exportProps, "text", layer.record.id);
-    const { style: textStyleObject, rawProperties: textRawProperties } = withVisibilityStyle(getExportTextStyle(layer.record), textVisibilityProp);
+    const textVisibilityProp = findVisibilityProp(exportProps, "text", record.id);
+    const variantStyle = getVariantExportStyle(exportContext, target);
+    const { style: textStyleObject, rawProperties: textRawProperties } = withVisibilityStyle({ ...getExportTextStyle(record), ...variantStyle }, textVisibilityProp);
     return `${indent}<span style={${formatReactStyle(textStyleObject, textRawProperties)}}>{${content}}</span>`;
   }
 
-  const children = layer.record.isComponent
+  const children = record.isComponent
     ? getLayerChildren(null)
-    : getLayerChildren(layer.record.id);
-  const frameVisibilityProp = findVisibilityProp(exportProps, "frame", layer.record.id);
-  const { style: frameStyleObject, rawProperties: frameRawProperties } = withVisibilityStyle(getExportFrameStyle(layer.record), frameVisibilityProp);
+    : getLayerChildren(record.id);
+  const frameVisibilityProp = findVisibilityProp(exportProps, "frame", record.id);
+  const variantStyle = getVariantExportStyle(exportContext, target);
+  const { style: frameStyleObject, rawProperties: frameRawProperties } = withVisibilityStyle({ ...getExportFrameStyle(record), ...variantStyle }, frameVisibilityProp);
   const style = formatReactStyle(frameStyleObject, frameRawProperties);
-  const htmlTag = normalizeFrameHtmlTag(layer.record.element.dataset.htmlTag || "div");
-  const disabledProp = exportProps.find((prop) => prop.targetFrameId === layer.record.id && prop.property === "disabled");
-  const onClickProp = exportProps.find((prop) => prop.targetFrameId === layer.record.id && prop.property === "onClick");
+  const htmlTag = normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div");
+  const disabledProp = exportProps.find((prop) => prop.targetFrameId === record.id && prop.property === "disabled");
+  const onClickProp = exportProps.find((prop) => prop.targetFrameId === record.id && prop.property === "onClick");
+  const isVariantDisabled = record.element.hasAttribute("disabled");
   const attributes = htmlTag === "button"
-    ? ` type="button"${disabledProp ? ` disabled={${disabledProp.exportName}}` : ""}${onClickProp ? ` onClick={${onClickProp.exportName}}` : ""}`
+    ? ` type="button"${disabledProp ? ` disabled={${disabledProp.exportName}}` : isVariantDisabled ? " disabled" : ""}${onClickProp ? ` onClick={${onClickProp.exportName}}` : ""}`
     : "";
   if (children.length === 0) return `${indent}<${htmlTag}${attributes} style={${style}} />`;
-  const childMarkup = children.map((child) => renderExportLayer(child, depth + 1, exportProps)).join("\n");
+  const childMarkup = children.map((child) => renderExportLayer(child, depth + 1, exportProps, exportContext)).join("\n");
   return `${indent}<${htmlTag}${attributes} style={${style}}>\n${childMarkup}\n${indent}</${htmlTag}>`;
 }
 
 function createReactComponentSource(componentName) {
-  const exportProps = getExportComponentProps();
+  const hasVariants = variantInstances.length > 0;
+  const variantAxes = hasVariants ? getExportVariantAxes() : [];
+  const excludedVariantPropIds = new Set(variantAxes.map((axis) => axis.id));
+  const exportProps = getExportComponentProps({
+    reservedNames: ["variant", ...variantAxes.map((axis) => axis.exportName)],
+    excludedVariantPropIds,
+  });
+  const defaultVariant = getDefaultVariantInstance();
+  if (hasVariants && defaultVariant) {
+    const exportVariants = getExportVariantEntries(variantAxes);
+    const defaultExportVariant = exportVariants.find(({ instance }) => instance === defaultVariant) ?? exportVariants[0];
+    const variantMarkup = exportVariants.map(({ instance, key }) => {
+      const context = createVariantExportContext(instance);
+      const markup = renderExportLayer({ type: "frame", record: currentComponent.frameRecord }, 3, exportProps, context);
+      return `    ${JSON.stringify(key)}: (\n${markup}\n    ),`;
+    }).join("\n");
+    const combinationOwners = new Map();
+    [defaultExportVariant, ...exportVariants.filter((entry) => entry !== defaultExportVariant)].forEach((entry) => {
+      if (!combinationOwners.has(entry.combinationKey)) combinationOwners.set(entry.combinationKey, entry.key);
+    });
+    const combinationRows = [...combinationOwners.entries()]
+      .map(([combinationKey, key]) => `    ${JSON.stringify(combinationKey)}: ${JSON.stringify(key)},`)
+      .join("\n");
+    const defaultAxisParameters = variantAxes.map((axis) => (
+      `${axis.exportName} = ${JSON.stringify(getExportVariantAxisDefaultValue(axis))}`
+    ));
+    const parameters = [
+      ...defaultAxisParameters,
+      "variant",
+      ...exportProps.map((prop) => prop.type === "action"
+        ? prop.exportName
+        : `${prop.exportName} = ${JSON.stringify(prop.defaultValue)}`),
+    ].join(", ");
+    const axisValues = variantAxes.map((axis) => axis.exportName).join(", ");
+    return `import React from "react";\n\nexport default function ${componentName}({ ${parameters} }) {\n  const variants = {\n${variantMarkup}\n  };\n  const authoredCombinations = {\n${combinationRows}\n  };\n  const combinationKey = JSON.stringify([${axisValues}]);\n  const selectedVariant = variant ?? authoredCombinations[combinationKey];\n  if (!selectedVariant || !variants[selectedVariant]) {\n    console.warn(${JSON.stringify(`${componentName}: no authored variant matches the supplied variant properties.`)}, { ${axisValues} });\n  }\n  return variants[selectedVariant] ?? variants[${JSON.stringify(defaultExportVariant.key)}];\n}\n`;
+  }
   const componentMarkup = currentComponent?.frameRecord
     ? renderExportLayer({ type: "frame", record: currentComponent.frameRecord }, 2, exportProps)
     : "    <></>";
@@ -328,7 +472,14 @@ function createReactComponentSource(componentName) {
 }
 
 function createStorySource(componentName) {
-  const exportProps = getExportComponentProps();
+  const hasVariants = variantInstances.length > 0;
+  const variantAxes = hasVariants ? getExportVariantAxes() : [];
+  const excludedVariantPropIds = new Set(variantAxes.map((axis) => axis.id));
+  const exportProps = getExportComponentProps({
+    reservedNames: ["variant", ...variantAxes.map((axis) => axis.exportName)],
+    excludedVariantPropIds,
+  });
+  const exportVariants = getExportVariantEntries(variantAxes);
   const actionProps = exportProps.filter((prop) => prop.type === "action");
   const actionImport = actionProps.length > 0 ? `import { action } from "storybook/actions";\n` : "";
   const actionDeclarations = actionProps.length > 0
@@ -337,16 +488,50 @@ function createStorySource(componentName) {
   const storyRender = actionProps.length > 0
     ? `\n  render: (args) => (\n    <${componentName}\n      {...args}\n${actionProps.map((prop) => `      ${prop.exportName}={() => ${prop.exportName}Action()}`).join("\n")}\n    />\n  ),`
     : "";
-  const argTypes = exportProps.length > 0
-    ? `\n  argTypes: {\n${exportProps.map((prop) => prop.type === "action"
+  const variantAxisArgTypes = variantAxes.map((axis) => axis.type === "boolean"
+    ? `    ${axis.exportName}: { control: "boolean" },`
+    : `    ${axis.exportName}: { control: "select", options: ${JSON.stringify(getVariantPropValues(axis))} },`);
+  const variantEscapeArgType = hasVariants
+    ? "    variant: { control: false, table: { disable: true } },"
+    : "";
+  const argTypes = exportProps.length > 0 || hasVariants
+    ? `\n  argTypes: {\n${[...variantAxisArgTypes, variantEscapeArgType, ...exportProps.map((prop) => prop.type === "action"
       ? `    ${prop.exportName}: { control: false },`
-      : `    ${prop.exportName}: { control: "${prop.type === "string" ? "text" : "boolean"}" },`).join("\n")}\n  },`
+      : `    ${prop.exportName}: { control: "${prop.type === "string" ? "text" : "boolean"}" },`)].filter(Boolean).join("\n")}\n  },`
     : "";
   const propsWithDefaults = exportProps.filter((prop) => prop.type !== "action");
-  const defaultArgs = propsWithDefaults.length > 0
-    ? `{\n  args: {\n${propsWithDefaults.map((prop) => `    ${prop.exportName}: ${JSON.stringify(prop.defaultValue)},`).join("\n")}\n  },\n}`
+  const defaultVariant = getDefaultVariantInstance();
+  const defaultExportVariant = exportVariants.find(({ instance }) => instance === defaultVariant) ?? exportVariants[0];
+  const defaultArgRows = [
+    ...variantAxes.map((axis) => `    ${axis.exportName}: ${JSON.stringify(getExportVariantAxisDefaultValue(axis))},`),
+    ...propsWithDefaults.map((prop) => `    ${prop.exportName}: ${JSON.stringify(prop.defaultValue)},`),
+  ];
+  const defaultArgs = defaultArgRows.length > 0
+    ? `{\n  args: {\n${defaultArgRows.join("\n")}\n  },\n}`
     : "{}";
-  return `${actionImport}import ${componentName} from "./${componentName}";\n\n${actionDeclarations}const meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${argTypes}${storyRender}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};\n`;
+  const usedStoryNames = new Set(["Default"]);
+  const canonicalCombinationOwner = new Map();
+  [defaultExportVariant, ...exportVariants.filter((entry) => entry !== defaultExportVariant)].forEach((entry) => {
+    if (!canonicalCombinationOwner.has(entry.combinationKey)) canonicalCombinationOwner.set(entry.combinationKey, entry.key);
+  });
+  const variantStories = exportVariants
+    .filter(({ instance }) => instance !== defaultVariant)
+    .map(({ instance, key }, index) => {
+      let storyName = toReactComponentName(instance.name || `Variant ${index + 2}`);
+      const baseName = storyName === "Default" ? "VariantDefault" : storyName;
+      storyName = baseName;
+      let suffix = 2;
+      while (usedStoryNames.has(storyName)) storyName = `${baseName}${suffix++}`;
+      usedStoryNames.add(storyName);
+      const axisRows = variantAxes
+        .map((axis) => `    ${axis.exportName}: ${JSON.stringify(getExportVariantAxisValue(instance, axis))},`);
+      const needsNamedEscape = canonicalCombinationOwner.get(
+        getExportVariantCombinationKey(instance, variantAxes),
+      ) !== key;
+      const escapeRow = needsNamedEscape ? [`    variant: ${JSON.stringify(key)},`] : [];
+      return `\nexport const ${storyName} = {\n  args: {\n    ...Default.args,\n${[...axisRows, ...escapeRow].join("\n")}\n  },\n};`;
+    }).join("\n");
+  return `${actionImport}import ${componentName} from "./${componentName}";\n\n${actionDeclarations}const meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${argTypes}${storyRender}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};${variantStories}\n`;
 }
 
 function downloadExportFile(fileName, source) {
