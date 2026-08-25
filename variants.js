@@ -116,20 +116,40 @@ function getVariantInstance(instanceId = selectedVariantInstanceId) {
   return variantInstances.find((instance) => instance.id === instanceId) ?? null;
 }
 
+function getDefaultVariantInstance() {
+  return variantInstances.find((instance) => instance.isDefault) ?? variantInstances[0] ?? null;
+}
+
+function normalizeDefaultVariantInstance() {
+  if (variantInstances.length === 0) return null;
+  const defaultInstance = getDefaultVariantInstance();
+  variantInstances.forEach((instance) => {
+    instance.isDefault = instance === defaultInstance;
+  });
+  return defaultInstance;
+}
+
 function getSelectedVariantStyleOverride(property, fallback = "") {
   const instance = getVariantInstance();
   const override = instance?.overrides?.find((entry) => entry.target === "component:0" && entry.property === property);
   return override ? String(override.value ?? "") : fallback;
 }
 
-function setSelectedVariantStyleOverride(property, value, { render = true } = {}) {
+function getSelectedVariantTargetStyleOverride(property, fallback = "") {
+  const instance = getVariantInstance();
+  const target = selectedVariantLayerTarget || "component:0";
+  const override = instance?.overrides?.find((entry) => entry.target === target && entry.property === property);
+  return override ? String(override.value ?? "") : fallback;
+}
+
+function setSelectedVariantStyleOverride(property, value, { render = true, record = true } = {}) {
   const instance = getVariantInstance();
   if (!instance) return false;
   const nextValue = String(value ?? "");
   const overrides = instance.overrides ?? (instance.overrides = []);
   const override = overrides.find((entry) => entry.target === "component:0" && entry.property === property);
   if (override?.value === nextValue) return true;
-  recordHistory();
+  if (record) recordHistory();
   if (override) override.value = nextValue;
   else overrides.push({ target: "component:0", property, value: nextValue });
   if (render) renderVariantInstances();
@@ -157,6 +177,17 @@ function setSelectedVariantLayerOverride(property, value, { render = false } = {
   else overrides.push({ target: selectedVariantLayerTarget, property, value: nextValue });
   if (render) renderVariantInstances();
   return true;
+}
+
+function setSelectedVariantFrameStyleOverride(property, value, options = {}) {
+  if (selectedVariantLayerTarget?.startsWith("frame:")) {
+    if (options.record !== false) recordHistory();
+    return setSelectedVariantLayerOverride(property, value, {
+      ...options,
+      render: options.render !== false,
+    });
+  }
+  return setSelectedVariantStyleOverride(property, value, options);
 }
 
 function getVariantTargetOptions() {
@@ -358,6 +389,47 @@ function prepareVariantClone(clone, instanceId) {
   namespaceVariantCloneIds(clone, instanceId);
 }
 
+function selectNewSharedLayerInVariant(instanceId, target, { editText = false } = {}) {
+  selectedVariantInstanceId = instanceId;
+  selectedVariantLayerTarget = target;
+  clearMasterSelectionForVariant();
+  selectTool("select");
+  renderTree();
+  if (!editText) return;
+  setTimeout(() => {
+    requestAnimationFrame(() => {
+      const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`);
+      const text = preview ? findVariantTarget(preview.querySelector(".canvas-root-stack"), target) : null;
+      if (text instanceof HTMLElement) text.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, button: 0 }));
+    });
+  }, 0);
+}
+
+function handleVariantStructureToolClick(instance, parentTarget, event) {
+  if (activeTool !== "text" && activeTool !== "frame") return false;
+  const parentRecord = parentTarget === "component:0"
+    ? currentComponent?.frameRecord
+    : parentTarget.startsWith("frame:")
+      ? getFrameRecord(Number(parentTarget.split(":")[1]))
+      : null;
+  if (!parentRecord) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  if (activeTool === "frame") {
+    const record = createCanvasFrame(0, 0, parentRecord, { select: false });
+    if (record) selectNewSharedLayerInVariant(instance.id, `frame:${record.id}`);
+    return true;
+  }
+  const record = createCanvasText(parentRecord, 0, 0, { beginEditing: false });
+  if (!record) return true;
+  record.isNew = false;
+  record.name = `Text ${record.id}`;
+  record.element.textContent = "Text";
+  record.element.classList.remove("is-new-empty");
+  selectNewSharedLayerInVariant(instance.id, `text:${record.id}`, { editText: true });
+  return true;
+}
+
 function renderBaseComponentLabel() {
   if (!(canvasRootStack instanceof HTMLElement)) return;
   const label = canvasRootStack.querySelector("[data-component-preview-label]");
@@ -374,7 +446,10 @@ function renderBaseComponentLabel() {
 
 function renderVariantInstances() {
   if (!(componentSet instanceof HTMLElement) || !(canvasRootStack instanceof HTMLElement)) return;
-  renderBaseComponentLabel();
+  const hasVariants = variantInstances.length > 0;
+  componentSet.classList.toggle("has-variants", hasVariants);
+  canvasRootStack.setAttribute("aria-hidden", String(hasVariants));
+  if (!hasVariants) renderBaseComponentLabel();
   componentSet.querySelectorAll(":scope > .variant-preview").forEach((preview) => preview.remove());
 
   variantInstances.forEach((instance) => {
@@ -394,6 +469,9 @@ function renderVariantInstances() {
     prepareVariantClone(clone, instance.id);
     resolveVariantOperations(instance).forEach((operation) => applyVariantOperation(clone, operation));
     syncVariantFlexbox(clone);
+    clone.addEventListener("click", (event) => {
+      if (event.target === clone) handleVariantStructureToolClick(instance, "component:0", event);
+    });
     clone.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((layerElement) => {
       const type = layerElement.classList.contains("canvas-frame")
         ? "frame"
@@ -417,7 +495,13 @@ function renderVariantInstances() {
         layerElement.classList.add("is-selected");
         layerElement.setAttribute("aria-selected", "true");
         updateInspector();
+        syncResizeOverlay();
       });
+      if (type === "frame") {
+        layerElement.addEventListener("click", (event) => {
+          if (event.target === layerElement) handleVariantStructureToolClick(instance, target, event);
+        });
+      }
       if (type !== "text") return;
       const text = layerElement;
       const textId = id;
@@ -437,6 +521,12 @@ function renderVariantInstances() {
         selection?.addRange(range);
       };
       text.addEventListener("dblclick", beginEditing);
+      text.addEventListener("click", (event) => {
+        if (activeTool !== "text") return;
+        selectTool("select");
+        selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
+        beginEditing(event);
+      });
       text.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && !text.isContentEditable) beginEditing(event);
       });
@@ -467,6 +557,7 @@ function renderVariantInstances() {
     componentSet.append(preview);
     setVariantLabelTooltip(label, label.textContent);
   });
+  requestAnimationFrame(syncResizeOverlay);
 }
 
 function scheduleVariantInstanceRender() {
@@ -507,12 +598,25 @@ function selectVariantInstance(instanceId, options = {}) {
 function addVariantInstance() {
   if (!currentComponent) return null;
   recordHistory();
+  if (variantInstances.length === 0) {
+    variantInstances.push({
+      id: nextVariantInstanceId++,
+      name: "Default",
+      componentId: currentComponent.id,
+      isDefault: true,
+      propValues: Object.fromEntries(variantProps
+        .filter((prop) => prop.type !== "boolean")
+        .map((prop) => [prop.id, prop.defaultValue])),
+      overrides: [],
+    });
+  }
+  const sourceInstance = getVariantInstance() ?? getDefaultVariantInstance();
   const index = variantInstances.length;
-  const sourceInstance = getVariantInstance();
   const instance = {
     id: nextVariantInstanceId++,
-    name: `Preview ${index + 1}`,
+    name: `Variant ${index + 1}`,
     componentId: currentComponent.id,
+    isDefault: false,
     propValues: sourceInstance
       ? structuredClone(sourceInstance.propValues ?? {})
       : Object.fromEntries(variantProps
@@ -530,10 +634,14 @@ function addVariantInstance() {
 
 function removeVariantInstance(instanceId) {
   const index = variantInstances.findIndex((instance) => instance.id === instanceId);
-  if (index < 0) return false;
+  if (index < 0 || variantInstances.length <= 1) return false;
   recordHistory();
+  const removedDefault = Boolean(variantInstances[index].isDefault);
   variantInstances.splice(index, 1);
+  if (removedDefault) variantInstances[0].isDefault = true;
+  normalizeDefaultVariantInstance();
   selectedVariantInstanceId = variantInstances[Math.min(index, variantInstances.length - 1)]?.id ?? null;
+  selectedVariantLayerTarget = null;
   renderTree();
   return true;
 }
@@ -965,13 +1073,15 @@ function renderVariantInspector() {
   deleteButton.className = "variant-small-button variant-danger-button";
   deleteButton.type = "button";
   deleteButton.textContent = "Delete instance";
+  deleteButton.disabled = variantInstances.length <= 1;
+  if (deleteButton.disabled) deleteButton.title = "A component must keep at least one variant.";
   deleteButton.addEventListener("click", () => removeVariantInstance(instance.id));
   const actions = makeInspectorSection("Instance");
   actions.section.append(deleteButton);
   variantInspectorContent.append(properties.section, overrides.section, actions.section);
 }
 
-function createInstanceTreeRow(label, depth, icon, selected, instanceId) {
+function createInstanceTreeRow(label, depth, icon, selected, instanceId, target = null) {
   const row = document.createElement("button");
   const iconCell = document.createElement("span");
   const labelSpan = document.createElement("span");
@@ -985,18 +1095,24 @@ function createInstanceTreeRow(label, depth, icon, selected, instanceId) {
   labelSpan.className = "tree-node-label";
   labelSpan.textContent = label;
   row.append(iconCell, labelSpan);
-  row.addEventListener("click", () => selectVariantInstance(instanceId));
+  row.addEventListener("click", () => {
+    selectVariantInstance(instanceId, { render: false });
+    selectedVariantLayerTarget = target;
+    renderTree();
+  });
   return row;
 }
 
 function appendInstanceLayerRows(fragment, parentFrameId, depth, instance) {
   getLayerChildren(parentFrameId).forEach((layer) => {
+    const target = `${layer.type}:${layer.record.id}`;
     fragment.append(createInstanceTreeRow(
       getTreeNodeName(layer.type, layer.record),
       depth,
       createLayerTypeIcon(layer.type, layer.record),
-      false,
+      instance.id === selectedVariantInstanceId && target === selectedVariantLayerTarget,
       instance.id,
+      target,
     ));
     if (layer.type === "frame") appendInstanceLayerRows(fragment, layer.record.id, depth + 1, instance);
   });
@@ -1013,7 +1129,13 @@ function renderVariantLayersTree() {
   }
   const nodes = document.createDocumentFragment();
   variantInstances.forEach((instance) => {
-    nodes.append(createInstanceTreeRow(instance.name, 1, createLayerTypeIcon("component"), instance.id === selectedVariantInstanceId, instance.id));
+    nodes.append(createInstanceTreeRow(
+      instance.name,
+      1,
+      createLayerTypeIcon("component"),
+      instance.id === selectedVariantInstanceId && selectedVariantLayerTarget === null,
+      instance.id,
+    ));
     appendInstanceLayerRows(nodes, null, 2, instance);
   });
   instanceTreeView.replaceChildren(nodes);

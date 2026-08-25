@@ -1083,6 +1083,10 @@ textarea:focus-visible {
   flex: 0 0 auto;
 }
 
+.component-set.has-variants > .canvas-root-stack {
+  display: none;
+}
+
 .canvas-root-stack.is-selected {
   outline: 1px solid #992CFF;
 }
@@ -1142,6 +1146,7 @@ textarea:focus-visible {
 
 .component-preview-label {
   pointer-events: auto;
+  cursor: default;
 }
 
 .variant-preview-content {
@@ -1565,7 +1570,7 @@ textarea:focus-visible {
 
 .resize-overlay {
   position: absolute;
-  z-index: 2;
+  z-index: 5;
   pointer-events: none;
 }
 

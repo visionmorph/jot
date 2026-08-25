@@ -165,6 +165,14 @@ function selectComponentLayerTreeNode(component, type, record, additive = false)
       ? getTextRecord(record.id)
       : getVectorRecord(record.id);
   if (!activeRecord) return;
+  if (variantInstances.length > 0) {
+    const instanceId = getVariantInstance()?.id ?? getDefaultVariantInstance()?.id;
+    if (instanceId == null) return;
+    selectVariantInstance(instanceId, { render: false });
+    selectedVariantLayerTarget = `${type}:${activeRecord.id}`;
+    renderTree();
+    return;
+  }
   if (type === "frame") selectCanvasFrame(activeRecord.element, isChangingComponent ? false : additive);
   else if (type === "text") selectCanvasText(activeRecord.element, isChangingComponent ? false : additive);
   else selectCanvasVector(activeRecord.element, isChangingComponent ? false : additive);
@@ -568,6 +576,10 @@ function selectComponentTreeNode(componentId = currentComponent?.id) {
     renderTree();
     return;
   }
+  if (variantInstances.length > 0) {
+    selectVariantInstance(getVariantInstance()?.id ?? getDefaultVariantInstance()?.id);
+    return;
+  }
   selectedLayerKeys.clear();
   clearElementSelection();
   selectedComponentId = componentId;
@@ -593,7 +605,8 @@ function renderComponentTreeNode(component) {
   const isBranch = componentHasChildLayers(component);
   const isExpanded = isBranch && (isActive ? isComponentExpanded : component.expanded !== false);
   const rootLayers = getComponentLayerChildren(component, null);
-  const isSelected = selectedComponentId === component.id;
+  const isSelected = selectedComponentId === component.id
+    || (isActive && selectedVariantInstanceId !== null);
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic tree-node--component";
@@ -664,9 +677,9 @@ function renderComponentTreeNode(component) {
 function renderTree() {
   if (!treeView) return;
   treeView.replaceChildren(...components.map(renderComponentTreeNode));
+  renderVariantSystem();
   updateInspector();
   renderComponentProps();
-  renderVariantSystem();
 }
 
 addComponentButton?.addEventListener("click", () => {

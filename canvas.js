@@ -60,7 +60,11 @@ if (canvas instanceof HTMLElement) {
 function getSelectedResizeElement() {
   if (selectedVariantInstanceId !== null) {
     const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
-    return preview?.querySelector(".canvas-root-stack") ?? null;
+    const root = preview?.querySelector(".canvas-root-stack");
+    if (!(root instanceof HTMLElement)) return null;
+    return selectedVariantLayerTarget
+      ? findVariantTarget(root, selectedVariantLayerTarget)
+      : root;
   }
   if (selectedComponentId === currentComponent?.id) return currentComponent.frameRecord.element;
   return selectedCanvasFrame || selectedCanvasText || selectedCanvasVector;
@@ -68,7 +72,13 @@ function getSelectedResizeElement() {
 
 function getSelectedResizeRecord() {
   if (selectedVariantInstanceId !== null && currentComponent?.frameRecord) {
-    return { type: "variant", record: currentComponent.frameRecord, parentId: null };
+    return {
+      type: "variant",
+      target: selectedVariantLayerTarget || "component:0",
+      targetType: getVariantTargetType(selectedVariantLayerTarget || "component:0"),
+      record: currentComponent.frameRecord,
+      parentId: null,
+    };
   }
   const frameRecord = getSelectedFrameRecord();
   if (frameRecord) return { type: "frame", record: frameRecord, parentId: frameRecord.parentId };
@@ -191,14 +201,27 @@ function applyResizePointerPosition(clientX, clientY, proportional = false) {
 
   if (!widthChanged && !heightChanged) return;
   if (layer.type === "variant") {
+    if (!resizeInteraction.hasRecordedHistory) {
+      recordHistory();
+      resizeInteraction.hasRecordedHistory = true;
+    }
+    const setOverride = layer.target === "component:0"
+      ? (property, value) => setSelectedVariantStyleOverride(property, value, { render: false, record: false })
+      : (property, value) => setSelectedVariantLayerOverride(property, value, { render: false });
     if (changesWidth) {
-      setSelectedVariantStyleOverride("width", `${nextWidth}px`, { render: false });
+      setOverride("width", `${nextWidth}px`);
+      element.dataset.widthMode = "fixed";
+      element.dataset.width = String(nextWidth);
       element.style.width = `${nextWidth}px`;
     }
     if (changesHeight) {
-      setSelectedVariantStyleOverride("height", `${nextHeight}px`, { render: false });
+      setOverride("height", `${nextHeight}px`);
+      element.dataset.heightMode = "fixed";
+      element.dataset.height = String(nextHeight);
       element.style.height = `${nextHeight}px`;
     }
+    if (layer.targetType === "text") syncSelectedTextSizeInputs();
+    else if (layer.targetType === "component" || layer.targetType === "frame") syncInspectorToSelectedFrame();
     positionResizeOverlay();
     syncVariantActionOverlay();
     return;

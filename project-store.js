@@ -293,6 +293,7 @@ function createEmptyWorkspaceState(componentId) {
     variantProps: [],
     variantRules: [],
     variantInstances: [],
+    variantModelVersion: 2,
     nextVariantPropId: 1,
     nextVariantRuleId: 1,
     nextVariantInstanceId: 1,
@@ -482,6 +483,7 @@ function captureWorkspaceState() {
     variantProps: structuredClone(variantProps),
     variantRules: structuredClone(variantRules),
     variantInstances: structuredClone(variantInstances),
+    variantModelVersion: 2,
     nextVariantPropId,
     nextVariantRuleId,
     nextVariantInstanceId,
@@ -602,7 +604,23 @@ function restoreWorkspaceState(snapshot, options = {}) {
   nextVariantPropId = snapshot.nextVariantPropId ?? 1;
   nextVariantRuleId = snapshot.nextVariantRuleId ?? 1;
   nextVariantInstanceId = snapshot.nextVariantInstanceId ?? 1;
+  if (variantInstances.length > 0 && snapshot.variantModelVersion !== 2) {
+    variantInstances.unshift({
+      id: nextVariantInstanceId++,
+      name: "Default",
+      componentId: currentComponent?.id ?? snapshot.componentId,
+      isDefault: true,
+      propValues: Object.fromEntries(variantProps
+        .filter((prop) => prop.type !== "boolean")
+        .map((prop) => [prop.id, prop.defaultValue])),
+      overrides: [],
+    });
+  }
+  normalizeDefaultVariantInstance();
   selectedVariantInstanceId = snapshot.selectedVariantInstanceId ?? null;
+  if (variantInstances.length > 0 && !getVariantInstance(selectedVariantInstanceId)) {
+    selectedVariantInstanceId = getDefaultVariantInstance()?.id ?? null;
+  }
   expandedFrameIds.clear();
   snapshot.expandedFrameIds.forEach((frameId) => expandedFrameIds.add(frameId));
   selectedCanvasFrame = snapshot.selectedCanvasFrame;
@@ -611,6 +629,7 @@ function restoreWorkspaceState(snapshot, options = {}) {
   selectedComponentId = snapshot.selectedComponentId === currentComponent?.id
     ? snapshot.selectedComponentId
     : null;
+  if (variantInstances.length > 0) selectedComponentId = null;
   selectedLayerKeys.clear();
   (snapshot.selectedLayerKeys ?? []).forEach((key) => selectedLayerKeys.add(key));
   if (selectedLayerKeys.size === 0) {
@@ -691,8 +710,9 @@ function activateComponent(componentId, options = {}) {
   component.expandedFrameIds = [...expandedFrameIds];
 
   if (options.selectComponent !== false) {
-    selectedComponentId = component.id;
-    selectedVariantInstanceId = null;
+    const defaultVariant = getDefaultVariantInstance();
+    selectedComponentId = defaultVariant ? null : component.id;
+    selectedVariantInstanceId = defaultVariant?.id ?? null;
     selectedLayerKeys.clear();
     selectedCanvasFrame = null;
     selectedCanvasText = null;
@@ -738,14 +758,39 @@ function getSelectedTextRecord() {
 }
 
 function getSelectedFrameRecord() {
+  if (selectedVariantInstanceId !== null) {
+    const target = selectedVariantLayerTarget || "component:0";
+    if (target === "component:0") {
+      const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+      const element = preview?.querySelector(".canvas-root-stack");
+      if (currentComponent?.frameRecord && element instanceof HTMLElement) {
+        return { ...currentComponent.frameRecord, element, isVariantInstance: true };
+      }
+      return undefined;
+    }
+    if (target.startsWith("frame:")) {
+      const frameId = Number(target.split(":")[1]);
+      const sourceRecord = frameRecords.find((record) => record.id === frameId);
+      const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+      const element = preview?.querySelector(`[data-frame-id="${CSS.escape(String(frameId))}"]`);
+      if (sourceRecord && element instanceof HTMLElement) return { ...sourceRecord, element, isVariantInstance: true };
+    }
+    return undefined;
+  }
   if (selectedComponentId === currentComponent?.id) return currentComponent.frameRecord;
-  if (selectedVariantInstanceId !== null) return currentComponent?.frameRecord;
   return selectedCanvasFrame
     ? frameRecords.find((record) => record.element === selectedCanvasFrame)
     : undefined;
 }
 
 function getSelectedVectorRecord() {
+  if (selectedVariantInstanceId !== null && selectedVariantLayerTarget?.startsWith("vector:")) {
+    const vectorId = Number(selectedVariantLayerTarget.split(":")[1]);
+    const sourceRecord = vectorRecords.find((record) => record.id === vectorId);
+    const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+    const element = preview?.querySelector(`[data-vector-id="${CSS.escape(String(vectorId))}"]`);
+    if (sourceRecord && element instanceof HTMLElement) return { ...sourceRecord, element, isVariantInstance: true };
+  }
   return selectedCanvasVector
     ? vectorRecords.find((record) => record.element === selectedCanvasVector)
     : undefined;
