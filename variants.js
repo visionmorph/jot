@@ -3,7 +3,7 @@
 const VARIANT_PROPERTY_OPTIONS = {
   component: ["backgroundColor", "color", "borderColor", "borderWidth", "borderRadius", "padding", "gap", "width", "height", "flexDirection", "alignItems", "justifyContent", "flexWrap", "opacity", "visibility", "disabled"],
   frame: ["backgroundColor", "color", "borderColor", "borderWidth", "borderRadius", "padding", "gap", "width", "height", "flexDirection", "alignItems", "justifyContent", "flexWrap", "flex", "alignSelf", "opacity", "visibility", "disabled"],
-  text: ["textContent", "color", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "opacity", "visibility"],
+  text: ["textContent", "color", "fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "textAlign", "alignContent", "display", "width", "height", "opacity", "visibility"],
   vector: ["fill", "stroke", "width", "height", "opacity", "visibility"],
 };
 
@@ -144,6 +144,19 @@ function setVariantTextOverride(instance, textId, value, { render = true } = {})
   if (override) override.value = value;
   else overrides.push({ target, property: "textContent", value });
   if (render) renderVariantInstances();
+}
+
+function setSelectedVariantLayerOverride(property, value, { render = false } = {}) {
+  const instance = getVariantInstance();
+  if (!instance || !selectedVariantLayerTarget) return false;
+  const overrides = instance.overrides ?? (instance.overrides = []);
+  const override = overrides.find((entry) => entry.target === selectedVariantLayerTarget && entry.property === property);
+  const nextValue = String(value ?? "");
+  if (override?.value === nextValue) return true;
+  if (override) override.value = nextValue;
+  else overrides.push({ target: selectedVariantLayerTarget, property, value: nextValue });
+  if (render) renderVariantInstances();
+  return true;
 }
 
 function getVariantTargetOptions() {
@@ -403,6 +416,7 @@ function renderVariantInstances() {
         });
         layerElement.classList.add("is-selected");
         layerElement.setAttribute("aria-selected", "true");
+        updateInspector();
       });
       if (type !== "text") return;
       const text = layerElement;

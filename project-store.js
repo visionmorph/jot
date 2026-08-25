@@ -725,6 +725,13 @@ function deleteSelectedComponent() {
 }
 
 function getSelectedTextRecord() {
+  if (selectedVariantInstanceId !== null && selectedVariantLayerTarget?.startsWith("text:")) {
+    const textId = Number(selectedVariantLayerTarget.split(":")[1]);
+    const sourceRecord = textRecords.find((record) => record.id === textId);
+    const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+    const element = preview?.querySelector(`[data-text-id="${CSS.escape(String(textId))}"]`);
+    if (sourceRecord && element instanceof HTMLElement) return { ...sourceRecord, element, isVariantInstance: true };
+  }
   return selectedCanvasText
     ? textRecords.find((record) => record.element === selectedCanvasText)
     : undefined;

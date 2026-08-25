@@ -239,24 +239,48 @@ function syncInspectorToSelectedText() {
   if (!record) return;
 
   const { element } = record;
-  const family = element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
-  const weight = Number(element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
+  const styles = record.isVariantInstance ? getComputedStyle(element) : null;
+  const family = record.isVariantInstance
+    ? styles.fontFamily.split(",")[0].replace(/^['"]|['"]$/g, "").trim() || DEFAULT_FONT_FAMILY
+    : element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
+  const weight = Number(record.isVariantInstance ? styles.fontWeight : element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
   if (fontSelect instanceof HTMLSelectElement) fontSelect.value = family;
   populateWeightOptions(family, weight);
   if (sizeSelect instanceof HTMLInputElement) {
-    sizeSelect.value = element.dataset.fontSize || "14";
+    sizeSelect.value = record.isVariantInstance ? String(Number.parseFloat(styles.fontSize) || 14) : element.dataset.fontSize || "14";
     syncTextSizeCombobox(sizeSelect.value);
   }
-  if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.value = element.dataset.lineHeight || "Auto";
-  if (letterSpacingInput instanceof HTMLInputElement) letterSpacingInput.value = element.dataset.letterSpacing || "0%";
+  if (lineHeightInput instanceof HTMLInputElement) {
+    lineHeightInput.value = record.isVariantInstance
+      ? styles.lineHeight === "normal" ? "Auto" : String(Number.parseFloat(styles.lineHeight))
+      : element.dataset.lineHeight || "Auto";
+  }
+  if (letterSpacingInput instanceof HTMLInputElement) {
+    const renderedSpacing = record.isVariantInstance ? styles.letterSpacing : "";
+    letterSpacingInput.value = record.isVariantInstance
+      ? renderedSpacing === "normal" ? "0%" : renderedSpacing
+      : element.dataset.letterSpacing || "0%";
+  }
   if (textColorPicker instanceof HTMLInputElement) {
-    const color = Object.prototype.hasOwnProperty.call(element.dataset, "textColor")
-      ? element.dataset.textColor
-      : "#000000";
-    syncCustomColorControl(textColorPicker, color, element.dataset.textColorOpacity || "100");
+    const renderedColor = record.isVariantInstance ? styles.color : "";
+    const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+    const color = record.isVariantInstance
+      ? cssColorToHex(renderedColor) || "#000000"
+      : Object.prototype.hasOwnProperty.call(element.dataset, "textColor") ? element.dataset.textColor : "#000000";
+    const opacity = record.isVariantInstance ? rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : 100 : element.dataset.textColorOpacity || "100";
+    syncCustomColorControl(textColorPicker, color, opacity);
   }
   textAlignmentOptions.forEach((option) => {
-    const isSelected = option.getAttribute("data-text-alignment") === normalizeFrameAlignment(element.dataset.alignment || "top-left");
+    const vertical = record.isVariantInstance
+      ? styles.alignContent === "center" ? "center" : styles.alignContent === "end" ? "bottom" : "top"
+      : null;
+    const horizontal = record.isVariantInstance
+      ? styles.textAlign === "center" ? "center" : styles.textAlign === "right" ? "right" : "left"
+      : null;
+    const alignment = record.isVariantInstance
+      ? vertical === "center" && horizontal === "center" ? "center" : `${vertical}-${horizontal}`
+      : normalizeFrameAlignment(element.dataset.alignment || "top-left");
+    const isSelected = option.getAttribute("data-text-alignment") === alignment;
     option.classList.toggle("is-selected", isSelected);
     option.setAttribute("aria-pressed", String(isSelected));
   });
@@ -461,8 +485,9 @@ function syncInspectorToSelectedVector() {
 
 function updateInspector() {
   const isVariantSelected = selectedVariantInstanceId !== null;
-  const isComponentSelected = selectedComponentId === currentComponent?.id || isVariantSelected;
-  const isTextSelected = !isComponentSelected && selectedCanvasText !== null;
+  const isVariantTextSelected = isVariantSelected && selectedVariantLayerTarget?.startsWith("text:");
+  const isComponentSelected = selectedComponentId === currentComponent?.id || (isVariantSelected && !isVariantTextSelected);
+  const isTextSelected = isVariantTextSelected || (!isComponentSelected && selectedCanvasText !== null);
   const isFrameSelected = isComponentSelected || selectedCanvasFrame !== null;
   const isVectorSelected = !isComponentSelected && selectedCanvasVector !== null;
   if (pageInspector instanceof HTMLElement) pageInspector.hidden = isTextSelected || isFrameSelected || isVectorSelected;
@@ -1113,14 +1138,16 @@ function getCustomColorState(control) {
   if (property === "text") {
     const record = getSelectedTextRecord();
     if (!record) return null;
-    const color = Object.prototype.hasOwnProperty.call(record.element.dataset, "textColor")
-      ? record.element.dataset.textColor
-      : "#000000";
+    const renderedColor = record.isVariantInstance ? getComputedStyle(record.element).color : "";
+    const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+    const color = record.isVariantInstance
+      ? cssColorToHex(renderedColor) || "#000000"
+      : Object.prototype.hasOwnProperty.call(record.element.dataset, "textColor") ? record.element.dataset.textColor : "#000000";
     return {
       property,
       record,
       color,
-      opacity: normalizeColorOpacity(record.element.dataset.textColorOpacity || "100"),
+      opacity: normalizeColorOpacity(record.isVariantInstance && rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : record.element.dataset.textColorOpacity || "100"),
       picker: textColorPicker,
     };
   }
@@ -1169,6 +1196,17 @@ function applyCustomColorValue(control, color, opacity) {
   if (selectedVariantInstanceId !== null && state.property === "frame-background") {
     if (normalizedColor) control.dataset.lastColor = normalizedColor;
     setSelectedVariantStyleOverride("backgroundColor", getColorWithOpacity(normalizedColor, normalizedOpacity));
+    syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
+    return true;
+  }
+  if (selectedVariantInstanceId !== null && state.property === "text" && state.record.isVariantInstance) {
+    if (normalizedColor) control.dataset.lastColor = normalizedColor;
+    const renderedColor = getColorWithOpacity(normalizedColor, normalizedOpacity);
+    if (state.color !== normalizedColor || state.opacity !== normalizedOpacity) recordHistory();
+    state.record.element.dataset.textColor = normalizedColor;
+    state.record.element.dataset.textColorOpacity = String(normalizedOpacity);
+    state.record.element.style.color = renderedColor;
+    setSelectedVariantLayerOverride("color", renderedColor);
     syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
     return true;
   }
@@ -1521,6 +1559,11 @@ if (colorPicker instanceof HTMLInputElement) {
   syncCustomColorControl(colorPicker, canvasColorValue, canvasColorOpacity);
 }
 
+function persistVariantTextStyle(record, property, value) {
+  if (!record?.isVariantInstance) return;
+  setSelectedVariantLayerOverride(property, value);
+}
+
 fontSelect?.addEventListener("change", () => {
   const record = getSelectedTextRecord();
   if (!record || !(fontSelect instanceof HTMLSelectElement)) return;
@@ -1536,6 +1579,8 @@ fontSelect?.addEventListener("change", () => {
   record.element.dataset.fontWeight = String(weight);
   record.element.style.fontFamily = `${JSON.stringify(family)}, ${getFontFallback(font?.category || "Sans Serif")}`;
   record.element.style.fontWeight = String(weight);
+  persistVariantTextStyle(record, "fontFamily", record.element.style.fontFamily);
+  persistVariantTextStyle(record, "fontWeight", String(weight));
   loadGoogleFont(family, weight);
   requestAnimationFrame(syncSelectedTextSizeInputs);
 });
@@ -1548,6 +1593,7 @@ weightSelect?.addEventListener("change", () => {
   if (Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT) !== weight) recordHistory();
   record.element.dataset.fontWeight = String(weight);
   record.element.style.fontWeight = String(weight);
+  persistVariantTextStyle(record, "fontWeight", String(weight));
   loadGoogleFont(family, weight);
   requestAnimationFrame(syncSelectedTextSizeInputs);
 });
@@ -1575,6 +1621,7 @@ function applyTextSizeValue(rawValue = sizeSelect?.value, normalize = true) {
   if ((record.element.dataset.fontSize || "14") !== normalizedValue) recordHistory();
   record.element.dataset.fontSize = normalizedValue;
   record.element.style.fontSize = `${normalizedValue}px`;
+  persistVariantTextStyle(record, "fontSize", `${normalizedValue}px`);
   if (normalize) sizeSelect.value = normalizedValue;
   syncTextSizeCombobox(normalizedValue);
   requestAnimationFrame(syncSelectedTextSizeInputs);
@@ -1654,6 +1701,7 @@ function applyLineHeightValue() {
     lineHeightInput.value = "Auto";
     record.element.dataset.lineHeight = "Auto";
     record.element.style.lineHeight = "normal";
+    persistVariantTextStyle(record, "lineHeight", "normal");
     requestAnimationFrame(syncSelectedTextSizeInputs);
     return true;
   }
@@ -1664,6 +1712,7 @@ function applyLineHeightValue() {
   lineHeightInput.value = String(numberValue);
   record.element.dataset.lineHeight = String(numberValue);
   record.element.style.lineHeight = `${numberValue}px`;
+  persistVariantTextStyle(record, "lineHeight", `${numberValue}px`);
   requestAnimationFrame(syncSelectedTextSizeInputs);
   return true;
 }
@@ -1720,6 +1769,7 @@ function applyLetterSpacingValue(normalizeDisplay = true) {
   record.element.style.letterSpacing = unit === "%"
     ? `${Number(match[1]) / 100}em`
     : value;
+  persistVariantTextStyle(record, "letterSpacing", record.element.style.letterSpacing);
   requestAnimationFrame(syncSelectedTextSizeInputs);
   return true;
 }
@@ -1755,10 +1805,13 @@ textAlignmentOptions.forEach((option) => {
   option.addEventListener("click", () => {
     const record = getSelectedTextRecord();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-text-alignment") || "top-left");
-    if (!record || normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment) return;
+    if (!record || (!record.isVariantInstance && normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment)) return;
     recordHistory();
     record.element.dataset.alignment = alignment;
     applyTextAlignment(record.element);
+    persistVariantTextStyle(record, "display", record.element.style.display);
+    persistVariantTextStyle(record, "alignContent", record.element.style.alignContent);
+    persistVariantTextStyle(record, "textAlign", record.element.style.textAlign);
     syncInspectorToSelectedText();
     requestAnimationFrame(syncResizeOverlay);
   });
@@ -1841,6 +1894,21 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
       : requestedMode === "fill" ? "100%" : "auto";
     setSelectedVariantStyleOverride(dimension, value);
     if (normalize) input.value = numberMatch ? numberMatch[0] : requestedMode === "fill" ? "Fill" : "Hug";
+    return true;
+  }
+  if (selectedVariantInstanceId !== null && type === "text" && record.isVariantInstance) {
+    const value = numberMatch
+      ? `${Math.max(0, Number(numberMatch[0]))}px`
+      : requestedMode === "fill" ? "100%" : "auto";
+    recordHistory();
+    element.style[dimension] = value;
+    element.dataset[`${dimension}Mode`] = numberMatch ? "fixed" : requestedMode;
+    if (numberMatch) element.dataset[dimension] = String(Math.max(0, Number(numberMatch[0])));
+    setSelectedVariantLayerOverride(dimension, value);
+    if (normalize) input.value = numberMatch ? String(Math.max(0, Number(numberMatch[0]))) : requestedMode === "fill" ? "Fill" : "Hug";
+    const wrapper = input.closest("[data-size-combobox]");
+    if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, numberMatch ? "fixed" : requestedMode);
+    requestAnimationFrame(syncResizeOverlay);
     return true;
   }
 
