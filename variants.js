@@ -378,6 +378,11 @@ function applyVariantOperation(root, operation) {
   if ((property === "fill" || property === "stroke") && target.classList.contains("canvas-vector")) {
     const paintTargets = target.querySelectorAll("path, rect, circle, ellipse, line, polyline, polygon, text, tspan, use");
     paintTargets.forEach((element) => element.style.setProperty(property, String(value)));
+    const color = typeof cssColorToHex === "function" ? cssColorToHex(String(value)) : null;
+    if (color) target.dataset.vectorColor = color;
+    else if (String(value).trim().toLowerCase() === "none") target.dataset.vectorColor = "";
+    const alpha = String(value).match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+    target.dataset.vectorColorOpacity = String(normalizeColorOpacity(alpha ? Number(alpha[1]) * 100 : 100));
     return;
   }
   target.style[property] = String(value ?? "");
@@ -681,6 +686,7 @@ function renderVariantInstances() {
     label.addEventListener("pointerdown", selectPreview);
     preview.addEventListener("pointerdown", selectPreview);
     preview.addEventListener("keydown", (event) => {
+      if (event.target !== preview) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       selectVariantInstance(instance.id);
@@ -718,10 +724,23 @@ function selectVariantInstance(instanceId, options = {}) {
   if (options.render !== false) renderTree();
   else {
     document.querySelectorAll(".variant-preview").forEach((preview) => {
-      preview.classList.toggle("is-selected", Number(preview.dataset.variantInstanceId) === instanceId);
+      const isSelectedInstance = Number(preview.dataset.variantInstanceId) === instanceId;
+      preview.classList.toggle("is-selected", isSelectedInstance);
+      preview.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((layerElement) => {
+        const type = layerElement.classList.contains("canvas-frame")
+          ? "frame"
+          : layerElement.classList.contains("canvas-text") ? "text" : "vector";
+        const id = Number(layerElement.dataset[`${type}Id`]);
+        const isSelectedLayer = isSelectedInstance
+          && Number.isFinite(id)
+          && selectedVariantLayerTarget === `${type}:${id}`;
+        layerElement.classList.toggle("is-selected", isSelectedLayer);
+        layerElement.setAttribute("aria-selected", String(isSelectedLayer));
+      });
     });
     renderVariantLayersTree();
     updateInspector();
+    syncResizeOverlay();
   }
   return true;
 }

@@ -156,6 +156,14 @@ function getTreeNodeName(type, record) {
   return record.name || `Vector ${record.id}`;
 }
 
+function isComponentTreeLayerSelected(component, type, id) {
+  if (component.id !== currentComponent?.id) return false;
+  if (selectedVariantInstanceId !== null) {
+    return selectedVariantLayerTarget === `${type}:${id}`;
+  }
+  return isLayerSelected(type, id);
+}
+
 function selectComponentLayerTreeNode(component, type, record, additive = false) {
   const isChangingComponent = component.id !== currentComponent?.id;
   if (isChangingComponent && !activateComponent(component.id, { render: false })) return;
@@ -383,6 +391,7 @@ function renderFrameTreeNode(record, depth, component, hasHiddenAncestor = false
   const isBranch = childLayers.length > 0;
   const isExpanded = getComponentExpandedFrameIds(component).has(record.id);
   const isActiveComponent = component.id === currentComponent?.id;
+  const isSelected = isComponentTreeLayerSelected(component, "frame", record.id);
   const item = document.createElement("div");
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
@@ -393,9 +402,9 @@ function renderFrameTreeNode(record, depth, component, hasHiddenAncestor = false
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
-  node.setAttribute("aria-selected", String(isActiveComponent && isLayerSelected("frame", record.id)));
+  node.setAttribute("aria-selected", String(isSelected));
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
-  if (isActiveComponent && isLayerSelected("frame", record.id)) node.classList.add("is-selected");
+  if (isSelected) node.classList.add("is-selected");
   if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
 
   node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "frame", record, event.shiftKey || event.ctrlKey || event.metaKey));
@@ -464,6 +473,7 @@ function renderTextTreeNode(record, depth, component, hasHiddenAncestor = false)
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
   const isActiveComponent = component.id === currentComponent?.id;
+  const isSelected = isComponentTreeLayerSelected(component, "text", record.id);
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic";
@@ -471,9 +481,9 @@ function renderTextTreeNode(record, depth, component, hasHiddenAncestor = false)
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
-  node.setAttribute("aria-selected", String(isActiveComponent && isLayerSelected("text", record.id)));
+  node.setAttribute("aria-selected", String(isSelected));
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
-  if (isActiveComponent && isLayerSelected("text", record.id)) node.classList.add("is-selected");
+  if (isSelected) node.classList.add("is-selected");
 
   node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "text", record, event.shiftKey || event.ctrlKey || event.metaKey));
   node.addEventListener("keydown", (event) => {
@@ -516,6 +526,7 @@ function renderVectorTreeNode(record, depth, component, hasHiddenAncestor = fals
   const node = document.createElement("div");
   const iconGroup = document.createElement("span");
   const isActiveComponent = component.id === currentComponent?.id;
+  const isSelected = isComponentTreeLayerSelected(component, "vector", record.id);
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic";
@@ -523,9 +534,9 @@ function renderVectorTreeNode(record, depth, component, hasHiddenAncestor = fals
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
-  node.setAttribute("aria-selected", String(isActiveComponent && isLayerSelected("vector", record.id)));
+  node.setAttribute("aria-selected", String(isSelected));
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
-  if (isActiveComponent && isLayerSelected("vector", record.id)) node.classList.add("is-selected");
+  if (isSelected) node.classList.add("is-selected");
 
   node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "vector", record, event.shiftKey || event.ctrlKey || event.metaKey));
   node.addEventListener("keydown", (event) => {
@@ -606,7 +617,7 @@ function renderComponentTreeNode(component) {
   const isExpanded = isBranch && (isActive ? isComponentExpanded : component.expanded !== false);
   const rootLayers = getComponentLayerChildren(component, null);
   const isSelected = selectedComponentId === component.id
-    || (isActive && selectedVariantInstanceId !== null);
+    || (isActive && selectedVariantInstanceId !== null && selectedVariantLayerTarget === null);
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic tree-node--component";

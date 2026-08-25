@@ -1185,6 +1185,14 @@ textarea:focus-visible {
   pointer-events: auto;
 }
 
+.canvas.is-text-tool-active .variant-preview-content,
+.canvas.is-text-tool-active .variant-preview-content .canvas-root-stack,
+.canvas.is-text-tool-active .variant-preview-content .canvas-frame,
+.canvas.is-text-tool-active .variant-preview-content .canvas-text,
+.canvas.is-text-tool-active .variant-preview-content .canvas-vector {
+  cursor: text;
+}
+
 .variant-preview.is-selected .variant-preview-content {
   outline-color: #992cff;
 }
@@ -1201,7 +1209,7 @@ textarea:focus-visible {
 .variant-preview .canvas-frame:hover,
 .variant-preview .canvas-text:hover,
 .variant-preview .canvas-vector:hover {
-  outline: none;
+  outline: 2px solid #992CFF;
 }
 
 .variant-preview .canvas-frame,
@@ -1606,6 +1614,7 @@ textarea:focus-visible {
 
 .resize-handle {
   position: absolute;
+  z-index: 1;
   width: 8px;
   height: 8px;
   margin: 0;
@@ -1615,6 +1624,52 @@ textarea:focus-visible {
   pointer-events: auto;
   touch-action: none;
   user-select: none;
+}
+
+.resize-edge {
+  position: absolute;
+  z-index: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.resize-edge--n,
+.resize-edge--s {
+  left: 0;
+  width: 100%;
+  height: 12px;
+  transform: translateY(-50%);
+  cursor: ns-resize;
+}
+
+.resize-edge--n {
+  top: 0;
+}
+
+.resize-edge--s {
+  top: 100%;
+}
+
+.resize-edge--w,
+.resize-edge--e {
+  top: 0;
+  width: 12px;
+  height: 100%;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+}
+
+.resize-edge--w {
+  left: 0;
+}
+
+.resize-edge--e {
+  left: 100%;
 }
 
 .resize-handle--nw,

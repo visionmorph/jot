@@ -41,7 +41,7 @@ const CANVAS_REFLOW_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
 
 const canvasReflowAnimations = new WeakMap();
 
-RESIZE_HANDLE_DIRECTIONS.forEach((direction) => {
+RESIZE_HANDLE_DIRECTIONS.filter((direction) => direction.length === 2).forEach((direction) => {
   const handle = document.createElement("button");
   handle.className = `resize-handle resize-handle--${direction}`;
   handle.type = "button";
@@ -49,6 +49,16 @@ RESIZE_HANDLE_DIRECTIONS.forEach((direction) => {
   handle.dataset.resizeHandle = direction;
   handle.setAttribute("aria-label", `Resize ${direction}`);
   resizeOverlay.append(handle);
+});
+
+["n", "e", "s", "w"].forEach((direction) => {
+  const edge = document.createElement("button");
+  edge.className = `resize-edge resize-edge--${direction}`;
+  edge.type = "button";
+  edge.tabIndex = -1;
+  edge.dataset.resizeHandle = direction;
+  edge.setAttribute("aria-label", `Resize ${direction}`);
+  resizeOverlay.append(edge);
 });
 
 if (canvas instanceof HTMLElement) {
@@ -311,6 +321,43 @@ resizeOverlay.addEventListener("pointercancel", (event) => {
   if (resizeInteraction?.layer.type === "text") resizeInteraction.element.draggable = true;
   resizeInteraction = null;
   syncResizeOverlay();
+});
+
+function setResizeEdgeDimensionMode(direction, mode) {
+  const layer = getSelectedResizeRecord();
+  const element = getSelectedResizeElement();
+  const dimension = direction === "e" || direction === "w" ? "width" : "height";
+  const targetType = layer?.type === "variant" ? layer.targetType : layer?.type;
+  const isFrameTarget = targetType === "frame" || targetType === "component";
+  if (!(element instanceof HTMLElement) || !layer || (!isFrameTarget && targetType !== "text")) return;
+
+  recordHistory();
+  if (layer.type === "variant") {
+    const value = mode === "fill" ? "100%" : "auto";
+    if (layer.target === "component:0") {
+      setSelectedVariantStyleOverride(dimension, value, { record: false });
+    } else {
+      setSelectedVariantLayerOverride(dimension, value, { render: true });
+    }
+    element.dataset[`${dimension}Mode`] = mode;
+    element.style[dimension] = value;
+  } else {
+    element.dataset[`${dimension}Mode`] = mode;
+    applyLayerSizing(layer.type, layer.record);
+    if (variantInstances.length > 0) scheduleVariantInstanceRender();
+  }
+
+  if (isFrameTarget) syncInspectorToSelectedFrame();
+  else syncSelectedTextSizeInputs();
+  syncResizeOverlay();
+}
+
+resizeOverlay.addEventListener("dblclick", (event) => {
+  const edge = event.target instanceof HTMLElement ? event.target.closest(".resize-edge") : null;
+  if (!(edge instanceof HTMLButtonElement) || event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  setResizeEdgeDimensionMode(edge.dataset.resizeHandle || "", event.altKey ? "fill" : "hug");
 });
 
 window.addEventListener("resize", syncResizeOverlay);
@@ -1939,9 +1986,13 @@ function applyMarqueeSelection(selectionBounds) {
 }
 
 canvas?.addEventListener("pointerdown", (event) => {
+  const target = event.target;
+  const startsOnCanvasBackground = target === canvas
+    || target === componentSet
+    || target === canvasRootStack;
   if (
     !(canvas instanceof HTMLElement)
-    || event.target !== canvas
+    || !startsOnCanvasBackground
     || event.button !== 0
     || activeTool !== "select"
   ) return;

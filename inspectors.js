@@ -426,6 +426,31 @@ function getVectorRenderedColor(record) {
   return "#000000";
 }
 
+function getVectorRenderedOpacity(record) {
+  const svg = record.element.querySelector("svg");
+  if (!(svg instanceof SVGElement)) return 100;
+  for (const element of getVectorPaintElements(svg)) {
+    const styles = getComputedStyle(element);
+    const paint = isSolidSvgPaint(styles.fill) ? styles.fill : isSolidSvgPaint(styles.stroke) ? styles.stroke : null;
+    if (!paint) continue;
+    const alpha = paint.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+    return normalizeColorOpacity(alpha ? Number(alpha[1]) * 100 : 100);
+  }
+  return 100;
+}
+
+function getVectorPaintProperties(record) {
+  const svg = record.element.querySelector("svg");
+  if (!(svg instanceof SVGElement)) return [];
+  const properties = new Set();
+  getVectorPaintElements(svg).forEach((element) => {
+    const styles = getComputedStyle(element);
+    if (isSolidSvgPaint(styles.fill)) properties.add("fill");
+    if (isSolidSvgPaint(styles.stroke)) properties.add("stroke");
+  });
+  return [...properties];
+}
+
 function applyVectorColor(record, color) {
   const canvasSvg = record.element.querySelector("svg");
   if (!(canvasSvg instanceof SVGElement)) return;
@@ -1185,14 +1210,19 @@ function getCustomColorState(control) {
   if (property === "vector") {
     const record = getSelectedVectorRecord();
     if (!record) return null;
-    const color = Object.prototype.hasOwnProperty.call(record.element.dataset, "vectorColor")
-      ? record.element.dataset.vectorColor
-      : getVectorRenderedColor(record);
+    const variantPaintProperties = record.isVariantInstance ? getVectorPaintProperties(record) : [];
+    const color = record.isVariantInstance
+      ? variantPaintProperties.length > 0 ? getVectorRenderedColor(record) : ""
+      : Object.prototype.hasOwnProperty.call(record.element.dataset, "vectorColor")
+        ? record.element.dataset.vectorColor
+        : getVectorRenderedColor(record);
     return {
       property,
       record,
       color,
-      opacity: normalizeColorOpacity(record.element.dataset.vectorColorOpacity || "100"),
+      opacity: record.isVariantInstance
+        ? getVectorRenderedOpacity(record)
+        : normalizeColorOpacity(record.element.dataset.vectorColorOpacity || "100"),
       picker: vectorColorPicker,
     };
   }
@@ -1240,6 +1270,26 @@ function applyCustomColorValue(control, color, opacity) {
     state.record.element.style.color = renderedColor;
     setSelectedVariantLayerOverride("color", renderedColor);
     syncVariantLayerStylePreviews(selectedVariantLayerTarget, "color", state.record.element);
+    syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
+    return true;
+  }
+  if (selectedVariantInstanceId !== null && state.property === "vector" && state.record.isVariantInstance) {
+    if (normalizedColor) control.dataset.lastColor = normalizedColor;
+    if (normalizeHexColor(state.color) === normalizedColor && state.opacity === normalizedOpacity) {
+      syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
+      return true;
+    }
+    recordHistoryForGesture(control);
+    const paintProperties = getVectorPaintProperties(state.record);
+    const renderedColor = getColorWithOpacity(normalizedColor, normalizedOpacity);
+    state.record.element.dataset.vectorColor = normalizedColor;
+    state.record.element.dataset.vectorColorOpacity = String(normalizedOpacity);
+    if (normalizedColor) applyVectorColor(state.record, renderedColor);
+    else removeVectorColor(state.record);
+    const overrideProperties = paintProperties.length > 0 ? paintProperties : ["fill"];
+    overrideProperties.forEach((property) => {
+      setSelectedVariantLayerOverride(property, normalizedColor ? renderedColor : "none");
+    });
     syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
     return true;
   }
