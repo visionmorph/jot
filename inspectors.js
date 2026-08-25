@@ -1239,6 +1239,7 @@ function applyCustomColorValue(control, color, opacity) {
     state.record.element.dataset.textColorOpacity = String(normalizedOpacity);
     state.record.element.style.color = renderedColor;
     setSelectedVariantLayerOverride("color", renderedColor);
+    syncVariantLayerStylePreviews(selectedVariantLayerTarget, "color", state.record.element);
     syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
     return true;
   }

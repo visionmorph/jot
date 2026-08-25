@@ -249,6 +249,7 @@ function applyResizePointerPosition(clientX, clientY, proportional = false) {
   }
 
   applyLayerSizing(layer.type, layer.record);
+  if (variantInstances.length > 0) scheduleVariantInstanceRender();
   if (layer.type === "frame") syncInspectorToSelectedFrame();
   else if (layer.type === "text") syncSelectedTextSizeInputs();
   else syncInspectorToSelectedVector();
@@ -1130,6 +1131,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
       setPrimarySelectionToLatest();
       syncElementSelectionStyles();
     }
+    if (variantInstances.length > 0) scheduleVariantInstanceRender();
     redoHistory.length = 0;
     renderTree();
   });

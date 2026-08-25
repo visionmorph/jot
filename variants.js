@@ -248,6 +248,7 @@ function setSelectedVariantStyleOverride(property, value, { render = true, recor
   if (override) override.value = nextValue;
   else overrides.push({ target: "component:0", property, value: nextValue });
   if (render) renderVariantInstances();
+  else syncVariantLayerStylePreviews("component:0", property);
   return true;
 }
 
@@ -261,6 +262,35 @@ function setVariantTextOverride(instance, textId, value, { render = true } = {})
   if (render) renderVariantInstances();
 }
 
+function syncVariantTextPreviewContent(textId, editingElement = null) {
+  const target = `text:${textId}`;
+  const fallbackValue = getTextRecord(textId)?.element.textContent ?? "";
+  componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
+    const instance = getVariantInstance(Number(preview.dataset.variantInstanceId));
+    const root = preview.querySelector(".canvas-root-stack");
+    const text = root ? findVariantTarget(root, target) : null;
+    if (!instance || !(text instanceof HTMLElement) || text === editingElement) return;
+    const textOperation = resolveVariantOperations(instance)
+      .filter((operation) => operation.target === target && operation.property === "textContent")
+      .pop();
+    text.textContent = String(textOperation?.value ?? fallbackValue);
+  });
+}
+
+function syncVariantLayerStylePreviews(target, property, editingElement = null) {
+  componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
+    const instance = getVariantInstance(Number(preview.dataset.variantInstanceId));
+    const root = preview.querySelector(".canvas-root-stack");
+    const element = root ? findVariantTarget(root, target) : null;
+    if (!instance || !(element instanceof HTMLElement) || element === editingElement) return;
+    const operation = resolveVariantOperations(instance)
+      .filter((entry) => entry.target === target && entry.property === property)
+      .pop();
+    if (operation) applyVariantOperation(root, operation);
+  });
+  requestAnimationFrame(syncResizeOverlay);
+}
+
 function setSelectedVariantLayerOverride(property, value, { render = false } = {}) {
   const instance = getVariantInstance();
   if (!instance || !selectedVariantLayerTarget) return false;
@@ -271,6 +301,7 @@ function setSelectedVariantLayerOverride(property, value, { render = false } = {
   if (override) override.value = nextValue;
   else overrides.push({ target: selectedVariantLayerTarget, property, value: nextValue });
   if (render) renderVariantInstances();
+  else syncVariantLayerStylePreviews(selectedVariantLayerTarget, property);
   return true;
 }
 
@@ -631,6 +662,7 @@ function renderVariantInstances() {
       text.addEventListener("input", () => {
         recordHistoryForGesture(text);
         setVariantTextOverride(instance, textId, text.textContent ?? "", { render: false });
+        syncVariantTextPreviewContent(textId, text);
       });
       text.addEventListener("blur", () => {
         endHistoryGesture(text);
