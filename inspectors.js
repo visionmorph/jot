@@ -565,7 +565,7 @@ function createPropSelectIcon(iconType, record = null) {
   if (iconType === "prop-boolean") return createSvgAssetIcon("toggle-on", "layer-type-icon prop-type-icon");
   if (iconType === "prop-string") return createSvgAssetIcon("text", "layer-type-icon prop-type-icon");
   if (iconType === "prop-action") return createSvgAssetIcon("cursor-1", "layer-type-icon prop-type-icon");
-  if (iconType === "prop-enum") return createSvgAssetIcon("diamond-filled", "layer-type-icon prop-type-icon");
+  if (iconType === "prop-enum") return createSvgAssetIcon("diamond-outline", "layer-type-icon prop-type-icon");
   if (iconType === "frame" && record) return createLayerTypeIcon("frame", record);
   if (iconType === "vector" && record) return createVectorLayerTreeIcon(record);
   return createLayerTypeIcon(iconType, record);

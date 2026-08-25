@@ -94,7 +94,7 @@ function createSquareIcon(record) {
 }
 
 function createLayerTypeIcon(type, record = null) {
-  if (type === "component") return createSvgAssetIcon("diamond-filled");
+  if (type === "component") return createSvgAssetIcon("diamond-group");
   if (type === "frame") return createFrameLayerIcon(record);
   if (type === "text") return createSvgAssetIcon("letter-t");
   if (type === "vector") {

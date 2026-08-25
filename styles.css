@@ -16,7 +16,8 @@
   --border-subtle-00: #343a3f;
   --border-subtle-01: #4d5358;
   --border-subtle-02: #4d5358;
-  --background-brand: #4589ff;
+  --icon-brand: #4589ff;
+  --background-brand: var(--icon-brand);
   --layer-hover-01: #343a3f;
   --text-secondary: #c1c7cd;
   --text-inverse: #121619;
@@ -176,6 +177,9 @@ textarea:focus-visible {
 .svg-icon--cursor-1 { -webkit-mask-image: url("src/icons/cursor--1.svg"); mask-image: url("src/icons/cursor--1.svg"); }
 .svg-icon--cursor-2 { -webkit-mask-image: url("src/icons/cursor--2.svg"); mask-image: url("src/icons/cursor--2.svg"); }
 .svg-icon--diamond-filled { -webkit-mask-image: url("src/icons/diamond--filled.svg"); mask-image: url("src/icons/diamond--filled.svg"); }
+.svg-icon--diamond-group { -webkit-mask-image: url("src/icons/diamond--group.svg"); mask-image: url("src/icons/diamond--group.svg"); }
+.svg-icon--diamond-outline { -webkit-mask-image: url("src/icons/diamond--outline.svg"); mask-image: url("src/icons/diamond--outline.svg"); }
+.svg-icon--add-diamond { -webkit-mask-image: url("src/icons/add--diamond.svg"); mask-image: url("src/icons/add--diamond.svg"); }
 .svg-icon--letter-t { -webkit-mask-image: url("src/icons/letter--t.svg"); mask-image: url("src/icons/letter--t.svg"); }
 .svg-icon--padding { -webkit-mask-image: url("src/icons/padding.svg"); mask-image: url("src/icons/padding.svg"); }
 .svg-icon--text { -webkit-mask-image: url("src/icons/text.svg"); mask-image: url("src/icons/text.svg"); }
@@ -1769,7 +1773,7 @@ textarea:focus-visible {
 
 .tool-button.is-toggled {
   background: var(--layer-selected-01);
-  color: var(--icon-on-color);
+  color: var(--icon-brand);
 }
 
 .tool-button:focus-visible,
@@ -2286,7 +2290,7 @@ textarea:focus-visible {
 
 .padding-mode-toggle[aria-pressed="true"] {
   background: var(--background-selected);
-  color: var(--icon-primary);
+  color: var(--icon-brand);
 }
 
 .padding-mode-toggle[aria-pressed="true"]:hover {
