@@ -134,6 +134,16 @@ function setSelectedVariantStyleOverride(property, value, { render = true } = {}
   return true;
 }
 
+function setVariantTextOverride(instance, textId, value, { render = true } = {}) {
+  const overrides = instance.overrides ?? (instance.overrides = []);
+  const target = `text:${textId}`;
+  const override = overrides.find((entry) => entry.target === target && entry.property === "textContent");
+  if (override?.value === value) return;
+  if (override) override.value = value;
+  else overrides.push({ target, property: "textContent", value });
+  if (render) renderVariantInstances();
+}
+
 function getVariantTargetOptions() {
   return [
     ...(currentComponent ? [{ value: "component:0", label: currentComponent.name || "Component", type: "component" }] : []),
@@ -368,6 +378,30 @@ function renderVariantInstances() {
     prepareVariantClone(clone, instance.id);
     resolveVariantOperations(instance).forEach((operation) => applyVariantOperation(clone, operation));
     syncVariantFlexbox(clone);
+    clone.querySelectorAll(".canvas-text").forEach((text) => {
+      const textId = Number(text.dataset.textId);
+      if (!Number.isFinite(textId)) return;
+      text.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0 || activeTool !== "select") return;
+        event.stopPropagation();
+        selectVariantInstance(instance.id, { render: false });
+      });
+      text.addEventListener("dblclick", (event) => {
+        if (activeTool !== "select") return;
+        event.preventDefault();
+        event.stopPropagation();
+        text.contentEditable = "true";
+        text.focus();
+      });
+      text.addEventListener("input", () => {
+        recordHistory();
+        setVariantTextOverride(instance, textId, text.textContent ?? "", { render: false });
+      });
+      text.addEventListener("blur", () => {
+        text.contentEditable = "false";
+        renderVariantInstances();
+      });
+    });
     content.append(clone);
     preview.append(label, content);
     const selectPreview = (event) => {

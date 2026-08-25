@@ -131,7 +131,7 @@ function syncVariantActionOverlay() {
   variantSizeTooltip.textContent = `${getDimensionLabel("width")} x ${getDimensionLabel("height")}`;
   variantActionOverlay.hidden = false;
   variantActionOverlay.style.left = `${bounds.left - canvasBounds.left + bounds.width / 2}px`;
-  variantActionOverlay.style.top = `${bounds.top - canvasBounds.top - 8}px`;
+  variantActionOverlay.style.top = `${bounds.bottom - canvasBounds.top + 8}px`;
 }
 
 function syncResizeOverlay() {

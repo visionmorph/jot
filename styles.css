@@ -1134,15 +1134,10 @@ textarea:focus-visible {
 .variant-preview.is-selected .variant-preview-label {
   background: transparent;
   color: #D1A8FF;
-  bottom: calc(100% + 48px);
 }
 
 .component-preview-label {
   pointer-events: auto;
-}
-
-.canvas-root-stack.is-selected .component-preview-label {
-  bottom: calc(100% + 48px);
 }
 
 .variant-preview-content {
@@ -1175,9 +1170,12 @@ textarea:focus-visible {
 }
 
 .variant-preview .canvas-frame,
-.variant-preview .canvas-text,
 .variant-preview .canvas-vector {
   pointer-events: none;
+}
+
+.variant-preview .canvas-text {
+  pointer-events: auto;
 }
 
 .variant-action-overlay {
@@ -1188,7 +1186,7 @@ textarea:focus-visible {
   align-items: center;
   gap: 4px;
   pointer-events: none;
-  transform: translate(-50%, -100%);
+  transform: translateX(-50%);
 }
 
 .variant-action-overlay[hidden] {
