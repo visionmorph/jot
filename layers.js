@@ -164,6 +164,22 @@ function isComponentTreeLayerSelected(component, type, id) {
   return isLayerSelected(type, id);
 }
 
+function syncLayerTreeSelectionStyles() {
+  document.querySelectorAll(".tree-node[data-selection-component-id]").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    const componentId = Number(node.dataset.selectionComponentId);
+    const layerKey = node.dataset.selectionLayerKey || null;
+    const isSelected = layerKey
+      ? componentId === currentComponent?.id
+        && (selectedVariantInstanceId !== null
+          ? selectedVariantLayerTarget === layerKey
+          : selectedLayerKeys.has(layerKey))
+      : selectedComponentId === componentId;
+    node.classList.toggle("is-selected", isSelected);
+    node.setAttribute("aria-selected", String(isSelected));
+  });
+}
+
 function selectComponentLayerTreeNode(component, type, record, additive = false) {
   const isChangingComponent = component.id !== currentComponent?.id;
   if (isChangingComponent && !activateComponent(component.id, { render: false })) return;
@@ -173,11 +189,10 @@ function selectComponentLayerTreeNode(component, type, record, additive = false)
       ? getTextRecord(record.id)
       : getVectorRecord(record.id);
   if (!activeRecord) return;
-  if (variantInstances.length > 0) {
-    const instanceId = getVariantInstance()?.id ?? getDefaultVariantInstance()?.id;
+  if (selectedVariantInstanceId !== null) {
+    const instanceId = selectedVariantInstanceId;
     if (instanceId == null) return;
-    selectVariantInstance(instanceId, { render: false });
-    selectedVariantLayerTarget = `${type}:${activeRecord.id}`;
+    selectVariantInstance(instanceId, { render: false, layerTarget: `${type}:${activeRecord.id}` });
     renderTree();
     return;
   }
@@ -403,6 +418,8 @@ function renderFrameTreeNode(record, depth, component, hasHiddenAncestor = false
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
   node.setAttribute("aria-selected", String(isSelected));
+  node.dataset.selectionComponentId = String(component.id);
+  node.dataset.selectionLayerKey = getLayerKey("frame", record.id);
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isSelected) node.classList.add("is-selected");
   if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
@@ -482,6 +499,8 @@ function renderTextTreeNode(record, depth, component, hasHiddenAncestor = false)
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
   node.setAttribute("aria-selected", String(isSelected));
+  node.dataset.selectionComponentId = String(component.id);
+  node.dataset.selectionLayerKey = getLayerKey("text", record.id);
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isSelected) node.classList.add("is-selected");
 
@@ -535,6 +554,8 @@ function renderVectorTreeNode(record, depth, component, hasHiddenAncestor = fals
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", String(depth));
   node.setAttribute("aria-selected", String(isSelected));
+  node.dataset.selectionComponentId = String(component.id);
+  node.dataset.selectionLayerKey = getLayerKey("vector", record.id);
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isSelected) node.classList.add("is-selected");
 
@@ -583,21 +604,12 @@ function renderLayerTreeNode(layer, depth, component, hasHiddenAncestor = false)
 function selectComponentTreeNode(componentId = currentComponent?.id) {
   if (componentId === undefined || componentId === null) return;
   if (currentComponent?.id !== componentId) {
-    activateComponent(componentId, { render: false });
-    renderTree();
+    if (!activateComponent(componentId, { render: false })) return;
+  }
+  if (!selectComponentState(componentId)) {
     return;
   }
-  if (variantInstances.length > 0) {
-    selectVariantInstance(getVariantInstance()?.id ?? getDefaultVariantInstance()?.id);
-    return;
-  }
-  selectedLayerKeys.clear();
   clearElementSelection();
-  selectedComponentId = componentId;
-  selectedVariantInstanceId = null;
-  selectedCanvasFrame = null;
-  selectedCanvasText = null;
-  selectedCanvasVector = null;
   syncElementSelectionStyles();
   renderTree();
   requestAnimationFrame(() => {
@@ -616,14 +628,14 @@ function renderComponentTreeNode(component) {
   const isBranch = componentHasChildLayers(component);
   const isExpanded = isBranch && (isActive ? isComponentExpanded : component.expanded !== false);
   const rootLayers = getComponentLayerChildren(component, null);
-  const isSelected = selectedComponentId === component.id
-    || (isActive && selectedVariantInstanceId !== null && selectedVariantLayerTarget === null);
+  const isSelected = selectedComponentId === component.id;
 
   item.className = "dynamic-tree-item";
   node.className = "tree-node tree-node--dynamic tree-node--component";
   node.setAttribute("role", "treeitem");
   node.setAttribute("tabindex", "0");
   node.setAttribute("aria-level", "1");
+  node.dataset.selectionComponentId = String(component.id);
   if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
   node.setAttribute("aria-selected", String(isSelected));
   node.style.setProperty("--tree-indent", `${getTreeIndent(1)}px`);

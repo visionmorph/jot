@@ -1211,13 +1211,6 @@ textarea:focus-visible {
   pointer-events: auto;
 }
 
-.variant-preview .canvas-root-stack:hover,
-.variant-preview .canvas-frame:hover,
-.variant-preview .canvas-text:hover,
-.variant-preview .canvas-vector:hover {
-  outline: 2px solid #992CFF;
-}
-
 .variant-preview .canvas-frame,
 .variant-preview .canvas-vector {
   pointer-events: auto;
@@ -1601,8 +1594,21 @@ textarea:focus-visible {
 .canvas-root-stack.is-selected:hover,
 .canvas-frame.is-selected:hover,
 .canvas-text.is-selected:hover:not(.is-new-empty),
-.canvas-vector.is-selected:hover {
+.canvas-vector.is-selected:hover,
+.canvas-root-stack.is-selected.is-selection-hovered,
+.canvas-frame.is-selected.is-selection-hovered,
+.canvas-text.is-selected.is-selection-hovered:not(.is-new-empty),
+.canvas-vector.is-selected.is-selection-hovered {
   outline: 2px solid var(--canvas-selected-outline);
+}
+
+.component-set.has-variants.is-selected {
+  outline: 1px solid var(--canvas-selected-outline);
+  outline-offset: 8px;
+}
+
+.component-set.has-variants.is-selected:hover {
+  outline-width: 2px;
 }
 
 .resize-overlay {

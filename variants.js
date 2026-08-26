@@ -37,8 +37,6 @@ const VARIANT_PROPERTY_DEFAULTS = {
 
 let variantRenderFrame = null;
 
-let selectedVariantLayerTarget = null;
-
 let draggedVariantInstanceId = null;
 
 function getVariantPropValues(prop) {
@@ -387,6 +385,19 @@ function applyVariantOperation(root, operation) {
     target.dataset.vectorColorOpacity = String(normalizeColorOpacity(alpha ? Number(alpha[1]) * 100 : 100));
     return;
   }
+  if (["outlineColor", "outlineColorOpacity", "outlineWeight", "outlinePosition"].includes(property)) {
+    target.dataset[property] = String(value ?? "");
+    applyFrameOutline(target);
+    return;
+  }
+  if (property === "backgroundColor") {
+    target.style.backgroundColor = String(value ?? "");
+    const color = typeof cssColorToHex === "function" ? cssColorToHex(String(value)) : null;
+    if (color) target.dataset.frameColor = color;
+    const alpha = String(value).match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+    target.dataset.frameColorOpacity = String(normalizeColorOpacity(alpha ? Number(alpha[1]) * 100 : 100));
+    return;
+  }
   target.style[property] = String(value ?? "");
 }
 
@@ -523,8 +534,7 @@ function prepareVariantClone(clone, instanceId) {
 }
 
 function selectNewSharedLayerInVariant(instanceId, target, { editText = false } = {}) {
-  selectedVariantInstanceId = instanceId;
-  selectedVariantLayerTarget = target;
+  selectVariantState(instanceId, target);
   clearMasterSelectionForVariant();
   selectTool("select");
   renderTree();
@@ -639,7 +649,7 @@ function renderVariantInstances() {
         if (activeTool !== "select") return;
         event.preventDefault();
         event.stopPropagation();
-        selectedVariantLayerTarget = target;
+        selectVariantState(instance.id, target);
         beginHistoryGesture(text);
         text.classList.add("is-selected");
         text.setAttribute("aria-selected", "true");
@@ -747,24 +757,19 @@ function scheduleVariantInstanceRender() {
 }
 
 function clearMasterSelectionForVariant() {
-  selectedLayerKeys.clear();
-  selectedComponentId = null;
-  selectedCanvasFrame = null;
-  selectedCanvasText = null;
-  selectedCanvasVector = null;
   clearElementSelection();
 }
 
 function selectVariantInstance(instanceId, options = {}) {
   if (!getVariantInstance(instanceId)) return false;
-  clearMasterSelectionForVariant();
   const hasLayerTarget = Object.prototype.hasOwnProperty.call(options, "layerTarget");
-  if (hasLayerTarget) {
-    selectedVariantLayerTarget = options.layerTarget;
-  } else if (selectedVariantInstanceId !== instanceId || options.preserveLayerSelection !== true) {
-    selectedVariantLayerTarget = null;
-  }
-  selectedVariantInstanceId = instanceId;
+  const nextTarget = hasLayerTarget
+    ? options.layerTarget
+    : selectedVariantInstanceId === instanceId && options.preserveLayerSelection === true
+      ? selectedVariantLayerTarget
+      : null;
+  selectVariantState(instanceId, nextTarget);
+  clearMasterSelectionForVariant();
   if (options.render !== false) renderTree();
   else {
     document.querySelectorAll(".variant-preview").forEach((preview) => {
@@ -788,6 +793,7 @@ function selectVariantInstance(instanceId, options = {}) {
         layerElement.setAttribute("aria-selected", String(isSelectedLayer));
       });
     });
+    syncLayerTreeSelectionStyles();
     renderVariantLayersTree();
     updateInspector();
     syncResizeOverlay();
@@ -851,8 +857,7 @@ function addVariantInstance() {
     overrides: [],
   };
   variantInstances.push(instance);
-  selectedVariantInstanceId = instance.id;
-  selectedVariantLayerTarget = null;
+  selectVariantState(instance.id, null);
   clearMasterSelectionForVariant();
   renderTree();
   return instance;
@@ -876,8 +881,9 @@ function removeVariantInstance(instanceId) {
   });
   variantInstances.splice(index, 1);
   normalizeDefaultVariantInstance();
-  selectedVariantInstanceId = variantInstances[Math.min(index, variantInstances.length - 1)]?.id ?? null;
-  selectedVariantLayerTarget = null;
+  const nextInstanceId = variantInstances[Math.min(index, variantInstances.length - 1)]?.id ?? null;
+  if (nextInstanceId == null) selectComponentState(currentComponent?.id);
+  else selectVariantState(nextInstanceId, null);
   renderTree();
   return true;
 }
