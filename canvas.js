@@ -860,15 +860,12 @@ function createCanvasDragPlaceholder(element) {
   return placeholder;
 }
 
-function captureCanvasLayerPositions(usePlaceholderForDraggedLayer = false) {
+function captureCanvasItemPositions(elements, getKey = (element) => element, getBounds = (element) => element.getBoundingClientRect()) {
   const positions = new Map();
-  if (!(canvasRootStack instanceof HTMLElement)) return positions;
-  const elements = Array.from(canvasRootStack.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector"));
   elements.forEach((element) => {
-    const bounds = usePlaceholderForDraggedLayer && canvasDragSession?.element === element
-      ? canvasDragSession.placeholder.getBoundingClientRect()
-      : element.getBoundingClientRect();
-    positions.set(element, {
+    if (!(element instanceof HTMLElement)) return;
+    const bounds = getBounds(element);
+    positions.set(getKey(element), {
       left: bounds.left,
       top: bounds.top,
     });
@@ -881,7 +878,22 @@ function captureCanvasLayerPositions(usePlaceholderForDraggedLayer = false) {
   return positions;
 }
 
-function animateCanvasLayerReflow(previousPositions) {
+function captureCanvasLayerPositions(usePlaceholderForDraggedLayer = false) {
+  if (!(canvasRootStack instanceof HTMLElement)) return new Map();
+  const elements = Array.from(canvasRootStack.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector"));
+  return captureCanvasItemPositions(
+    elements,
+    (element) => element,
+    (element) => usePlaceholderForDraggedLayer && canvasDragSession?.element === element
+      ? canvasDragSession.placeholder.getBoundingClientRect()
+      : element.getBoundingClientRect(),
+  );
+}
+
+function animateCanvasItemReflow(previousPositions, elements, {
+  getKey = (element) => element,
+  getAnimatedAncestor = () => null,
+} = {}) {
   if (
     previousPositions.size === 0
     || typeof Element.prototype.animate !== "function"
@@ -889,8 +901,10 @@ function animateCanvasLayerReflow(previousPositions) {
   ) return;
 
   const movements = new Map();
-  previousPositions.forEach((previous, element) => {
+  elements.forEach((element) => {
     if (!(element instanceof HTMLElement) || !element.isConnected || element.classList.contains("is-canvas-dragging")) return;
+    const previous = previousPositions.get(getKey(element));
+    if (!previous) return;
     const bounds = element.getBoundingClientRect();
     const x = previous.left - bounds.left;
     const y = previous.top - bounds.top;
@@ -899,7 +913,7 @@ function animateCanvasLayerReflow(previousPositions) {
   });
 
   movements.forEach((movement, element) => {
-    const animatedAncestor = element.parentElement?.closest(".canvas-frame");
+    const animatedAncestor = getAnimatedAncestor(element);
     const ancestorMovement = animatedAncestor ? movements.get(animatedAncestor) : null;
     const x = movement.x - (ancestorMovement?.x ?? 0);
     const y = movement.y - (ancestorMovement?.y ?? 0);
@@ -922,6 +936,15 @@ function animateCanvasLayerReflow(previousPositions) {
       if (canvasReflowAnimations.get(element) === animation) canvasReflowAnimations.delete(element);
     }, { once: true });
   });
+}
+
+function animateCanvasLayerReflow(previousPositions) {
+  if (!(canvasRootStack instanceof HTMLElement)) return;
+  animateCanvasItemReflow(
+    previousPositions,
+    Array.from(canvasRootStack.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector")),
+    { getAnimatedAncestor: (element) => element.parentElement?.closest(".canvas-frame") },
+  );
 }
 
 function clearCanvasDropTarget() {

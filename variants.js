@@ -792,27 +792,20 @@ function reorderVariantInstance(instanceId, destinationIndex) {
   if (sourceIndex < 0) return false;
   const nextIndex = Math.max(0, Math.min(variantInstances.length - 1, destinationIndex));
   if (sourceIndex === nextIndex) return false;
-  const previousPositions = new Map([...componentSet?.querySelectorAll(".variant-preview") ?? []]
-    .map((preview) => [preview.dataset.variantInstanceId, preview.getBoundingClientRect()]));
+  const previousPositions = captureCanvasItemPositions(
+    Array.from(componentSet?.querySelectorAll(".variant-preview") ?? []),
+    (preview) => preview.dataset.variantInstanceId,
+  );
   recordHistory();
   const [instance] = variantInstances.splice(sourceIndex, 1);
   variantInstances.splice(nextIndex, 0, instance);
   renderTree();
   requestAnimationFrame(() => {
-    if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches && typeof Element.prototype.animate === "function") {
-      componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
-        const previous = previousPositions.get(preview.dataset.variantInstanceId);
-        if (!previous) return;
-        const bounds = preview.getBoundingClientRect();
-        const x = previous.left - bounds.left;
-        const y = previous.top - bounds.top;
-        if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) return;
-        preview.animate(
-          [{ transform: `translate(${x}px, ${y}px)` }, { transform: "translate(0, 0)" }],
-          { duration: 160, easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
-        );
-      });
-    }
+    animateCanvasItemReflow(
+      previousPositions,
+      Array.from(componentSet?.querySelectorAll(".variant-preview") ?? []),
+      { getKey: (preview) => preview.dataset.variantInstanceId },
+    );
     const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`);
     if (preview instanceof HTMLElement) preview.focus();
   });
