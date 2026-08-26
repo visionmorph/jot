@@ -608,12 +608,13 @@ function handleVariantStructureToolClick(instance, parentTarget, event) {
     if (record) selectNewSharedLayerInVariant(instance.id, `frame:${record.id}`);
     return true;
   }
-  const record = createCanvasText(parentRecord, 0, 0, { beginEditing: false });
+  const record = createCanvasText(parentRecord, 0, 0, {
+    beginEditing: false,
+    isNew: false,
+    textContent: "Text",
+    useDefaultName: true,
+  });
   if (!record) return true;
-  record.isNew = false;
-  record.name = `Text ${record.id}`;
-  record.element.textContent = "Text";
-  record.element.classList.remove("is-new-empty");
   selectNewSharedLayerInVariant(instance.id, `text:${record.id}`, { editText: true });
   return true;
 }

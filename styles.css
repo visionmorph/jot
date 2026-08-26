@@ -1590,6 +1590,7 @@ textarea:focus-visible {
 .canvas-text:hover:not(.is-selected):not(.is-new-empty),
 .canvas-vector:hover:not(.is-selected) {
   outline: 1px solid var(--canvas-hover-outline);
+  outline-offset: -1px;
 }
 
 .canvas-root-stack.is-selected,
@@ -1597,6 +1598,7 @@ textarea:focus-visible {
 .canvas-text.is-selected,
 .canvas-vector.is-selected {
   outline: 1px solid var(--canvas-selected-outline);
+  outline-offset: -1px;
 }
 
 .canvas-root-stack.is-selected:hover,
@@ -1608,6 +1610,7 @@ textarea:focus-visible {
 .canvas-text.is-selected.is-selection-hovered:not(.is-new-empty),
 .canvas-vector.is-selected.is-selection-hovered {
   outline: 2px solid var(--canvas-selected-outline);
+  outline-offset: -2px;
 }
 
 .component-set.has-variants.is-selected {
@@ -2767,6 +2770,19 @@ textarea:focus-visible {
 
 .color-picker-popup[hidden] {
   display: none;
+}
+
+.color-picker-drag-handle {
+  display: flex;
+  width: 100%;
+  height: 16px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
 }
 
 .color-picker-sv {

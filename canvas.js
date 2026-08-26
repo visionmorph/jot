@@ -33,6 +33,8 @@ let canvasDragSession = null;
 
 let canvasPointerDrag = null;
 
+let canvasGestureState = null;
+
 const CANVAS_DRAG_THRESHOLD = 4;
 
 const CANVAS_REFLOW_DURATION = 160;
@@ -66,6 +68,32 @@ if (canvas instanceof HTMLElement) {
   canvas.insertBefore(resizeOverlay, toolbar instanceof Node ? toolbar : null);
   canvas.insertBefore(variantActionOverlay, toolbar instanceof Node ? toolbar : null);
 }
+
+function beginCanvasGesture(event) {
+  if (event.button !== 0 || !event.isPrimary) return;
+  canvasGestureState = {
+    pointerId: event.pointerId,
+    suppressClick: false,
+  };
+}
+
+function suppressCanvasClickForGesture(event) {
+  if (canvasGestureState?.pointerId === event.pointerId) {
+    canvasGestureState.suppressClick = true;
+  }
+}
+
+function consumeSuppressedCanvasClick(event) {
+  if (!canvasGestureState || canvasGestureState.pointerId !== event.pointerId) return false;
+  const shouldSuppress = canvasGestureState.suppressClick;
+  canvasGestureState = null;
+  return shouldSuppress;
+}
+
+canvas?.addEventListener("pointerdown", beginCanvasGesture, true);
+canvas?.addEventListener("pointercancel", (event) => {
+  if (canvasGestureState?.pointerId === event.pointerId) canvasGestureState = null;
+}, true);
 
 function getSelectedResizeElement() {
   if (selectedVariantInstanceId !== null) {
@@ -219,10 +247,10 @@ function applyResizePointerPosition(clientX, clientY, proportional = false) {
   let changesWidth = direction.includes("e") || direction.includes("w");
   let changesHeight = direction.includes("n") || direction.includes("s");
   let nextWidth = changesWidth
-    ? Math.max(0, Math.round(resizeInteraction.width + (direction.includes("w") ? -deltaX : deltaX)))
+    ? Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(resizeInteraction.width + (direction.includes("w") ? -deltaX : deltaX)))
     : resizeInteraction.width;
   let nextHeight = changesHeight
-    ? Math.max(0, Math.round(resizeInteraction.height + (direction.includes("n") ? -deltaY : deltaY)))
+    ? Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(resizeInteraction.height + (direction.includes("n") ? -deltaY : deltaY)))
     : resizeInteraction.height;
 
   if (proportional && resizeInteraction.width > 0 && resizeInteraction.height > 0) {
@@ -230,14 +258,14 @@ function applyResizePointerPosition(clientX, clientY, proportional = false) {
     if (changesWidth && changesHeight) {
       const widthDeltaRatio = Math.abs(nextWidth - resizeInteraction.width) / resizeInteraction.width;
       const heightDeltaRatio = Math.abs(nextHeight - resizeInteraction.height) / resizeInteraction.height;
-      if (widthDeltaRatio >= heightDeltaRatio) nextHeight = Math.max(0, Math.round(nextWidth / aspectRatio));
-      else nextWidth = Math.max(0, Math.round(nextHeight * aspectRatio));
+      if (widthDeltaRatio >= heightDeltaRatio) nextHeight = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(nextWidth / aspectRatio));
+      else nextWidth = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(nextHeight * aspectRatio));
     } else if (changesWidth) {
       changesHeight = true;
-      nextHeight = Math.max(0, Math.round(nextWidth / aspectRatio));
+      nextHeight = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(nextWidth / aspectRatio));
     } else if (changesHeight) {
       changesWidth = true;
-      nextWidth = Math.max(0, Math.round(nextHeight * aspectRatio));
+      nextWidth = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(nextHeight * aspectRatio));
     }
   }
   const widthChanged = changesWidth && nextWidth !== Number(element.dataset.width || resizeInteraction.width);
@@ -548,7 +576,7 @@ function clearLayerSelection() {
   renderTree();
 }
 
-function removeCanvasText(textElement, suppressCreationForCurrentClick = false) {
+function removeCanvasText(textElement) {
   const textRecord = textRecords.find((record) => record.element === textElement);
   textElement.remove();
   if (textRecord) {
@@ -558,13 +586,6 @@ function removeCanvasText(textElement, suppressCreationForCurrentClick = false) 
   applyAllLayerSizing();
   if (selectedCanvasText === textElement) setPrimarySelectionToLatest();
   syncElementSelectionStyles();
-
-  if (suppressCreationForCurrentClick) {
-    suppressNextTextCreation = true;
-    setTimeout(() => {
-      suppressNextTextCreation = false;
-    }, 0);
-  }
 
   renderTree();
 }
@@ -1077,8 +1098,8 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
   const vectorId = nextVectorId;
   nextVectorId += 1;
   const vector = document.createElement("div");
-  const width = Math.max(0, Number(svgDefinition.width) || 24);
-  const height = Math.max(0, Number(svgDefinition.height) || 24);
+  const width = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Number(svgDefinition.width) || 24);
+  const height = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Number(svgDefinition.height) || 24);
   const record = {
     id: vectorId,
     parentFrameId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
@@ -1112,10 +1133,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
 
   vector.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (suppressNextCanvasSurfaceClick) {
-      suppressNextCanvasSurfaceClick = false;
-      return;
-    }
+    if (consumeSuppressedCanvasClick(event)) return;
     selectCanvasVector(vector, event.shiftKey || event.ctrlKey || event.metaKey);
   });
   vector.addEventListener("dragstart", (event) => {
@@ -1135,10 +1153,6 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
 
 function createCanvasText(parentRecord, x, y, options = {}) {
   if (!(canvas instanceof HTMLElement)) return;
-  if (suppressNextTextCreation) {
-    suppressNextTextCreation = false;
-    return;
-  }
   if (options.recordHistory !== false) recordHistory();
   clearLayerSelection();
 
@@ -1152,7 +1166,9 @@ function createCanvasText(parentRecord, x, y, options = {}) {
     element: text,
     order: nextLayerOrder,
     isNew: options.isNew !== false,
-    name: undefined,
+    name: options.useDefaultName === true
+      ? `Text ${textId}`
+      : options.name == null ? undefined : String(options.name),
   };
   nextLayerOrder += 1;
 
@@ -1193,10 +1209,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
 
   text.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (suppressNextCanvasSurfaceClick) {
-      suppressNextCanvasSurfaceClick = false;
-      return;
-    }
+    if (consumeSuppressedCanvasClick(event)) return;
     if (activeTool === "text") startEditingText(text);
     else selectCanvasText(text, event.shiftKey || event.ctrlKey || event.metaKey);
   });
@@ -1229,7 +1242,7 @@ function createCanvasText(parentRecord, x, y, options = {}) {
     endHistoryGesture(text);
     if (record.isNew && (text.textContent ?? "").length === 0) {
       selectTool("select");
-      removeCanvasText(text, true);
+      removeCanvasText(text);
       return;
     }
 
@@ -1240,10 +1253,6 @@ function createCanvasText(parentRecord, x, y, options = {}) {
     text.draggable = true;
     if (wasNewText) {
       selectTool("select");
-      suppressNextTextCreation = true;
-      setTimeout(() => {
-        suppressNextTextCreation = false;
-      }, 0);
     }
   });
   text.addEventListener("dragstart", (event) => {
@@ -1321,10 +1330,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
     event.stopPropagation();
     if (event.target !== frame) return;
 
-    if (suppressNextCanvasSurfaceClick) {
-      suppressNextCanvasSurfaceClick = false;
-      return;
-    }
+    if (consumeSuppressedCanvasClick(event)) return;
 
     if (activeTool === "text") {
       const frameBounds = frame.getBoundingClientRect();
@@ -1369,7 +1375,28 @@ function copyElementDataset(source, target, excludedKeys) {
   });
 }
 
-function duplicateTextRecord(sourceRecord, parentRecord, offsetRoot = false, textContent = sourceRecord.element.textContent ?? "") {
+function copyTextPresentation(source, target) {
+  copyElementDataset(source, target, ["textId"]);
+  target.setAttribute("style", source.getAttribute("style") || "");
+  const styles = getComputedStyle(source);
+  target.dataset.fontFamily = styles.fontFamily.split(",")[0].replace(/^['"]|['"]$/g, "").trim() || DEFAULT_FONT_FAMILY;
+  target.dataset.fontWeight = String(Number.parseFloat(styles.fontWeight) || DEFAULT_FONT_WEIGHT);
+  target.dataset.fontSize = String(Number.parseFloat(styles.fontSize) || 14);
+  target.dataset.lineHeight = styles.lineHeight === "normal" ? "Auto" : String(Number.parseFloat(styles.lineHeight) || 0);
+  target.dataset.letterSpacing = styles.letterSpacing === "normal" ? "0%" : styles.letterSpacing;
+  const rgbaAlpha = styles.color.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+  const opacity = rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : 100;
+  target.dataset.textColor = opacity === 0 ? "" : cssColorToHex(styles.color) || "#000000";
+  target.dataset.textColorOpacity = String(opacity);
+}
+
+function duplicateTextRecord(
+  sourceRecord,
+  parentRecord,
+  offsetRoot = false,
+  textContent = sourceRecord.element.textContent ?? "",
+  presentationSource = sourceRecord.element,
+) {
   const source = sourceRecord.element;
   const x = Number.parseFloat(source.style.left || "0") + (offsetRoot ? 16 : 0);
   const y = Number.parseFloat(source.style.top || "0") + (offsetRoot ? 16 : 0);
@@ -1382,13 +1409,13 @@ function duplicateTextRecord(sourceRecord, parentRecord, offsetRoot = false, tex
   if (!duplicateRecord) return;
 
   const duplicate = duplicateRecord.element;
-  copyElementDataset(source, duplicate, ["textId"]);
-  duplicate.setAttribute("style", source.getAttribute("style") || "");
+  copyTextPresentation(presentationSource, duplicate);
   duplicate.style.left = parentRecord ? "" : `${x}px`;
   duplicate.style.top = parentRecord ? "" : `${y}px`;
   duplicate.contentEditable = "false";
   duplicateRecord.name = sourceRecord.name;
   duplicate.setAttribute("aria-label", duplicateRecord.name || `Text ${duplicateRecord.id}`);
+  applyLayerSizing("text", duplicateRecord);
   return duplicateRecord;
 }
 
@@ -1447,6 +1474,7 @@ function duplicateSelectedLayer() {
   let selectedTextRecord = getSelectedTextRecord();
   let selectedVectorRecord = getSelectedVectorRecord();
   const selectedTextContent = selectedTextRecord?.element.textContent ?? null;
+  const selectedTextPresentation = selectedTextRecord?.element ?? null;
   if (variantSelection) {
     if (selectedFrameRecord?.isVariantInstance) selectedFrameRecord = getFrameRecord(selectedFrameRecord.id);
     if (selectedTextRecord?.isVariantInstance) selectedTextRecord = getTextRecord(selectedTextRecord.id);
@@ -1466,7 +1494,6 @@ function duplicateSelectedLayer() {
 
   recordHistory();
   isBatchingHistory = true;
-  suppressNextTextCreation = false;
   try {
     if (selectedFrameRecord) {
       const parentRecord = selectedFrameRecord.parentId === null
@@ -1496,6 +1523,7 @@ function duplicateSelectedLayer() {
         parentRecord,
         selectedTextRecord.parentFrameId === null,
         selectedTextContent ?? "",
+        selectedTextPresentation ?? selectedTextRecord.element,
       );
       if (!duplicateRecord) return;
       moveLayerRelative(
@@ -1925,10 +1953,7 @@ function finishCanvasPointerDrag(event, shouldCommit) {
   event.stopPropagation();
   if (intent) commitCanvasLayerDrop(pointerDrag.draggedLayer, intent);
   else clearCanvasDragSession();
-  suppressNextCanvasSurfaceClick = true;
-  setTimeout(() => {
-    suppressNextCanvasSurfaceClick = false;
-  }, 0);
+  suppressCanvasClickForGesture(event);
 }
 
 canvas?.addEventListener("pointerdown", (event) => {
@@ -2116,7 +2141,7 @@ function finishMarqueeSelection(event) {
   selectionRectangle.classList.remove("is-visible");
   selectionRectangle.removeAttribute("style");
   if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-  if (wasDragged && event.type === "pointerup") suppressNextCanvasSurfaceClick = true;
+  if (wasDragged && event.type === "pointerup") suppressCanvasClickForGesture(event);
 }
 
 canvas?.addEventListener("pointerup", finishMarqueeSelection);
@@ -2135,7 +2160,7 @@ canvas?.addEventListener("pointerdown", (event) => {
     || (target instanceof HTMLElement && target.classList.contains("canvas-frame"));
   if (!activeText || !isCanvasSurface) return;
 
-  suppressNextCanvasSurfaceClick = true;
+  suppressCanvasClickForGesture(event);
   if ((activeText.textContent ?? "").length > 0) selectCanvasText(activeText);
   selectTool("select");
 }, true);
@@ -2144,10 +2169,7 @@ canvasRootStack?.addEventListener("click", (event) => {
   if (!(canvasRootStack instanceof HTMLElement) || event.target !== canvasRootStack || !currentComponent) return;
   event.stopPropagation();
 
-  if (suppressNextCanvasSurfaceClick) {
-    suppressNextCanvasSurfaceClick = false;
-    return;
-  }
+  if (consumeSuppressedCanvasClick(event)) return;
 
   const bounds = canvasRootStack.getBoundingClientRect();
   const x = event.clientX - bounds.left;
@@ -2184,12 +2206,11 @@ componentSet?.addEventListener("pointerdown", (event) => {
 canvas?.addEventListener("click", (event) => {
   if (!(canvas instanceof HTMLElement) || event.target !== canvas) return;
 
-  if (suppressNextCanvasSurfaceClick) {
-    suppressNextCanvasSurfaceClick = false;
-    return;
-  }
+  if (consumeSuppressedCanvasClick(event)) return;
 
   clearLayerSelection();
+  if (variantInstances.length > 0) return;
+
   const canvasBounds = canvas.getBoundingClientRect();
   const x = event.clientX - canvasBounds.left;
   const y = event.clientY - canvasBounds.top;

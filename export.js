@@ -136,8 +136,10 @@ function getExportTextStyle(record) {
   return {
     opacity: getExportOpacity(element),
     ...getExportSizingStyle("text", record),
-    color: element.dataset.textColor
-      ? getColorWithOpacity(element.dataset.textColor, element.dataset.textColorOpacity || "100")
+    color: Object.prototype.hasOwnProperty.call(element.dataset, "textColor")
+      ? element.dataset.textColor
+        ? getColorWithOpacity(element.dataset.textColor, element.dataset.textColorOpacity || "100")
+        : "transparent"
       : undefined,
     fontFamily: element.style.fontFamily || '"Inter", sans-serif',
     fontSize: `${element.dataset.fontSize || "14"}px`,

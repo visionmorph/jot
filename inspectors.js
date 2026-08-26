@@ -264,8 +264,9 @@ function syncInspectorToSelectedText() {
   if (textColorPicker instanceof HTMLInputElement) {
     const renderedColor = record.isVariantInstance ? styles.color : "";
     const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+    const isTransparent = renderedColor === "transparent" || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
     const color = record.isVariantInstance
-      ? cssColorToHex(renderedColor) || "#000000"
+      ? isTransparent ? "" : cssColorToHex(renderedColor) || "#000000"
       : Object.prototype.hasOwnProperty.call(element.dataset, "textColor") ? element.dataset.textColor : "#000000";
     const opacity = record.isVariantInstance ? rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : 100 : element.dataset.textColorOpacity || "100";
     syncCustomColorControl(textColorPicker, color, opacity);
@@ -966,6 +967,7 @@ function renderComponentProps() {
       booleanDefaultLabel.append(booleanDefaultSelect);
       defaultCell.append(booleanDefaultLabel);
     } else if (prop.type === "string" && prop.property === "textContent") {
+      defaultCell.classList.add("props-table-value-cell--control");
       const valueInput = document.createElement("input");
       valueInput.className = "prop-control";
       valueInput.type = "text";
@@ -1213,8 +1215,9 @@ function getCustomColorState(control) {
     if (!record) return null;
     const renderedColor = record.isVariantInstance ? getComputedStyle(record.element).color : "";
     const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+    const isTransparent = renderedColor === "transparent" || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
     const color = record.isVariantInstance
-      ? cssColorToHex(renderedColor) || "#000000"
+      ? isTransparent ? "" : cssColorToHex(renderedColor) || "#000000"
       : Object.prototype.hasOwnProperty.call(record.element.dataset, "textColor") ? record.element.dataset.textColor : "#000000";
     return {
       property,
@@ -1295,14 +1298,16 @@ function applyCustomColorValue(control, color, opacity) {
   }
   if (selectedVariantInstanceId !== null && state.property === "text" && state.record.isVariantInstance) {
     if (normalizedColor) control.dataset.lastColor = normalizedColor;
-    const renderedColor = getColorWithOpacity(normalizedColor, normalizedOpacity);
-    if (state.color !== normalizedColor || state.opacity !== normalizedOpacity) recordHistoryForGesture(control);
+    const isTransparent = !normalizedColor;
+    const renderedColor = isTransparent ? "transparent" : getColorWithOpacity(normalizedColor, normalizedOpacity);
+    const nextOpacity = isTransparent ? 0 : normalizedOpacity;
+    if (state.color !== normalizedColor || state.opacity !== nextOpacity) recordHistoryForGesture(control);
     state.record.element.dataset.textColor = normalizedColor;
-    state.record.element.dataset.textColorOpacity = String(normalizedOpacity);
+    state.record.element.dataset.textColorOpacity = String(nextOpacity);
     state.record.element.style.color = renderedColor;
     setSelectedVariantLayerOverride("color", renderedColor);
     syncVariantLayerStylePreviews(selectedVariantLayerTarget, "color", state.record.element);
-    syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
+    syncCustomColorControl(state.picker, normalizedColor, nextOpacity);
     return true;
   }
   if (selectedVariantInstanceId !== null && state.property === "vector" && state.record.isVariantInstance) {
@@ -1342,9 +1347,11 @@ function applyCustomColorValue(control, color, opacity) {
     canvasColorOpacity = normalizedOpacity;
     if (canvas instanceof HTMLElement) canvas.style.backgroundColor = renderedColor || "transparent";
   } else if (state.property === "text") {
+    const isTransparent = !normalizedColor;
     state.record.element.dataset.textColor = normalizedColor;
-    state.record.element.dataset.textColorOpacity = String(normalizedOpacity);
-    state.record.element.style.color = renderedColor;
+    state.record.element.dataset.textColorOpacity = String(isTransparent ? 0 : normalizedOpacity);
+    state.record.element.style.color = isTransparent ? "transparent" : renderedColor;
+    if (variantInstances.length > 0) scheduleVariantInstanceRender();
   } else if (state.property === "frame-background") {
     state.record.element.dataset.frameColor = normalizedColor;
     state.record.element.dataset.frameColorOpacity = String(normalizedOpacity);
@@ -1418,6 +1425,7 @@ colorPickerPopup.hidden = true;
 colorPickerPopup.setAttribute("role", "dialog");
 colorPickerPopup.setAttribute("aria-label", "Color picker");
 colorPickerPopup.innerHTML = `
+  <div class="color-picker-drag-handle" data-picker-drag-handle>Color picker</div>
   <div class="color-picker-sv" data-picker-sv role="slider" aria-label="Saturation and value">${colorPickerKnobMarkup()}</div>
   <div class="color-picker-sliders">
     <div class="color-picker-slider color-picker-hue" data-picker-hue role="slider" aria-label="Hue">${colorPickerKnobMarkup()}</div>
@@ -1435,12 +1443,15 @@ const colorPickerHue = colorPickerPopup.querySelector("[data-picker-hue]");
 const colorPickerOpacity = colorPickerPopup.querySelector("[data-picker-opacity]");
 const colorPickerHex = colorPickerPopup.querySelector("[data-picker-hex]");
 const colorPickerOpacityInput = colorPickerPopup.querySelector("[data-picker-opacity-input]");
+const colorPickerDragHandle = colorPickerPopup.querySelector("[data-picker-drag-handle]");
 let activeColorControl = null;
 let pickerHue = 0;
 let pickerSaturation = 0;
 let pickerValue = 1;
 let pickerOpacity = 100;
 let isApplyingPickerColor = false;
+let colorPickerDrag = null;
+let hasCustomColorPickerPosition = false;
 
 function renderColorPicker() {
   const currentColor = hsvToHex(pickerHue, pickerSaturation, pickerValue);
@@ -1477,7 +1488,7 @@ function syncOpenColorPicker(control, color, opacity) {
 }
 
 function positionColorPicker() {
-  if (!(activeColorControl instanceof HTMLElement) || colorPickerPopup.hidden) return;
+  if (!(activeColorControl instanceof HTMLElement) || colorPickerPopup.hidden || hasCustomColorPickerPosition) return;
   const rect = activeColorControl.getBoundingClientRect();
   colorPickerPopup.style.left = `${rect.left - colorPickerPopup.offsetWidth - 4}px`;
   colorPickerPopup.style.top = `${rect.top}px`;
@@ -1492,6 +1503,7 @@ function openColorPicker(control) {
   pickerSaturation = hsv.saturation;
   pickerValue = hsv.value;
   pickerOpacity = state.opacity;
+  hasCustomColorPickerPosition = false;
   colorPickerPopup.hidden = false;
   syncOpenColorPicker(control, state.color, state.opacity);
   positionColorPicker();
@@ -1500,8 +1512,46 @@ function openColorPicker(control) {
 function closeColorPicker() {
   if (activeColorControl) endHistoryGesture(activeColorControl);
   colorPickerPopup.hidden = true;
+  colorPickerPopup.style.removeProperty("left");
+  colorPickerPopup.style.removeProperty("top");
+  hasCustomColorPickerPosition = false;
+  colorPickerDrag = null;
   activeColorControl = null;
 }
+
+colorPickerDragHandle?.addEventListener("pointerdown", (event) => {
+  if (!(colorPickerDragHandle instanceof HTMLElement) || event.button !== 0 || colorPickerPopup.hidden) return;
+  const bounds = colorPickerPopup.getBoundingClientRect();
+  colorPickerDrag = {
+    pointerId: event.pointerId,
+    offsetX: event.clientX - bounds.left,
+    offsetY: event.clientY - bounds.top,
+  };
+  colorPickerDragHandle.setPointerCapture(event.pointerId);
+  event.preventDefault();
+});
+
+colorPickerDragHandle?.addEventListener("pointermove", (event) => {
+  if (!colorPickerDrag || event.pointerId !== colorPickerDrag.pointerId) return;
+  const maxLeft = Math.max(4, window.innerWidth - colorPickerPopup.offsetWidth - 4);
+  const maxTop = Math.max(4, window.innerHeight - colorPickerPopup.offsetHeight - 4);
+  const left = Math.max(4, Math.min(event.clientX - colorPickerDrag.offsetX, maxLeft));
+  const top = Math.max(4, Math.min(event.clientY - colorPickerDrag.offsetY, maxTop));
+  colorPickerPopup.style.left = `${left}px`;
+  colorPickerPopup.style.top = `${top}px`;
+  hasCustomColorPickerPosition = true;
+});
+
+function finishColorPickerDrag(event) {
+  if (!colorPickerDrag || event.pointerId !== colorPickerDrag.pointerId) return;
+  if (colorPickerDragHandle instanceof HTMLElement && colorPickerDragHandle.hasPointerCapture(event.pointerId)) {
+    colorPickerDragHandle.releasePointerCapture(event.pointerId);
+  }
+  colorPickerDrag = null;
+}
+
+colorPickerDragHandle?.addEventListener("pointerup", finishColorPickerDrag);
+colorPickerDragHandle?.addEventListener("pointercancel", finishColorPickerDrag);
 
 function applyPickerColor() {
   if (!(activeColorControl instanceof HTMLElement)) return;
@@ -1698,8 +1748,11 @@ colorControls.forEach((control) => {
     const nextColor = normalizeHexColor(control.dataset.lastColor)
       || fallbackColors[control.dataset.colorControl]
       || "#000000";
+    const nextOpacity = control.dataset.colorControl === "text" && !normalizeHexColor(state.color)
+      ? 100
+      : state.opacity;
     beginHistoryGesture(control);
-    applyCustomColorValue(control, nextColor, state.opacity);
+    applyCustomColorValue(control, nextColor, nextOpacity);
     endHistoryGesture(control);
   });
 
@@ -1985,19 +2038,20 @@ vectorSizeInputs.forEach((input) => {
     const record = getSelectedVectorRecord();
     const dimension = input.dataset.vectorSize;
     const value = Number(input.value);
-    if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value) || value < 0) return;
+    if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value)) return;
+    const fixedValue = Math.max(MIN_INTERACTIVE_LAYER_SIZE, value);
     if (record.isVariantInstance) {
       recordHistoryForGesture(input);
       record.element.dataset[`${dimension}Mode`] = "fixed";
-      record.element.dataset[dimension] = String(value);
-      record.element.style[dimension] = `${value}px`;
-      setSelectedVariantLayerOverride(dimension, `${value}px`);
+      record.element.dataset[dimension] = String(fixedValue);
+      record.element.style[dimension] = `${fixedValue}px`;
+      setSelectedVariantLayerOverride(dimension, `${fixedValue}px`);
       requestAnimationFrame(syncResizeOverlay);
       return;
     }
-    if (Number(record.element.dataset[dimension] || "24") !== value) recordHistoryForGesture(input);
+    if (Number(record.element.dataset[dimension] || "24") !== fixedValue) recordHistoryForGesture(input);
     record.element.dataset[`${dimension}Mode`] = "fixed";
-    record.element.dataset[dimension] = String(value);
+    record.element.dataset[dimension] = String(fixedValue);
     applyLayerSizing("vector", record);
     requestAnimationFrame(syncResizeOverlay);
   });
@@ -2058,26 +2112,29 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
         : null;
   const numberMatch = trimmedValue.match(/^\d+(?:\.\d+)?$/);
   if (!requestedMode && !numberMatch) return false;
+  const fixedNumber = numberMatch
+    ? Math.max(MIN_INTERACTIVE_LAYER_SIZE, Number(numberMatch[0]))
+    : null;
 
   if (selectedVariantInstanceId !== null && type === "frame" && record.isVariantInstance) {
     const value = numberMatch
-      ? `${numberMatch[0]}px`
+      ? `${fixedNumber}px`
       : requestedMode === "fill" ? "100%" : "auto";
     recordHistoryForGesture(input);
     setSelectedVariantFrameStyleOverride(dimension, value, { record: false });
-    if (normalize) input.value = numberMatch ? numberMatch[0] : requestedMode === "fill" ? "Fill" : "Hug";
+    if (normalize) input.value = numberMatch ? String(fixedNumber) : requestedMode === "fill" ? "Fill" : "Hug";
     return true;
   }
   if (selectedVariantInstanceId !== null && type === "text" && record.isVariantInstance) {
     const value = numberMatch
-      ? `${Math.max(0, Number(numberMatch[0]))}px`
+      ? `${fixedNumber}px`
       : requestedMode === "fill" ? "100%" : "auto";
     recordHistoryForGesture(input);
     element.style[dimension] = value;
     element.dataset[`${dimension}Mode`] = numberMatch ? "fixed" : requestedMode;
-    if (numberMatch) element.dataset[dimension] = String(Math.max(0, Number(numberMatch[0])));
+    if (numberMatch) element.dataset[dimension] = String(fixedNumber);
     setSelectedVariantLayerOverride(dimension, value);
-    if (normalize) input.value = numberMatch ? String(Math.max(0, Number(numberMatch[0]))) : requestedMode === "fill" ? "Fill" : "Hug";
+    if (normalize) input.value = numberMatch ? String(fixedNumber) : requestedMode === "fill" ? "Fill" : "Hug";
     const wrapper = input.closest("[data-size-combobox]");
     if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, numberMatch ? "fixed" : requestedMode);
     requestAnimationFrame(syncResizeOverlay);
@@ -2087,9 +2144,9 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
   const currentMode = getLayerDimensionMode(element, dimension, type === "text" ? "hug" : "fixed");
   const mode = numberMatch ? "fixed" : requestedMode;
   let fixedValue = Number(element.dataset[dimension]);
-  if (numberMatch) fixedValue = Math.max(0, Number(numberMatch[0]));
+  if (numberMatch) fixedValue = fixedNumber;
   if (mode === "fixed" && !Number.isFinite(fixedValue)) {
-    fixedValue = Math.round(element.getBoundingClientRect()[dimension]);
+    fixedValue = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(element.getBoundingClientRect()[dimension]));
   }
   const hasChange = currentMode !== mode
     || (mode === "fixed" && Number(element.dataset[dimension]) !== fixedValue);

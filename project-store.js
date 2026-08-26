@@ -201,9 +201,7 @@ let nextVariantRuleId = 1;
 
 let nextVariantInstanceId = 1;
 
-let suppressNextTextCreation = false;
-
-let suppressNextCanvasSurfaceClick = false;
+const MIN_INTERACTIVE_LAYER_SIZE = 1;
 
 const expandedFrameIds = new Set();
 
