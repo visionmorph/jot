@@ -140,8 +140,14 @@ function positionResizeOverlay() {
 
 function syncVariantActionOverlay() {
   if (!(canvas instanceof HTMLElement)) return;
-  const element = getSelectedResizeElement();
-  if (!(element instanceof HTMLElement) || !element.isConnected) {
+  const selectedElement = getSelectedResizeElement();
+  const anchorElement = selectedComponentId === currentComponent?.id && variantInstances.length > 0
+    ? componentSet
+    : selectedElement;
+  if (!(selectedElement instanceof HTMLElement)
+    || !(anchorElement instanceof HTMLElement)
+    || !selectedElement.isConnected
+    || !anchorElement.isConnected) {
     variantActionOverlay.hidden = true;
     return;
   }
@@ -149,18 +155,19 @@ function syncVariantActionOverlay() {
   variantAddButton.hidden = isVariantLayerSelected;
   variantAddButtonTooltip.hidden = isVariantLayerSelected;
   const canvasBounds = canvas.getBoundingClientRect();
-  const bounds = element.getBoundingClientRect();
+  const bounds = anchorElement.getBoundingClientRect();
   const getDimensionLabel = (dimension) => {
     const override = selectedVariantInstanceId !== null
       ? getSelectedVariantStyleOverride(dimension, "")
       : "";
-    const defaultMode = element === selectedCanvasText ? "hug" : "fixed";
+    const defaultMode = selectedElement === selectedCanvasText ? "hug" : "fixed";
     const mode = override === "auto"
       ? "hug"
       : override === "100%"
         ? "fill"
-        : override ? "fixed" : getLayerDimensionMode(element, dimension, defaultMode);
-    const value = Math.round(bounds[dimension]);
+        : override ? "fixed" : getLayerDimensionMode(selectedElement, dimension, defaultMode);
+    const selectedBounds = selectedElement.getBoundingClientRect();
+    const value = Math.round(selectedBounds[dimension]);
     const suffix = mode === "hug" ? " Hug" : mode === "fill" ? " Fill" : "";
     return `${value}${suffix}`;
   };
@@ -184,8 +191,7 @@ function syncResizeOverlay() {
 
 variantAddButton.addEventListener("pointerdown", (event) => event.stopPropagation());
 variantAddButton.addEventListener("click", (event) => {
-  event.stopPropagation();
-  addVariantInstance();
+  requestAddVariant(event);
 });
 
 function applyResizePointerPosition(clientX, clientY, proportional = false) {

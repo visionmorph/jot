@@ -863,6 +863,21 @@ function addVariantInstance() {
   return instance;
 }
 
+function requestAddVariant(event = null) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  const instance = addVariantInstance();
+  if (!instance) return false;
+  requestAnimationFrame(() => {
+    syncResizeOverlay();
+    const preview = componentSet?.querySelector(
+      `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
+    );
+    if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
+  });
+  return true;
+}
+
 function removeVariantInstance(instanceId) {
   const index = variantInstances.findIndex((instance) => instance.id === instanceId);
   if (index < 0) return false;
@@ -1411,7 +1426,7 @@ function renderVariantSystem() {
   renderVariantInspector();
 }
 
-addVariantButton?.addEventListener("click", addVariantInstance);
+addVariantButton?.addEventListener("click", requestAddVariant);
 addVariantPropButton?.addEventListener("click", addVariantProp);
 addVariantRuleButton?.addEventListener("click", addVariantRule);
 
