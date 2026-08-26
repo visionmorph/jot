@@ -359,6 +359,8 @@ function isDirectVisibilityPropAxis(variantProp) {
       || (variantProp.sourceComponentPropId != null
         && componentProp.id != null
         && String(variantProp.sourceComponentPropId) === String(componentProp.id))
+      || (String(variantProp.name ?? "").trim() !== ""
+        && String(variantProp.name).trim() === String(componentProp.name ?? "").trim())
     )
   ));
 }
