@@ -237,10 +237,12 @@ function findVisibilityProp(exportProps, type, id) {
 
 function withVisibilityStyle(styleObject, visibilityProp) {
   if (!visibilityProp) return { style: styleObject, rawProperties: null };
-  const originalDisplay = styleObject.display;
+  const controlledStyle = { ...styleObject };
+  delete controlledStyle.visibility;
+  const originalDisplay = controlledStyle.display;
   const trueBranch = originalDisplay === undefined ? "undefined" : JSON.stringify(originalDisplay);
   return {
-    style: { ...styleObject, display: `${visibilityProp.exportName} ? ${trueBranch} : "none"` },
+    style: { ...controlledStyle, display: `${visibilityProp.exportName} ? ${trueBranch} : "none"` },
     rawProperties: new Set(["display"]),
   };
 }
@@ -346,10 +348,19 @@ function getExportVariants() {
   });
 }
 
+function isDirectVisibilityPropAxis(variantProp) {
+  return componentProps.some((componentProp) => (
+    componentProp.variantPropId === variantProp.id
+    && componentProp.type === "boolean"
+    && componentProp.property === "visibility"
+  ));
+}
+
 function getExportVariantAxes() {
   const usedNames = new Set(["variant"]);
   return variantProps
     .filter((prop) => prop.type === "enum" || prop.type === "boolean")
+    .filter((prop) => !isDirectVisibilityPropAxis(prop))
     .map((prop, index) => {
       let exportName = prop.name.trim().replace(/[^a-zA-Z0-9_$]/g, "");
       if (!/^[a-zA-Z_$]/.test(exportName)) exportName = `variantProp${index + 1}`;
@@ -511,9 +522,11 @@ function createStorySource(componentName) {
     : "{}";
   const usedStoryNames = new Set(["Default"]);
   const canonicalCombinationOwner = new Map();
-  [defaultExportVariant, ...exportVariants.filter((entry) => entry !== defaultExportVariant)].forEach((entry) => {
-    if (!canonicalCombinationOwner.has(entry.combinationKey)) canonicalCombinationOwner.set(entry.combinationKey, entry.key);
-  });
+  if (defaultExportVariant) {
+    [defaultExportVariant, ...exportVariants.filter((entry) => entry !== defaultExportVariant)].forEach((entry) => {
+      if (!canonicalCombinationOwner.has(entry.combinationKey)) canonicalCombinationOwner.set(entry.combinationKey, entry.key);
+    });
+  }
   const variantStories = exportVariants
     .filter(({ instance }) => instance !== defaultVariant)
     .map(({ instance, key }, index) => {
