@@ -536,6 +536,48 @@ function prepareVariantClone(clone, instanceId) {
   namespaceVariantCloneIds(clone, instanceId);
 }
 
+function resolveVariantCanvasSelectionTarget(eventTarget) {
+  if (!(eventTarget instanceof Element)) return null;
+  const preview = eventTarget.closest(".variant-preview");
+  if (!(preview instanceof HTMLElement) || !componentSet?.contains(preview)) return null;
+  const instanceId = Number(preview.dataset.variantInstanceId);
+  if (!Number.isFinite(instanceId) || !getVariantInstance(instanceId)) return null;
+
+  const layerElement = eventTarget.closest(".canvas-frame, .canvas-text, .canvas-vector");
+  if (layerElement instanceof HTMLElement && preview.contains(layerElement)) {
+    const type = layerElement.classList.contains("canvas-frame")
+      ? "frame"
+      : layerElement.classList.contains("canvas-text") ? "text" : "vector";
+    const id = Number(layerElement.dataset[`${type}Id`]);
+    if (Number.isFinite(id)) {
+      return {
+        kind: "variant-layer",
+        instanceId,
+        target: `${type}:${id}`,
+        element: layerElement,
+      };
+    }
+  }
+
+  return {
+    kind: "variant-root",
+    instanceId,
+    target: null,
+    element: preview.querySelector(".canvas-root-stack"),
+  };
+}
+
+canvas?.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || activeTool !== "select") return;
+  const target = resolveVariantCanvasSelectionTarget(event.target);
+  if (!target || target.element?.isContentEditable) return;
+  selectVariantInstance(target.instanceId, {
+    render: false,
+    layerTarget: target.target,
+  });
+  if (target.kind === "variant-root") renderComponentProps();
+});
+
 function selectNewSharedLayerInVariant(instanceId, target, { editText = false } = {}) {
   selectVariantState(instanceId, target);
   clearMasterSelectionForVariant();
@@ -604,13 +646,14 @@ function renderVariantInstances() {
     const content = document.createElement("div");
     const clone = canvasRootStack.cloneNode(true);
     preview.className = "variant-preview";
-    preview.draggable = true;
+    preview.draggable = false;
     preview.classList.toggle("is-selected", instance.id === selectedVariantInstanceId);
     preview.dataset.variantInstanceId = String(instance.id);
     preview.setAttribute("role", "group");
     preview.setAttribute("tabindex", "0");
     preview.setAttribute("aria-label", getVariantInstanceLabel(instance));
     label.className = "variant-preview-label";
+    label.draggable = true;
     const schemaTitle = getVariantPropSchemaTitle(instance);
     const isAuthoredDefault = instance === getAuthoredDefaultVariantInstance();
     label.textContent = isAuthoredDefault ? `${schemaTitle} · Default` : schemaTitle;
@@ -635,11 +678,6 @@ function renderVariantInstances() {
       layerElement.classList.toggle("is-selected", isSelectedLayer);
       layerElement.setAttribute("aria-selected", String(isSelectedLayer));
       layerElement.tabIndex = 0;
-      layerElement.addEventListener("pointerdown", (event) => {
-        if (event.button !== 0 || activeTool !== "select") return;
-        event.stopPropagation();
-        selectVariantInstance(instance.id, { render: false, layerTarget: target });
-      });
       if (type === "frame") {
         layerElement.addEventListener("click", (event) => {
           if (event.target === layerElement) handleVariantStructureToolClick(instance, target, event);
@@ -687,14 +725,6 @@ function renderVariantInstances() {
     });
     content.append(clone);
     preview.append(label, content);
-    const selectPreview = (event) => {
-      if (event.button !== 0 || activeTool !== "select") return;
-      event.stopPropagation();
-      selectVariantInstance(instance.id, { render: false });
-      renderComponentProps();
-    };
-    label.addEventListener("pointerdown", selectPreview);
-    preview.addEventListener("pointerdown", selectPreview);
     preview.addEventListener("keydown", (event) => {
       if (event.target !== preview) return;
       const move = event.key === "ArrowLeft" || event.key === "ArrowUp"
@@ -710,6 +740,10 @@ function renderVariantInstances() {
       selectVariantInstance(instance.id);
     });
     preview.addEventListener("dragstart", (event) => {
+      if (event.target !== label) {
+        event.preventDefault();
+        return;
+      }
       draggedVariantInstanceId = instance.id;
       preview.classList.add("is-variant-dragging");
       event.dataTransfer?.setData("text/plain", String(instance.id));

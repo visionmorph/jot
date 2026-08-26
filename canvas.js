@@ -114,7 +114,7 @@ function getSelectedResizeRecord() {
 
 function positionResizeOverlay() {
   if (!(canvas instanceof HTMLElement)) return;
-  if (canvasDragSession || canvasPointerDrag?.hasStarted) {
+  if (activeTool !== "select" || canvasDragSession || canvasPointerDrag?.hasStarted) {
     resizeOverlay.hidden = true;
     return;
   }
@@ -144,6 +144,10 @@ function positionResizeOverlay() {
 
 function syncVariantActionOverlay() {
   if (!(canvas instanceof HTMLElement)) return;
+  if (activeTool !== "select") {
+    variantActionOverlay.hidden = true;
+    return;
+  }
   const selectedElement = getSelectedResizeElement();
   const anchorElement = selectedComponentId === currentComponent?.id && variantInstances.length > 0
     ? componentSet
@@ -421,6 +425,7 @@ function selectTool(toolName) {
     toolButton.classList.toggle("is-toggled", isSelected);
     toolButton.setAttribute("aria-pressed", String(isSelected));
   });
+  requestAnimationFrame(syncResizeOverlay);
 }
 
 function applyLayerSizing(type, record) {
@@ -2163,7 +2168,6 @@ componentSet?.addEventListener("pointerdown", (event) => {
     || !(target instanceof Element)
     || (!isComponentSetSurface && !isVisibleBaseComponentSurface)
   ) return;
-  event.stopPropagation();
   selectComponentTreeNode(currentComponent.id);
 });
 

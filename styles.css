@@ -1175,6 +1175,14 @@ textarea:focus-visible {
   pointer-events: auto;
 }
 
+.variant-preview-label[draggable="true"] {
+  cursor: grab;
+}
+
+.variant-preview-label[draggable="true"]:active {
+  cursor: grabbing;
+}
+
 .variant-preview.is-selected .variant-preview-label {
   background: transparent;
   color: #D1A8FF;
@@ -1645,6 +1653,13 @@ textarea:focus-visible {
   pointer-events: auto;
   touch-action: none;
   user-select: none;
+}
+
+.canvas.is-text-tool-active .resize-handle,
+.canvas.is-text-tool-active .resize-edge,
+.canvas.is-frame-tool-active .resize-handle,
+.canvas.is-frame-tool-active .resize-edge {
+  pointer-events: none;
 }
 
 .resize-edge--n,
