@@ -167,17 +167,9 @@ let currentComponent = null;
 
 let nextComponentId = 1;
 
-let selectedComponentId = null;
-
 let isComponentExpanded = true;
 
-let selectedCanvasFrame = null;
-
-let selectedCanvasText = null;
-
-let selectedCanvasVector = null;
-
-const selectedLayerKeys = new Set();
+let selectionState = { kind: "canvas" };
 
 let nextFrameId = 1;
 
@@ -208,8 +200,6 @@ let nextVariantPropId = 1;
 let nextVariantRuleId = 1;
 
 let nextVariantInstanceId = 1;
-
-let selectedVariantInstanceId = null;
 
 let suppressNextTextCreation = false;
 
@@ -278,11 +268,7 @@ function createEmptyWorkspaceState(componentId) {
     frames: [],
     texts: [],
     vectors: [],
-    selectedCanvasFrame: null,
-    selectedCanvasText: null,
-    selectedCanvasVector: null,
-    selectedComponentId: componentId,
-    selectedLayerKeys: [],
+    selection: { kind: "component", componentId },
     expandedFrameIds: [],
     nextFrameId: 1,
     nextTextId: 1,
@@ -297,7 +283,6 @@ function createEmptyWorkspaceState(componentId) {
     nextVariantPropId: 1,
     nextVariantRuleId: 1,
     nextVariantInstanceId: 1,
-    selectedVariantInstanceId: null,
     canvasColor: "#121619",
     canvasColorOpacity: 100,
     activeTool: "select",
@@ -331,10 +316,10 @@ function initializeComponents() {
   const component = createComponentDefinition("Component 1");
   components.push(component);
   currentComponent = component;
-  selectedComponentId = component.id;
+  selectComponentState(component.id);
   isComponentExpanded = true;
   restoreWorkspaceState(component.workspace, { render: false });
-  selectedComponentId = component.id;
+  selectComponentState(component.id);
   syncElementSelectionStyles();
 }
 
@@ -389,15 +374,6 @@ function getLayerKey(type, id) {
   return `${type}:${id}`;
 }
 
-function getFrameSelectionKeys(frameId) {
-  const keys = [getLayerKey("frame", frameId)];
-  getLayerChildren(frameId).forEach((layer) => {
-    if (layer.type === "frame") keys.push(...getFrameSelectionKeys(layer.record.id));
-    else keys.push(getLayerKey(layer.type, layer.record.id));
-  });
-  return keys;
-}
-
 function getElementForLayerKey(key) {
   const [type, rawId] = key.split(":");
   const id = Number(rawId);
@@ -407,22 +383,202 @@ function getElementForLayerKey(key) {
   return null;
 }
 
+function getLayerParentKey(key) {
+  const [type, rawId] = String(key).split(":");
+  const id = Number(rawId);
+  const record = type === "frame" ? getFrameRecord(id) : type === "text" ? getTextRecord(id) : getVectorRecord(id);
+  if (!record || record.isComponent) return null;
+  const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+  return parentId === null ? "component:0" : `frame:${parentId}`;
+}
+
+function getLayerDepth(key) {
+  let parentKey = getLayerParentKey(key);
+  let depth = 0;
+  while (parentKey?.startsWith("frame:")) {
+    depth += 1;
+    parentKey = getLayerParentKey(parentKey);
+  }
+  return depth;
+}
+
+function getShallowestPrimaryLayerKey(keys) {
+  if (keys.length === 0) return null;
+  const minimumDepth = Math.min(...keys.map(getLayerDepth));
+  return [...keys].reverse().find((key) => getLayerDepth(key) === minimumDepth) ?? keys[keys.length - 1];
+}
+
+function normalizeLayerSelection(keys, primaryKey = null) {
+  const uniqueKeys = [...new Set(keys)].filter((key) => getElementForLayerKey(key) instanceof HTMLElement);
+  const resolvedPrimary = uniqueKeys.includes(primaryKey) ? primaryKey : uniqueKeys[uniqueKeys.length - 1] ?? null;
+  if (!resolvedPrimary) return { keys: [], primaryKey: null };
+  const parentKey = getLayerParentKey(resolvedPrimary);
+  const peerKeys = uniqueKeys.filter((key) => getLayerParentKey(key) === parentKey);
+  return {
+    keys: peerKeys,
+    primaryKey: peerKeys.includes(resolvedPrimary) ? resolvedPrimary : peerKeys[peerKeys.length - 1] ?? null,
+  };
+}
+
+function selectCanvasState() {
+  selectionState = { kind: "canvas" };
+}
+
+function selectComponentState(componentId = currentComponent?.id) {
+  if (componentId == null) return false;
+  selectionState = { kind: "component", componentId };
+  return true;
+}
+
+function selectVariantState(instanceId, target = null, componentId = currentComponent?.id) {
+  if (instanceId == null || componentId == null) return false;
+  const normalizedTarget = target === null || getElementForLayerKey(target) instanceof HTMLElement ? target : null;
+  selectionState = { kind: "variant", componentId, instanceId, target: normalizedTarget };
+  return true;
+}
+
+function selectLayerKeys(keys, primaryKey = null, componentId = currentComponent?.id) {
+  if (componentId == null) return false;
+  const normalized = normalizeLayerSelection(keys, primaryKey);
+  if (normalized.keys.length === 0) {
+    selectCanvasState();
+    return false;
+  }
+  selectionState = {
+    kind: "layers",
+    componentId,
+    keys: normalized.keys,
+    primaryKey: normalized.primaryKey,
+  };
+  return true;
+}
+
+function selectLayerKey(key, additive = false) {
+  const currentKeys = selectionState.kind === "layers" ? selectionState.keys : [];
+  if (!additive) return selectLayerKeys([key], key);
+  const nextKeys = [...currentKeys];
+  const existingIndex = nextKeys.indexOf(key);
+  if (existingIndex >= 0) {
+    nextKeys.splice(existingIndex, 1);
+    return selectLayerKeys(nextKeys, nextKeys[nextKeys.length - 1] ?? null);
+  }
+  return selectLayerKeys([...nextKeys, key], key);
+}
+
+function removeLayerKeyFromSelection(key) {
+  if (selectionState.kind !== "layers" || !selectionState.keys.includes(key)) return false;
+  const nextKeys = selectionState.keys.filter((candidate) => candidate !== key);
+  return selectLayerKeys(nextKeys, nextKeys[nextKeys.length - 1] ?? null);
+}
+
+function getSelectedLayerKeys() {
+  return selectionState.kind === "layers" ? selectionState.keys : [];
+}
+
+function getPrimarySelectedLayerKey() {
+  return selectionState.kind === "layers" ? selectionState.primaryKey : null;
+}
+
+function captureSelectionState() {
+  if (selectionState.kind === "layers") {
+    return { ...selectionState, keys: [...selectionState.keys] };
+  }
+  return { ...selectionState };
+}
+
+function restoreSelectionState(snapshot) {
+  const savedSelection = snapshot.selection;
+  if (savedSelection?.kind === "component" && savedSelection.componentId === currentComponent?.id) {
+    selectComponentState(savedSelection.componentId);
+    return;
+  }
+  if (savedSelection?.kind === "variant"
+    && savedSelection.componentId === currentComponent?.id
+    && getVariantInstance(savedSelection.instanceId)) {
+    selectVariantState(savedSelection.instanceId, savedSelection.target ?? null, savedSelection.componentId);
+    return;
+  }
+  if (savedSelection?.kind === "layers" && savedSelection.componentId === currentComponent?.id) {
+    if (selectLayerKeys(savedSelection.keys ?? [], savedSelection.primaryKey ?? null, savedSelection.componentId)) return;
+  }
+
+  // Migrate snapshots created before selection became a single state object.
+  if (snapshot.selectedVariantInstanceId != null && getVariantInstance(snapshot.selectedVariantInstanceId)) {
+    selectVariantState(snapshot.selectedVariantInstanceId, snapshot.selectedVariantLayerTarget ?? null);
+    return;
+  }
+  const legacyKeys = [...(snapshot.selectedLayerKeys ?? [])];
+  if (legacyKeys.length === 0) {
+    const legacyElementEntries = [
+      ["frame", snapshot.selectedCanvasFrame],
+      ["text", snapshot.selectedCanvasText],
+      ["vector", snapshot.selectedCanvasVector],
+    ];
+    legacyElementEntries.forEach(([type, element]) => {
+      const records = type === "frame" ? frameRecords : type === "text" ? textRecords : vectorRecords;
+      const record = records.find((candidate) => candidate.element === element);
+      if (record) legacyKeys.push(getLayerKey(type, record.id));
+    });
+  }
+  if (selectLayerKeys(legacyKeys, legacyKeys[legacyKeys.length - 1] ?? null)) return;
+  if (snapshot.selectedComponentId === currentComponent?.id) {
+    selectComponentState(snapshot.selectedComponentId);
+    return;
+  }
+  selectCanvasState();
+}
+
+const selectedLayerKeys = Object.freeze({
+  get size() { return getSelectedLayerKeys().length; },
+  has(key) { return getSelectedLayerKeys().includes(key); },
+  forEach(callback, thisArg) {
+    getSelectedLayerKeys().forEach((key) => callback.call(thisArg, key, key, selectedLayerKeys));
+  },
+  [Symbol.iterator]() { return getSelectedLayerKeys()[Symbol.iterator](); },
+});
+
+function getPrimarySelectedElement(type) {
+  const key = getPrimarySelectedLayerKey();
+  return key?.startsWith(`${type}:`) ? getElementForLayerKey(key) : null;
+}
+
+Object.defineProperties(globalThis, {
+  selectedComponentId: {
+    configurable: true,
+    get: () => selectionState.kind === "component" ? selectionState.componentId : null,
+  },
+  selectedVariantInstanceId: {
+    configurable: true,
+    get: () => selectionState.kind === "variant" ? selectionState.instanceId : null,
+  },
+  selectedVariantLayerTarget: {
+    configurable: true,
+    get: () => selectionState.kind === "variant" ? selectionState.target : null,
+  },
+  selectedCanvasFrame: {
+    configurable: true,
+    get: () => getPrimarySelectedElement("frame"),
+  },
+  selectedCanvasText: {
+    configurable: true,
+    get: () => getPrimarySelectedElement("text"),
+  },
+  selectedCanvasVector: {
+    configurable: true,
+    get: () => getPrimarySelectedElement("vector"),
+  },
+});
+
 function isLayerSelected(type, id) {
   return selectedLayerKeys.has(getLayerKey(type, id));
 }
 
 function setPrimarySelectionFromKey(key) {
-  const [type, rawId] = key?.split(":") ?? [];
-  const id = Number(rawId);
-  selectedVariantInstanceId = null;
-  selectedComponentId = null;
-  selectedCanvasFrame = type === "frame" ? getFrameRecord(id)?.element ?? null : null;
-  selectedCanvasText = type === "text" ? getTextRecord(id)?.element ?? null : null;
-  selectedCanvasVector = type === "vector" ? getVectorRecord(id)?.element ?? null : null;
+  selectLayerKeys(getSelectedLayerKeys(), key);
 }
 
 function setPrimarySelectionToLatest() {
-  const keys = [...selectedLayerKeys];
+  const keys = getSelectedLayerKeys();
   setPrimarySelectionFromKey(keys[keys.length - 1]);
 }
 
@@ -465,11 +621,7 @@ function captureWorkspaceState() {
       dataset: { ...record.element.dataset },
       style: record.element.getAttribute("style"),
     })),
-    selectedCanvasFrame,
-    selectedCanvasText,
-    selectedCanvasVector,
-    selectedComponentId,
-    selectedLayerKeys: [...selectedLayerKeys],
+    selection: captureSelectionState(),
     expandedFrameIds: [...expandedFrameIds],
     nextFrameId,
     nextTextId,
@@ -487,7 +639,6 @@ function captureWorkspaceState() {
     nextVariantPropId,
     nextVariantRuleId,
     nextVariantInstanceId,
-    selectedVariantInstanceId,
     canvasColor: canvasColorValue,
     canvasColorOpacity,
     activeTool,
@@ -627,35 +778,9 @@ function restoreWorkspaceState(snapshot, options = {}) {
     });
   }
   normalizeDefaultVariantInstance();
-  selectedVariantInstanceId = snapshot.selectedVariantInstanceId ?? null;
-  if (variantInstances.length > 0 && !getVariantInstance(selectedVariantInstanceId)) {
-    selectedVariantInstanceId = getDefaultVariantInstance()?.id ?? null;
-  }
   expandedFrameIds.clear();
   snapshot.expandedFrameIds.forEach((frameId) => expandedFrameIds.add(frameId));
-  selectedCanvasFrame = snapshot.selectedCanvasFrame;
-  selectedCanvasText = snapshot.selectedCanvasText;
-  selectedCanvasVector = snapshot.selectedCanvasVector ?? null;
-  selectedComponentId = snapshot.selectedComponentId === currentComponent?.id
-    ? snapshot.selectedComponentId
-    : null;
-  if (variantInstances.length > 0) selectedComponentId = null;
-  selectedLayerKeys.clear();
-  (snapshot.selectedLayerKeys ?? []).forEach((key) => selectedLayerKeys.add(key));
-  if (selectedLayerKeys.size === 0) {
-    if (selectedCanvasFrame) {
-      const record = frameRecords.find((frameRecord) => frameRecord.element === selectedCanvasFrame);
-      if (record) selectedLayerKeys.add(getLayerKey("frame", record.id));
-    }
-    if (selectedCanvasText) {
-      const record = textRecords.find((textRecord) => textRecord.element === selectedCanvasText);
-      if (record) selectedLayerKeys.add(getLayerKey("text", record.id));
-    }
-    if (selectedCanvasVector) {
-      const record = vectorRecords.find((vectorRecord) => vectorRecord.element === selectedCanvasVector);
-      if (record) selectedLayerKeys.add(getLayerKey("vector", record.id));
-    }
-  }
+  restoreSelectionState(snapshot);
 
   attachRestoredLayers(null, canvas);
   syncElementSelectionStyles();
@@ -758,13 +883,7 @@ function activateComponent(componentId, options = {}) {
   component.expandedFrameIds = [...expandedFrameIds];
 
   if (options.selectComponent !== false) {
-    const defaultVariant = getDefaultVariantInstance();
-    selectedComponentId = defaultVariant ? null : component.id;
-    selectedVariantInstanceId = defaultVariant?.id ?? null;
-    selectedLayerKeys.clear();
-    selectedCanvasFrame = null;
-    selectedCanvasText = null;
-    selectedCanvasVector = null;
+    selectComponentState(component.id);
     syncElementSelectionStyles();
   }
   if (options.render !== false) renderTree();
@@ -787,7 +906,7 @@ function deleteSelectedComponent() {
   components.splice(componentIndex, 1);
   const nextComponent = components[Math.min(componentIndex, components.length - 1)];
   currentComponent = null;
-  selectedComponentId = null;
+  selectCanvasState();
   activateComponent(nextComponent.id, { saveCurrent: false });
   return true;
 }
