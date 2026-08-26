@@ -1425,7 +1425,6 @@ colorPickerPopup.hidden = true;
 colorPickerPopup.setAttribute("role", "dialog");
 colorPickerPopup.setAttribute("aria-label", "Color picker");
 colorPickerPopup.innerHTML = `
-  <div class="color-picker-drag-handle" data-picker-drag-handle>Color picker</div>
   <div class="color-picker-sv" data-picker-sv role="slider" aria-label="Saturation and value">${colorPickerKnobMarkup()}</div>
   <div class="color-picker-sliders">
     <div class="color-picker-slider color-picker-hue" data-picker-hue role="slider" aria-label="Hue">${colorPickerKnobMarkup()}</div>
@@ -1443,7 +1442,6 @@ const colorPickerHue = colorPickerPopup.querySelector("[data-picker-hue]");
 const colorPickerOpacity = colorPickerPopup.querySelector("[data-picker-opacity]");
 const colorPickerHex = colorPickerPopup.querySelector("[data-picker-hex]");
 const colorPickerOpacityInput = colorPickerPopup.querySelector("[data-picker-opacity-input]");
-const colorPickerDragHandle = colorPickerPopup.querySelector("[data-picker-drag-handle]");
 let activeColorControl = null;
 let pickerHue = 0;
 let pickerSaturation = 0;
@@ -1519,19 +1517,23 @@ function closeColorPicker() {
   activeColorControl = null;
 }
 
-colorPickerDragHandle?.addEventListener("pointerdown", (event) => {
-  if (!(colorPickerDragHandle instanceof HTMLElement) || event.button !== 0 || colorPickerPopup.hidden) return;
+function isColorPickerContent(target) {
+  return target instanceof Element && Boolean(target.closest(".color-picker-sv, .color-picker-sliders, .color-picker-fields"));
+}
+
+colorPickerPopup.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || colorPickerPopup.hidden || isColorPickerContent(event.target)) return;
   const bounds = colorPickerPopup.getBoundingClientRect();
   colorPickerDrag = {
     pointerId: event.pointerId,
     offsetX: event.clientX - bounds.left,
     offsetY: event.clientY - bounds.top,
   };
-  colorPickerDragHandle.setPointerCapture(event.pointerId);
+  colorPickerPopup.setPointerCapture(event.pointerId);
   event.preventDefault();
 });
 
-colorPickerDragHandle?.addEventListener("pointermove", (event) => {
+colorPickerPopup.addEventListener("pointermove", (event) => {
   if (!colorPickerDrag || event.pointerId !== colorPickerDrag.pointerId) return;
   const maxLeft = Math.max(4, window.innerWidth - colorPickerPopup.offsetWidth - 4);
   const maxTop = Math.max(4, window.innerHeight - colorPickerPopup.offsetHeight - 4);
@@ -1544,14 +1546,14 @@ colorPickerDragHandle?.addEventListener("pointermove", (event) => {
 
 function finishColorPickerDrag(event) {
   if (!colorPickerDrag || event.pointerId !== colorPickerDrag.pointerId) return;
-  if (colorPickerDragHandle instanceof HTMLElement && colorPickerDragHandle.hasPointerCapture(event.pointerId)) {
-    colorPickerDragHandle.releasePointerCapture(event.pointerId);
+  if (colorPickerPopup.hasPointerCapture(event.pointerId)) {
+    colorPickerPopup.releasePointerCapture(event.pointerId);
   }
   colorPickerDrag = null;
 }
 
-colorPickerDragHandle?.addEventListener("pointerup", finishColorPickerDrag);
-colorPickerDragHandle?.addEventListener("pointercancel", finishColorPickerDrag);
+colorPickerPopup.addEventListener("pointerup", finishColorPickerDrag);
+colorPickerPopup.addEventListener("pointercancel", finishColorPickerDrag);
 
 function applyPickerColor() {
   if (!(activeColorControl instanceof HTMLElement)) return;
