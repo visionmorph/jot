@@ -72,7 +72,16 @@ function setComponentFrameExpanded(component, frameId, isExpanded) {
 }
 
 function componentHasChildLayers(component) {
-  return getComponentLayerChildren(component, null).length > 0;
+  // Avoid building+sorting the full child list (what getComponentLayerChildren
+  // does) just to answer a yes/no question. The active-component path still
+  // defers to the external getLayerChildren helper since its cost/behavior
+  // isn't something to second-guess here.
+  if (component.id === currentComponent?.id) return getLayerChildren(null).length > 0;
+  const workspace = component.workspace;
+  if (!workspace) return false;
+  return (workspace.frames ?? []).some((entry) => entry.parentId === null)
+    || (workspace.texts ?? []).some((entry) => entry.parentFrameId === null)
+    || (workspace.vectors ?? []).some((entry) => entry.parentFrameId === null);
 }
 
 function createSvgAssetIcon(name, className = "layer-type-icon") {
@@ -113,20 +122,11 @@ function createLayerTypeIcon(type, record = null) {
     svg.append(path, transparentRect);
     return svg;
   }
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("class", "layer-type-icon");
-  svg.setAttribute("viewBox", "0 0 32 32");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("aria-hidden", "true");
-
-  const paths = ["M5 4H27V6H5V4Z", "M15 6H17V28H15V6Z"];
-  paths.forEach((pathData) => {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", pathData);
-    path.setAttribute("fill", "currentColor");
-    svg.append(path);
-  });
-  return svg;
+  // type is always one of "component" | "frame" | "text" | "vector" at every
+  // call site, and each case above returns early, so this is unreachable.
+  // Kept only as a defensive fallback in case a new type is introduced
+  // without updating this function.
+  return createSvgAssetIcon("diamond-group");
 }
 
 function setLayerDragData(event, layerType, layerId) {
@@ -139,6 +139,49 @@ function getLayerDragData(event) {
   const id = Number(rawId);
   if ((type !== "frame" && type !== "text" && type !== "vector") || !Number.isInteger(id)) return null;
   return { type, id };
+}
+
+// Shared by renderFrameTreeNode/renderTextTreeNode/renderVectorTreeNode, which were
+// each wiring up an identical dragstart/dragend/dragover/drop block by hand.
+// `allowInside` mirrors the old per-call getTreeDropPosition(event, true|false) arg
+// (frames accept drops "inside"; text/vector nodes don't).
+function attachLayerDragHandlers(node, type, record, allowInside) {
+  node.addEventListener("dragstart", (event) => {
+    event.stopPropagation();
+    setLayerDragData(event, type, record.id);
+  });
+  node.addEventListener("dragend", clearTreeDropIndicators);
+  node.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    showTreeDropIndicator(node, getTreeDropPosition(event, allowInside));
+  });
+  node.addEventListener("drop", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const draggedLayer = getLayerDragData(event);
+    const position = getTreeDropPosition(event, allowInside);
+    clearTreeDropIndicators();
+    if (draggedLayer) moveLayerRelative(draggedLayer, { type, id: record.id }, position);
+  });
+}
+
+// Shared by the same three renderers for their click/keydown selection wiring.
+function attachLayerSelectionHandlers(node, type, component, record) {
+  node.addEventListener("click", (event) => {
+    selectComponentLayerTreeNode(component, type, record, isAdditiveSelectClick(event));
+  });
+  node.addEventListener("keydown", (event) => {
+    if (event.target === node && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      selectComponentLayerTreeNode(component, type, record);
+    }
+  });
+}
+
+function isAdditiveSelectClick(event) {
+  return event.shiftKey || event.ctrlKey || event.metaKey;
 }
 
 let treeRenameState = null;
@@ -373,6 +416,10 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
       event.stopPropagation();
       beginTreeNodeRename(type, record, component);
     };
+    // This pointerdown check already covers double-click detection (via
+    // event.detail === 2 for mouse, and the timing fallback for touch/pen),
+    // so a separate native "dblclick" listener isn't needed — it was
+    // causing startRename/beginTreeNodeRename to fire twice per double-click.
     labelWrapper.addEventListener("pointerdown", (event) => {
       const now = performance.now();
       const isDoubleClick = event.detail === 2
@@ -380,7 +427,6 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
       lastTreeLabelPointer = { key, time: now };
       if (isDoubleClick) startRename(event);
     });
-    labelWrapper.addEventListener("dblclick", startRename);
     labelWrapper.append(label);
   }
 
@@ -424,34 +470,8 @@ function renderFrameTreeNode(record, depth, component, hasHiddenAncestor = false
   if (isSelected) node.classList.add("is-selected");
   if (isBranch) node.setAttribute("aria-expanded", String(isExpanded));
 
-  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "frame", record, event.shiftKey || event.ctrlKey || event.metaKey));
-  node.addEventListener("keydown", (event) => {
-    if (event.target === node && (event.key === "Enter" || event.key === " ")) {
-      event.preventDefault();
-      selectComponentLayerTreeNode(component, "frame", record);
-    }
-  });
-  if (isActiveComponent) {
-    node.addEventListener("dragstart", (event) => {
-      event.stopPropagation();
-      setLayerDragData(event, "frame", record.id);
-    });
-    node.addEventListener("dragend", clearTreeDropIndicators);
-    node.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.dataTransfer.dropEffect = "move";
-      showTreeDropIndicator(node, getTreeDropPosition(event, true));
-    });
-    node.addEventListener("drop", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const draggedLayer = getLayerDragData(event);
-      const position = getTreeDropPosition(event, true);
-      clearTreeDropIndicators();
-      if (draggedLayer) moveLayerRelative(draggedLayer, { type: "frame", id: record.id }, position);
-    });
-  }
+  attachLayerSelectionHandlers(node, "frame", component, record);
+  if (isActiveComponent) attachLayerDragHandlers(node, "frame", record, true);
 
   iconGroup.className = "branch-icon-group";
   if (isBranch) {
@@ -504,34 +524,8 @@ function renderTextTreeNode(record, depth, component, hasHiddenAncestor = false)
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isSelected) node.classList.add("is-selected");
 
-  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "text", record, event.shiftKey || event.ctrlKey || event.metaKey));
-  node.addEventListener("keydown", (event) => {
-    if (event.target === node && (event.key === "Enter" || event.key === " ")) {
-      event.preventDefault();
-      selectComponentLayerTreeNode(component, "text", record);
-    }
-  });
-  if (isActiveComponent) {
-    node.addEventListener("dragstart", (event) => {
-      event.stopPropagation();
-      setLayerDragData(event, "text", record.id);
-    });
-    node.addEventListener("dragend", clearTreeDropIndicators);
-    node.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.dataTransfer.dropEffect = "move";
-      showTreeDropIndicator(node, getTreeDropPosition(event, false));
-    });
-    node.addEventListener("drop", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const draggedLayer = getLayerDragData(event);
-      const position = getTreeDropPosition(event, false);
-      clearTreeDropIndicators();
-      if (draggedLayer) moveLayerRelative(draggedLayer, { type: "text", id: record.id }, position);
-    });
-  }
+  attachLayerSelectionHandlers(node, "text", component, record);
+  if (isActiveComponent) attachLayerDragHandlers(node, "text", record, false);
 
   iconGroup.className = "branch-icon-group";
   iconGroup.append(createIconCell(createLayerTypeIcon("text")));
@@ -559,34 +553,8 @@ function renderVectorTreeNode(record, depth, component, hasHiddenAncestor = fals
   node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
   if (isSelected) node.classList.add("is-selected");
 
-  node.addEventListener("click", (event) => selectComponentLayerTreeNode(component, "vector", record, event.shiftKey || event.ctrlKey || event.metaKey));
-  node.addEventListener("keydown", (event) => {
-    if (event.target === node && (event.key === "Enter" || event.key === " ")) {
-      event.preventDefault();
-      selectComponentLayerTreeNode(component, "vector", record);
-    }
-  });
-  if (isActiveComponent) {
-    node.addEventListener("dragstart", (event) => {
-      event.stopPropagation();
-      setLayerDragData(event, "vector", record.id);
-    });
-    node.addEventListener("dragend", clearTreeDropIndicators);
-    node.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      event.dataTransfer.dropEffect = "move";
-      showTreeDropIndicator(node, getTreeDropPosition(event, false));
-    });
-    node.addEventListener("drop", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const draggedLayer = getLayerDragData(event);
-      const position = getTreeDropPosition(event, false);
-      clearTreeDropIndicators();
-      if (draggedLayer) moveLayerRelative(draggedLayer, { type: "vector", id: record.id }, position);
-    });
-  }
+  attachLayerSelectionHandlers(node, "vector", component, record);
+  if (isActiveComponent) attachLayerDragHandlers(node, "vector", record, false);
 
   iconGroup.className = "branch-icon-group";
   iconGroup.append(createIconCell(createVectorLayerTreeIcon(record)));
