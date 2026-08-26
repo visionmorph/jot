@@ -1,5 +1,13 @@
 /* React and Storybook source generation, SVG serialization, and export downloads. */
 
+const REACT_EXPORT_INTERNAL_NAMES = [
+  "variant",
+  "variants",
+  "authoredCombinations",
+  "combinationKey",
+  "selectedVariant",
+];
+
 function toReactComponentName(value) {
   const name = value
     .trim()
@@ -21,8 +29,24 @@ function isZeroCssValue(value) {
   return /^-?0(?:\.0+)?(?:px|em|rem|%)?$/i.test(String(value).trim());
 }
 
+function getFiniteExportNumber(value, fallback, { min = -Infinity, max = Infinity } = {}) {
+  const normalizedValue = value === undefined || value === null || String(value).trim() === ""
+    ? fallback
+    : value;
+  const number = Number(normalizedValue);
+  const fallbackNumber = Number(fallback);
+  const safeNumber = Number.isFinite(number)
+    ? number
+    : (Number.isFinite(fallbackNumber) ? fallbackNumber : 0);
+  return Math.max(min, Math.min(max, safeNumber));
+}
+
+function getExportLayerVisibility(element) {
+  return element.dataset.layerVisibility === "hidden" ? "hidden" : undefined;
+}
+
 function getExportOpacity(element) {
-  const opacity = Math.max(10, Math.min(100, Number(element.dataset.opacity || "100")));
+  const opacity = getFiniteExportNumber(element.dataset.opacity, 100, { min: 10, max: 100 });
   return opacity < 100 ? opacity / 100 : undefined;
 }
 
@@ -37,7 +61,9 @@ function getExportSizingStyle(type, record) {
   const mainMode = mainDimension === "width" ? widthMode : heightMode;
   const crossMode = mainDimension === "width" ? heightMode : widthMode;
   const dimensionValue = (dimension, mode, fallback) => {
-    if (mode === "fixed") return `${element.dataset[dimension] || fallback}px`;
+    if (mode === "fixed") {
+      return `${getFiniteExportNumber(element.dataset[dimension], fallback, { min: 0 })}px`;
+    }
     if (mode === "hug") {
       return dimension === "width" && type === "text" && isRoot ? "max-content" : undefined;
     }
@@ -58,10 +84,10 @@ function toExportCssLength(value) {
 }
 
 function getExportPaddingStyle(element) {
-  const top = Number(element.dataset.paddingTop || "10");
-  const right = Number(element.dataset.paddingRight || "10");
-  const bottom = Number(element.dataset.paddingBottom || "10");
-  const left = Number(element.dataset.paddingLeft || "10");
+  const top = getFiniteExportNumber(element.dataset.paddingTop, 10, { min: 0 });
+  const right = getFiniteExportNumber(element.dataset.paddingRight, 10, { min: 0 });
+  const bottom = getFiniteExportNumber(element.dataset.paddingBottom, 10, { min: 0 });
+  const left = getFiniteExportNumber(element.dataset.paddingLeft, 10, { min: 0 });
   const values = [top, right, bottom, left];
   if (values.every((value) => value === values[0])) {
     return { padding: toExportCssLength(values[0]) };
@@ -103,12 +129,13 @@ function getExportFrameStyle(record) {
   const heightMode = getLayerDimensionMode(element, "height", "fixed");
   const isButton = normalizeFrameHtmlTag(element.dataset.htmlTag || "div") === "button";
   const hasExplicitDimensions = widthMode !== "hug" || heightMode !== "hug";
-  const gap = element.dataset.gap || "10";
-  const radius = element.dataset.radius || "0";
+  const gap = getFiniteExportNumber(element.dataset.gap, 10, { min: 0 });
+  const radius = getFiniteExportNumber(element.dataset.radius, 0, { min: 0 });
   const alignment = getFrameAlignmentValues(element);
   const outlineBoxShadow = getFrameOutlineBoxShadow(element);
   return {
     opacity: getExportOpacity(element),
+    visibility: getExportLayerVisibility(element),
     display: isRoot && widthMode === "hug" ? "inline-flex" : "flex",
     flexDirection: direction === "vertical" ? "column" : undefined,
     alignItems: alignment.alignItems,
@@ -133,8 +160,14 @@ function getExportTextStyle(record) {
   const lineHeight = element.dataset.lineHeight || "Auto";
   const letterSpacing = element.style.letterSpacing || "0em";
   const widthMode = getLayerDimensionMode(element, "width", "hug");
+  const fontSize = getFiniteExportNumber(element.dataset.fontSize, 14, { min: 0 });
+  const fontWeight = getFiniteExportNumber(element.dataset.fontWeight, DEFAULT_FONT_WEIGHT, { min: 1, max: 1000 });
+  const exportedLineHeight = lineHeight.toLowerCase() === "auto"
+    ? undefined
+    : `${getFiniteExportNumber(lineHeight, fontSize, { min: 0 })}px`;
   return {
     opacity: getExportOpacity(element),
+    visibility: getExportLayerVisibility(element),
     ...getExportSizingStyle("text", record),
     color: Object.prototype.hasOwnProperty.call(element.dataset, "textColor")
       ? element.dataset.textColor
@@ -142,9 +175,9 @@ function getExportTextStyle(record) {
         : "transparent"
       : undefined,
     fontFamily: element.style.fontFamily || '"Inter", sans-serif',
-    fontSize: `${element.dataset.fontSize || "14"}px`,
-    fontWeight: Number(element.dataset.fontWeight || DEFAULT_FONT_WEIGHT),
-    lineHeight: lineHeight.toLowerCase() === "auto" ? undefined : `${lineHeight}px`,
+    fontSize: `${fontSize}px`,
+    fontWeight,
+    lineHeight: exportedLineHeight,
     letterSpacing: isZeroCssValue(letterSpacing) ? undefined : letterSpacing,
     whiteSpace: "pre-wrap",
     overflowWrap: widthMode === "hug" ? undefined : "anywhere",
@@ -155,6 +188,7 @@ function getExportTextStyle(record) {
 function getExportVectorStyle(record) {
   return {
     opacity: getExportOpacity(record.element),
+    visibility: getExportLayerVisibility(record.element),
     ...getExportSizingStyle("vector", record),
   };
 }
@@ -368,7 +402,7 @@ function isDirectVisibilityPropAxis(variantProp) {
 }
 
 function getExportVariantAxes() {
-  const usedNames = new Set(["variant"]);
+  const usedNames = new Set(REACT_EXPORT_INTERNAL_NAMES);
   return variantProps
     .filter((prop) => prop.type === "enum" || prop.type === "boolean")
     .filter((prop) => !isDirectVisibilityPropAxis(prop))
@@ -449,7 +483,7 @@ function createReactComponentSource(componentName) {
   const variantAxes = hasVariants ? getExportVariantAxes() : [];
   const excludedVariantPropIds = new Set(variantAxes.map((axis) => axis.id));
   const exportProps = getExportComponentProps({
-    reservedNames: ["variant", ...variantAxes.map((axis) => axis.exportName)],
+    reservedNames: [...REACT_EXPORT_INTERNAL_NAMES, ...variantAxes.map((axis) => axis.exportName)],
     excludedVariantPropIds,
   });
   const defaultVariant = getDefaultVariantInstance();
@@ -498,7 +532,7 @@ function createStorySource(componentName) {
   const variantAxes = hasVariants ? getExportVariantAxes() : [];
   const excludedVariantPropIds = new Set(variantAxes.map((axis) => axis.id));
   const exportProps = getExportComponentProps({
-    reservedNames: ["variant", ...variantAxes.map((axis) => axis.exportName)],
+    reservedNames: [...REACT_EXPORT_INTERNAL_NAMES, ...variantAxes.map((axis) => axis.exportName)],
     excludedVariantPropIds,
   });
   const exportVariants = getExportVariantEntries(variantAxes);
@@ -575,17 +609,27 @@ function exportAllComponents() {
   saveCurrentComponentWorkspace();
   const originalComponentId = currentComponent.id;
   const exportFiles = [];
+  const usedComponentNames = new Set();
 
-  components.forEach((component) => {
-    activateComponent(component.id, { saveCurrent: false, selectComponent: false, render: false });
-    const componentName = toReactComponentName(component.name || "Generated Component");
-    exportFiles.push(
-      { name: `${componentName}.jsx`, source: createReactComponentSource(componentName) },
-      { name: `${componentName}.stories.jsx`, source: createStorySource(componentName) },
-    );
-  });
+  try {
+    components.forEach((component) => {
+      activateComponent(component.id, { saveCurrent: false, selectComponent: false, render: false });
+      const baseName = toReactComponentName(component.name || "Generated Component");
+      let componentName = baseName;
+      let suffix = 2;
+      while (usedComponentNames.has(componentName.toLowerCase())) {
+        componentName = `${baseName}${suffix++}`;
+      }
+      usedComponentNames.add(componentName.toLowerCase());
+      exportFiles.push(
+        { name: `${componentName}.jsx`, source: createReactComponentSource(componentName) },
+        { name: `${componentName}.stories.jsx`, source: createStorySource(componentName) },
+      );
+    });
+  } finally {
+    activateComponent(originalComponentId, { saveCurrent: false, selectComponent: false });
+  }
 
-  activateComponent(originalComponentId, { saveCurrent: false, selectComponent: false });
   exportFiles.forEach((file) => downloadExportFile(file.name, file.source));
 }
 

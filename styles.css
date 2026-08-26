@@ -23,7 +23,7 @@
   --text-inverse: #121619;
   --text-disabled: rgba(244, 244, 244, 0.25);
   --field-01: #21272a;
-  --canvas-hover-outline: #78a9ff;
+  --canvas-hover-outline: #992cff;
   --canvas-selected-outline: #992cff;
 }
 
@@ -2766,23 +2766,11 @@ textarea:focus-visible {
   border: 1px solid var(--border-subtle-01);
   border-radius: 4px;
   background: var(--layer-01);
+  touch-action: none;
 }
 
 .color-picker-popup[hidden] {
   display: none;
-}
-
-.color-picker-drag-handle {
-  display: flex;
-  width: 100%;
-  height: 16px;
-  align-items: center;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 16px;
-  cursor: move;
-  touch-action: none;
-  user-select: none;
 }
 
 .color-picker-sv {
