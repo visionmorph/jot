@@ -783,6 +783,7 @@ function selectVariantInstance(instanceId, options = {}) {
     updateInspector();
     syncResizeOverlay();
   }
+  requestAnimationFrame(syncResizeOverlay);
   return true;
 }
 

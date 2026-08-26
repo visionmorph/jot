@@ -2271,12 +2271,16 @@ frameDirectionOptions.forEach((option) => {
 });
 
 frameAlignmentOptions.forEach((option) => {
-  option.addEventListener("click", () => {
+  let variantWasSpaceBetweenAtFirstClick = false;
+  option.addEventListener("click", (event) => {
     option.focus();
     const record = getSelectedFrameRecord();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
     if (selectedVariantInstanceId !== null) {
       const values = getFrameAlignmentValues({ dataset: { alignment, direction: getSelectedVariantTargetStyleOverride("flexDirection", record?.element.dataset.direction === "vertical" ? "column" : "row") === "column" ? "vertical" : "horizontal" } });
+      const isSpaceBetween = getSelectedVariantTargetStyleOverride("justifyContent", record?.element.style.justifyContent || "flex-start") === "space-between";
+      if (event.detail === 1) variantWasSpaceBetweenAtFirstClick = isSpaceBetween;
+      if (event.detail === 2 && variantWasSpaceBetweenAtFirstClick) return;
       if (
         getSelectedVariantTargetStyleOverride("alignItems", record?.element.style.alignItems || "flex-start") === values.alignItems
         && getSelectedVariantTargetStyleOverride("justifyContent", record?.element.style.justifyContent || "flex-start") === values.justifyContent
@@ -2295,18 +2299,24 @@ frameAlignmentOptions.forEach((option) => {
   });
   option.addEventListener("dblclick", (event) => {
     const record = getSelectedFrameRecord();
+    const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
     event.preventDefault();
     if (!record) return;
     if (selectedVariantInstanceId !== null) {
-      if (getSelectedVariantTargetStyleOverride("justifyContent", record.element.style.justifyContent || "flex-start") === "space-between") return;
-      recordHistory();
-      setSelectedVariantFrameStyleOverride("justifyContent", "space-between", { record: false });
+      const values = getFrameAlignmentValues({ dataset: { alignment, direction: getSelectedVariantTargetStyleOverride("flexDirection", record.element.dataset.direction === "vertical" ? "column" : "row") === "column" ? "vertical" : "horizontal" } });
+      if (variantWasSpaceBetweenAtFirstClick) {
+        setSelectedVariantFrameStyleOverride("justifyContent", values.justifyContent, { record: false });
+      } else if (getSelectedVariantTargetStyleOverride("justifyContent", record.element.style.justifyContent || "flex-start") !== "space-between") {
+        recordHistory();
+        setSelectedVariantFrameStyleOverride("justifyContent", "space-between", { record: false });
+      }
+      variantWasSpaceBetweenAtFirstClick = false;
       return;
     }
-    if (record.element.dataset.gapMode === "auto") return;
     recordHistory();
-    record.element.dataset.gapMode = "auto";
-    record.element.style.gap = "0px";
+    const enableSpaceBetween = record.element.dataset.gapMode !== "auto";
+    record.element.dataset.gapMode = enableSpaceBetween ? "auto" : "fixed";
+    record.element.style.gap = enableSpaceBetween ? "0px" : `${record.element.dataset.gap || "10"}px`;
     applyFrameAlignment(record.element);
     syncInspectorToSelectedFrame();
   });
