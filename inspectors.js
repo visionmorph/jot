@@ -2491,8 +2491,15 @@ frameHtmlTagInput?.addEventListener("change", () => {
   const record = getSelectedFrameRecord();
   if (!record || !(frameHtmlTagInput instanceof HTMLSelectElement)) return;
   const htmlTag = normalizeFrameHtmlTag(frameHtmlTagInput.value);
-  if ((record.element.dataset.htmlTag || "div") !== htmlTag) recordHistory();
-  record.element.dataset.htmlTag = htmlTag;
+  const sourceRecord = record.isVariantInstance
+    ? selectedVariantLayerTarget?.startsWith("frame:")
+      ? getFrameRecord(record.id)
+      : currentComponent?.frameRecord
+    : record;
+  if (!sourceRecord) return;
+  if ((sourceRecord.element.dataset.htmlTag || "div") !== htmlTag) recordHistory();
+  sourceRecord.element.dataset.htmlTag = htmlTag;
+  if (record.isVariantInstance) renderVariantInstances();
   renderComponentProps();
 });
 
