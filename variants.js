@@ -537,33 +537,25 @@ function prepareVariantClone(clone, instanceId) {
 }
 
 function resolveVariantCanvasSelectionTarget(eventTarget) {
-  if (!(eventTarget instanceof Element)) return null;
-  const preview = eventTarget.closest(".variant-preview");
-  if (!(preview instanceof HTMLElement) || !componentSet?.contains(preview)) return null;
-  const instanceId = Number(preview.dataset.variantInstanceId);
+  const hit = resolveCanvasHit(eventTarget);
+  if (hit.kind !== "variant-root" && hit.kind !== "variant-layer") return null;
+  const instanceId = hit.instanceId;
   if (!Number.isFinite(instanceId) || !getVariantInstance(instanceId)) return null;
 
-  const layerElement = eventTarget.closest(".canvas-frame, .canvas-text, .canvas-vector");
-  if (layerElement instanceof HTMLElement && preview.contains(layerElement)) {
-    const type = layerElement.classList.contains("canvas-frame")
-      ? "frame"
-      : layerElement.classList.contains("canvas-text") ? "text" : "vector";
-    const id = Number(layerElement.dataset[`${type}Id`]);
-    if (Number.isFinite(id)) {
-      return {
-        kind: "variant-layer",
-        instanceId,
-        target: `${type}:${id}`,
-        element: layerElement,
-      };
-    }
+  if (hit.kind === "variant-layer") {
+    return {
+      kind: "variant-layer",
+      instanceId,
+      target: `${hit.layer.type}:${hit.layer.id}`,
+      element: hit.element,
+    };
   }
 
   return {
     kind: "variant-root",
     instanceId,
     target: null,
-    element: preview.querySelector(".canvas-root-stack"),
+    element: hit.element,
   };
 }
 
@@ -666,7 +658,10 @@ function renderVariantInstances() {
     clone.classList.toggle("is-selected", isSelectedRoot);
     clone.setAttribute("aria-selected", String(isSelectedRoot));
     clone.addEventListener("click", (event) => {
-      if (event.target === clone) handleVariantStructureToolClick(instance, "component:0", event);
+      const hit = resolveCanvasHit(event.target);
+      if (hit.kind === "variant-root" && hit.instanceId === instance.id && hit.direct) {
+        handleVariantStructureToolClick(instance, "component:0", event);
+      }
     });
     clone.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((layerElement) => {
       const type = layerElement.classList.contains("canvas-frame")
@@ -681,7 +676,10 @@ function renderVariantInstances() {
       layerElement.tabIndex = 0;
       if (type === "frame") {
         layerElement.addEventListener("click", (event) => {
-          if (event.target === layerElement) handleVariantStructureToolClick(instance, target, event);
+          const hit = resolveCanvasHit(event.target);
+          if (hit.kind === "variant-layer" && hit.element === layerElement && hit.direct) {
+            handleVariantStructureToolClick(instance, target, event);
+          }
         });
       }
       if (type !== "text") return;

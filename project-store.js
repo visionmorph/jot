@@ -1046,8 +1046,7 @@ function moveLayer(layer, parentFrameId, targetIndex, rootPosition) {
   normalizeSiblingOrder(parentFrameId);
   syncLayerDomOrder(previousParentId);
   if (parentFrameId !== previousParentId) syncLayerDomOrder(parentFrameId);
-  applyAllLayerSizing();
-  renderTree();
+  queueCanvasMutationEffects({ sizing: true, tree: true });
   return true;
 }
 

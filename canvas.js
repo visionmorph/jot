@@ -35,6 +35,14 @@ let canvasPointerDrag = null;
 
 let canvasGestureState = null;
 
+let canvasMutationDepth = 0;
+
+let pendingCanvasMutationEffects = {
+  sizing: false,
+  selection: false,
+  tree: false,
+};
+
 const CANVAS_DRAG_THRESHOLD = 4;
 
 const CANVAS_REFLOW_DURATION = 160;
@@ -498,6 +506,42 @@ function applyAllLayerSizing() {
   requestAnimationFrame(syncResizeOverlay);
 }
 
+function queueCanvasMutationEffects(effects = {}) {
+  pendingCanvasMutationEffects.sizing ||= effects.sizing === true;
+  pendingCanvasMutationEffects.selection ||= effects.selection === true;
+  pendingCanvasMutationEffects.tree ||= effects.tree === true;
+  if (canvasMutationDepth === 0) flushCanvasMutationEffects();
+}
+
+function flushCanvasMutationEffects() {
+  const effects = pendingCanvasMutationEffects;
+  pendingCanvasMutationEffects = {
+    sizing: false,
+    selection: false,
+    tree: false,
+  };
+  if (effects.sizing) applyAllLayerSizing();
+  if (effects.selection) syncElementSelectionStyles();
+  if (effects.tree) renderTree();
+}
+
+function runCanvasMutation(callback, options = {}) {
+  const isOuterMutation = canvasMutationDepth === 0;
+  const previousBatchingHistory = isBatchingHistory;
+  if (isOuterMutation && options.history !== false) recordHistory();
+  if (isOuterMutation) isBatchingHistory = true;
+  canvasMutationDepth += 1;
+  try {
+    return callback();
+  } finally {
+    canvasMutationDepth -= 1;
+    if (isOuterMutation) {
+      isBatchingHistory = previousBatchingHistory;
+      flushCanvasMutationEffects();
+    }
+  }
+}
+
 function syncElementSelectionStyles() {
   clearElementSelection();
   if (selectedComponentId === currentComponent?.id && canvasRootStack instanceof HTMLElement) {
@@ -545,8 +589,7 @@ function selectCanvasFrame(frameElement, additive = false) {
   expandFramePath(record.parentId);
   const frameKey = getLayerKey("frame", record.id);
   selectLayerKey(frameKey, additive);
-  syncElementSelectionStyles();
-  renderTree();
+  queueCanvasMutationEffects({ selection: true, tree: true });
 }
 
 function selectCanvasText(textElement, additive = false) {
@@ -555,8 +598,7 @@ function selectCanvasText(textElement, additive = false) {
   if (!record) return;
   const textKey = getLayerKey("text", record.id);
   selectLayerKey(textKey, additive);
-  syncElementSelectionStyles();
-  renderTree();
+  queueCanvasMutationEffects({ selection: true, tree: true });
 }
 
 function selectCanvasVector(vectorElement, additive = false) {
@@ -565,15 +607,13 @@ function selectCanvasVector(vectorElement, additive = false) {
   if (!record) return;
   const vectorKey = getLayerKey("vector", record.id);
   selectLayerKey(vectorKey, additive);
-  syncElementSelectionStyles();
-  renderTree();
+  queueCanvasMutationEffects({ selection: true, tree: true });
 }
 
 function clearLayerSelection() {
   if (selectedLayerKeys.size === 0 && selectedComponentId === null && selectedVariantInstanceId === null) return;
   selectCanvasState();
-  clearElementSelection();
-  renderTree();
+  queueCanvasMutationEffects({ selection: true, tree: true });
 }
 
 function removeCanvasText(textElement) {
@@ -583,11 +623,8 @@ function removeCanvasText(textElement) {
     removeLayerKeyFromSelection(getLayerKey("text", textRecord.id));
     textRecords = textRecords.filter((record) => record.id !== textRecord.id);
   }
-  applyAllLayerSizing();
   if (selectedCanvasText === textElement) setPrimarySelectionToLatest();
-  syncElementSelectionStyles();
-
-  renderTree();
+  queueCanvasMutationEffects({ sizing: true, selection: true, tree: true });
 }
 
 function startEditingText(textElement, selectText = true) {
@@ -756,10 +793,71 @@ function isSameLayerDescriptor(first, second) {
   return Boolean(first && second && first.type === second.type && first.id === second.id);
 }
 
-function getCanvasLayerElementFromTarget(target) {
-  if (!(target instanceof Element)) return null;
-  const element = target.closest(".canvas-frame, .canvas-text, .canvas-vector");
-  return element instanceof HTMLElement && canvasRootStack?.contains(element) ? element : null;
+function resolveCanvasHit(target) {
+  if (!(target instanceof Element) || !(canvas instanceof HTMLElement) || !canvas.contains(target)) {
+    return { kind: "outside", target };
+  }
+
+  const resizeControl = target.closest("[data-resize-handle]");
+  if (resizeControl instanceof HTMLElement && resizeOverlay.contains(resizeControl)) {
+    return {
+      kind: "resize-control",
+      target,
+      element: resizeControl,
+      direct: target === resizeControl,
+    };
+  }
+
+  const variantPreview = target.closest(".variant-preview");
+  if (variantPreview instanceof HTMLElement && componentSet?.contains(variantPreview)) {
+    const instanceId = Number(variantPreview.dataset.variantInstanceId);
+    const layerElement = target.closest(".canvas-frame, .canvas-text, .canvas-vector");
+    const layer = getCanvasLayerDescriptor(layerElement);
+    if (layerElement instanceof HTMLElement && layer && variantPreview.contains(layerElement)) {
+      return {
+        kind: "variant-layer",
+        target,
+        element: layerElement,
+        layer,
+        instanceId,
+        preview: variantPreview,
+        direct: target === layerElement,
+      };
+    }
+    const root = variantPreview.querySelector(".canvas-root-stack");
+    return {
+      kind: "variant-root",
+      target,
+      element: root instanceof HTMLElement ? root : variantPreview,
+      instanceId,
+      preview: variantPreview,
+      direct: target === root,
+    };
+  }
+
+  const layerElement = target.closest(".canvas-frame, .canvas-text, .canvas-vector");
+  const layer = getCanvasLayerDescriptor(layerElement);
+  if (layerElement instanceof HTMLElement && layer && canvasRootStack?.contains(layerElement)) {
+    return {
+      kind: "layer",
+      target,
+      element: layerElement,
+      layer,
+      direct: target === layerElement,
+    };
+  }
+
+  if (canvasRootStack instanceof HTMLElement && canvasRootStack.contains(target)) {
+    return {
+      kind: "component-root",
+      target,
+      element: canvasRootStack,
+      direct: target === canvasRootStack,
+    };
+  }
+  if (target === componentSet) return { kind: "component-set", target, element: componentSet, direct: true };
+  if (target === canvas) return { kind: "canvas", target, element: canvas, direct: true };
+  return { kind: "canvas-ui", target, element: target, direct: true };
 }
 
 function getCanvasParentElement(parentFrameId) {
@@ -791,8 +889,9 @@ function getCanvasInsertionIndex(parentFrameId, draggedLayer, clientX, clientY) 
 
 function getCanvasDropIntent(event, draggedLayer) {
   if (!(canvasRootStack instanceof HTMLElement)) return null;
-  const targetElement = getCanvasLayerElementFromTarget(event.target);
-  const targetLayer = getCanvasLayerDescriptor(targetElement);
+  const hit = resolveCanvasHit(event.target);
+  const targetElement = hit.kind === "layer" ? hit.element : null;
+  const targetLayer = hit.kind === "layer" ? hit.layer : null;
 
   if (targetLayer && isSameLayerDescriptor(targetLayer, draggedLayer)) {
     const parentFrameId = getLayerParentId(draggedLayer);
@@ -1092,8 +1191,14 @@ function clearCanvasDragSession() {
 }
 
 function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = {}) {
+  return runCanvasMutation(
+    () => createCanvasVectorRecord(svgDefinition, x, y, parentRecord, options),
+    { history: options.recordHistory !== false },
+  );
+}
+
+function createCanvasVectorRecord(svgDefinition, x, y, parentRecord = null, options = {}) {
   if (!(canvas instanceof HTMLElement)) return;
-  if (options.recordHistory !== false) recordHistory();
 
   const vectorId = nextVectorId;
   nextVectorId += 1;
@@ -1133,6 +1238,8 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
 
   vector.addEventListener("click", (event) => {
     event.stopPropagation();
+    const hit = resolveCanvasHit(event.target);
+    if (hit.kind !== "layer" || hit.element !== vector) return;
     if (consumeSuppressedCanvasClick(event)) return;
     selectCanvasVector(vector, event.shiftKey || event.ctrlKey || event.metaKey);
   });
@@ -1145,15 +1252,22 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
   vectorRecords.push(record);
   vector.dataset.vectorColor = getVectorRenderedColor(record);
   vector.dataset.vectorColorOpacity = "100";
-  applyAllLayerSizing();
-  renderTree();
+  queueCanvasMutationEffects({ sizing: true, tree: true });
   if (options.select !== false) selectCanvasVector(vector);
   return record;
 }
 
 function createCanvasText(parentRecord, x, y, options = {}) {
+  const record = runCanvasMutation(
+    () => createCanvasTextRecord(parentRecord, x, y, options),
+    { history: options.recordHistory !== false },
+  );
+  if (record && options.beginEditing !== false) startEditingText(record.element, false);
+  return record;
+}
+
+function createCanvasTextRecord(parentRecord, x, y, options = {}) {
   if (!(canvas instanceof HTMLElement)) return;
-  if (options.recordHistory !== false) recordHistory();
   clearLayerSelection();
 
   const textId = nextTextId;
@@ -1209,6 +1323,8 @@ function createCanvasText(parentRecord, x, y, options = {}) {
 
   text.addEventListener("click", (event) => {
     event.stopPropagation();
+    const hit = resolveCanvasHit(event.target);
+    if (hit.kind !== "layer" || hit.element !== text) return;
     if (consumeSuppressedCanvasClick(event)) return;
     if (activeTool === "text") startEditingText(text);
     else selectCanvasText(text, event.shiftKey || event.ctrlKey || event.metaKey);
@@ -1266,15 +1382,19 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   });
 
   textRecords.push(record);
-  applyAllLayerSizing();
-  renderTree();
-  if (options.beginEditing !== false) startEditingText(text, false);
+  queueCanvasMutationEffects({ sizing: true, tree: true });
   return record;
 }
 
 function createCanvasFrame(x, y, parentRecord = null, options = {}) {
+  return runCanvasMutation(
+    () => createCanvasFrameRecord(x, y, parentRecord, options),
+    { history: options.recordHistory !== false },
+  );
+}
+
+function createCanvasFrameRecord(x, y, parentRecord = null, options = {}) {
   if (!(canvas instanceof HTMLElement)) return;
-  if (options.recordHistory !== false) recordHistory();
 
   const frameId = nextFrameId;
   nextFrameId += 1;
@@ -1328,7 +1448,8 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
 
   frame.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (event.target !== frame) return;
+    const hit = resolveCanvasHit(event.target);
+    if (hit.kind !== "layer" || hit.element !== frame || !hit.direct) return;
 
     if (consumeSuppressedCanvasClick(event)) return;
 
@@ -1361,10 +1482,9 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
     if (canvasRootStack instanceof HTMLElement) canvasRootStack.append(frame);
     else canvas.insertBefore(frame, toolbar);
   }
-  applyAllLayerSizing();
   applyFrameAlignment(frame);
   applyFrameOutline(frame);
-  renderTree();
+  queueCanvasMutationEffects({ sizing: true, tree: true });
   if (options.select !== false) selectCanvasFrame(frame);
   return record;
 }
@@ -1484,7 +1604,11 @@ function duplicateSelectedLayer() {
 
   const selectDuplicate = (type, record) => {
     if (variantSelection) {
-      selectVariantInstance(variantSelection.instanceId, { layerTarget: getLayerKey(type, record.id) });
+      selectVariantInstance(variantSelection.instanceId, {
+        render: false,
+        layerTarget: getLayerKey(type, record.id),
+      });
+      queueCanvasMutationEffects({ selection: true, tree: true });
       return;
     }
     if (type === "frame") selectCanvasFrame(record.element);
@@ -1492,9 +1616,7 @@ function duplicateSelectedLayer() {
     else selectCanvasVector(record.element);
   };
 
-  recordHistory();
-  isBatchingHistory = true;
-  try {
+  return runCanvasMutation(() => {
     if (selectedFrameRecord) {
       const parentRecord = selectedFrameRecord.parentId === null
         ? null
@@ -1550,9 +1672,7 @@ function duplicateSelectedLayer() {
       "after",
     );
     selectDuplicate("vector", duplicateRecord);
-  } finally {
-    isBatchingHistory = false;
-  }
+  });
 }
 
 function getPrimaryLayerDescriptor() {
@@ -1646,9 +1766,7 @@ function wrapSelectedLayersInFrame() {
     ? Math.round((gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length) * 100) / 100
     : 0;
 
-  recordHistory();
-  isBatchingHistory = true;
-  try {
+  return runCanvasMutation(() => {
     const parentRecord = parentId === null ? currentComponent.frameRecord : getFrameRecord(parentId);
     const wrapper = createCanvasFrame(0, 0, parentRecord, { recordHistory: false, select: false });
     if (!wrapper) return false;
@@ -1670,9 +1788,7 @@ function wrapSelectedLayersInFrame() {
     expandedFrameIds.add(wrapper.id);
     selectCanvasFrame(wrapper.element);
     return true;
-  } finally {
-    isBatchingHistory = false;
-  }
+  });
 }
 
 function reorderPrimaryLayer(step = 0, edge = null) {
@@ -1964,8 +2080,9 @@ canvas?.addEventListener("pointerdown", (event) => {
     || canvasPointerDrag
     || resizeInteraction
   ) return;
-  const element = getCanvasLayerElementFromTarget(event.target);
-  const draggedLayer = getCanvasLayerDescriptor(element);
+  const hit = resolveCanvasHit(event.target);
+  const element = hit.kind === "layer" ? hit.element : null;
+  const draggedLayer = hit.kind === "layer" ? hit.layer : null;
   if (!(element instanceof HTMLElement) || !draggedLayer || element.isContentEditable) return;
   if (!event.shiftKey && !event.ctrlKey && !event.metaKey) selectDraggedCanvasLayer(draggedLayer);
   element.focus({ preventScroll: true });
@@ -2095,9 +2212,9 @@ function applyMarqueeSelection(selectionBounds) {
 }
 
 canvas?.addEventListener("pointerdown", (event) => {
-  const target = event.target;
-  const startsOnCanvasBackground = target === canvas
-    || target === componentSet;
+  const hit = resolveCanvasHit(event.target);
+  const startsOnCanvasBackground = hit.kind === "canvas"
+    || hit.kind === "component-set";
   if (
     !(canvas instanceof HTMLElement)
     || !startsOnCanvasBackground
@@ -2154,10 +2271,10 @@ canvas?.addEventListener("pointerdown", (event) => {
     && document.activeElement.isContentEditable
       ? document.activeElement
       : null;
-  const target = event.target;
-  const isCanvasSurface = target === canvas
-    || target === canvasRootStack
-    || (target instanceof HTMLElement && target.classList.contains("canvas-frame"));
+  const hit = resolveCanvasHit(event.target);
+  const isCanvasSurface = hit.kind === "canvas"
+    || (hit.kind === "component-root" && hit.direct)
+    || ((hit.kind === "layer" || hit.kind === "variant-layer") && hit.layer.type === "frame" && hit.direct);
   if (!activeText || !isCanvasSurface) return;
 
   suppressCanvasClickForGesture(event);
@@ -2166,7 +2283,8 @@ canvas?.addEventListener("pointerdown", (event) => {
 }, true);
 
 canvasRootStack?.addEventListener("click", (event) => {
-  if (!(canvasRootStack instanceof HTMLElement) || event.target !== canvasRootStack || !currentComponent) return;
+  const hit = resolveCanvasHit(event.target);
+  if (!(canvasRootStack instanceof HTMLElement) || hit.kind !== "component-root" || !hit.direct || !currentComponent) return;
   event.stopPropagation();
 
   if (consumeSuppressedCanvasClick(event)) return;
@@ -2187,24 +2305,22 @@ canvasRootStack?.addEventListener("click", (event) => {
 });
 
 componentSet?.addEventListener("pointerdown", (event) => {
-  const target = event.target;
-  const isComponentSetSurface = target === componentSet;
+  const hit = resolveCanvasHit(event.target);
+  const isComponentSetSurface = hit.kind === "component-set";
   const isVisibleBaseComponentSurface = variantInstances.length === 0
-    && target instanceof Element
-    && canvasRootStack.contains(target)
-    && !target.closest(".canvas-frame, .canvas-text, .canvas-vector");
+    && hit.kind === "component-root";
   if (
     event.button !== 0
     || activeTool !== "select"
     || !currentComponent
-    || !(target instanceof Element)
     || (!isComponentSetSurface && !isVisibleBaseComponentSurface)
   ) return;
   selectComponentTreeNode(currentComponent.id);
 });
 
 canvas?.addEventListener("click", (event) => {
-  if (!(canvas instanceof HTMLElement) || event.target !== canvas) return;
+  const hit = resolveCanvasHit(event.target);
+  if (!(canvas instanceof HTMLElement) || hit.kind !== "canvas") return;
 
   if (consumeSuppressedCanvasClick(event)) return;
 
