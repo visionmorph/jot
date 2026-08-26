@@ -350,9 +350,16 @@ function getExportVariants() {
 
 function isDirectVisibilityPropAxis(variantProp) {
   return componentProps.some((componentProp) => (
-    componentProp.variantPropId === variantProp.id
-    && componentProp.type === "boolean"
+    componentProp.type === "boolean"
     && componentProp.property === "visibility"
+    && (
+      (componentProp.variantPropId != null
+        && variantProp.id != null
+        && String(componentProp.variantPropId) === String(variantProp.id))
+      || (variantProp.sourceComponentPropId != null
+        && componentProp.id != null
+        && String(variantProp.sourceComponentPropId) === String(componentProp.id))
+    )
   ));
 }
 
