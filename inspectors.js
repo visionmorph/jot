@@ -983,7 +983,6 @@ function renderComponentProps() {
         }
         if (variantInstances.length > 0) scheduleVariantInstanceRender();
         redoHistory.length = 0;
-        renderTree();
       };
       valueInput.addEventListener("input", commitStringValue);
       valueInput.addEventListener("blur", commitStringValue);
