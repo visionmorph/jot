@@ -1279,6 +1279,21 @@ function applyCustomColorValue(control, color, opacity) {
     syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
     return true;
   }
+  if (selectedVariantInstanceId !== null && state.property === "frame-outline") {
+    if (normalizedColor) control.dataset.lastColor = normalizedColor;
+    if (state.color !== normalizedColor || state.opacity !== normalizedOpacity) recordHistoryForGesture(control);
+    const shouldEnableOutline = Boolean(normalizedColor)
+      && !normalizeHexColor(state.color)
+      && Number(state.record.element.dataset.outlineWeight || "0") <= 0;
+    setSelectedVariantFrameStyleOverride("outlineColor", normalizedColor, { record: false, render: false });
+    setSelectedVariantFrameStyleOverride("outlineColorOpacity", String(normalizedOpacity), { record: false, render: false });
+    if (shouldEnableOutline) {
+      setSelectedVariantFrameStyleOverride("outlineWeight", "1", { record: false, render: false });
+      if (frameOutlineWeightInput instanceof HTMLInputElement) frameOutlineWeightInput.value = "1";
+    }
+    syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);
+    return true;
+  }
   if (selectedVariantInstanceId !== null && state.property === "text" && state.record.isVariantInstance) {
     if (normalizedColor) control.dataset.lastColor = normalizedColor;
     const renderedColor = getColorWithOpacity(normalizedColor, normalizedOpacity);
@@ -2337,6 +2352,10 @@ frameOutlinePositionSelect?.addEventListener("change", () => {
     ? frameOutlinePositionSelect.value
     : "inside";
   if ((record.element.dataset.outlinePosition || "inside") === position) return;
+  if (selectedVariantInstanceId !== null && record.isVariantInstance) {
+    setSelectedVariantFrameStyleOverride("outlinePosition", position);
+    return;
+  }
   recordHistory();
   record.element.dataset.outlinePosition = position;
   applyFrameOutline(record.element);
@@ -2352,6 +2371,10 @@ frameOutlineWeightInput?.addEventListener("input", () => {
   const weight = Number(frameOutlineWeightInput.value);
   if (!Number.isFinite(weight) || weight < 0) return;
   if (Number(record.element.dataset.outlineWeight || "1") !== weight) recordHistoryForGesture(frameOutlineWeightInput);
+  if (selectedVariantInstanceId !== null && record.isVariantInstance) {
+    setSelectedVariantFrameStyleOverride("outlineWeight", String(weight), { record: false, render: false });
+    return;
+  }
   record.element.dataset.outlineWeight = String(weight);
   applyFrameOutline(record.element);
 });

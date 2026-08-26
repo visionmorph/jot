@@ -130,6 +130,7 @@ document.addEventListener("keydown", (event) => {
   ) return;
 
   let activeVariantLayerTarget = selectedVariantLayerTarget;
+  let activeVariantInstanceId = selectedVariantInstanceId;
   const eventVariantLayer = target instanceof HTMLElement
     ? target.closest(".variant-preview .canvas-frame, .variant-preview .canvas-text, .variant-preview .canvas-vector")
     : null;
@@ -140,9 +141,10 @@ document.addEventListener("keydown", (event) => {
     const id = Number(eventVariantLayer.dataset[`${type}Id`]);
     if (Number.isFinite(id)) activeVariantLayerTarget = `${type}:${id}`;
     const previewId = Number(eventVariantLayer.closest(".variant-preview")?.dataset.variantInstanceId);
-    if (Number.isFinite(previewId)) selectedVariantInstanceId = previewId;
+    if (Number.isFinite(previewId)) activeVariantInstanceId = previewId;
+    if (activeVariantInstanceId !== null) selectVariantState(activeVariantInstanceId, activeVariantLayerTarget);
   }
-  if (selectedVariantInstanceId !== null && activeVariantLayerTarget === null) {
+  if (activeVariantInstanceId !== null && activeVariantLayerTarget === null) {
     const selectedLayer = componentSet?.querySelector(
       ".canvas-frame.is-selected, .canvas-text.is-selected, .canvas-vector.is-selected",
     );
@@ -155,19 +157,17 @@ document.addEventListener("keydown", (event) => {
     }
   }
 
-  if (selectedVariantInstanceId !== null && activeVariantLayerTarget === null) {
+  if (activeVariantInstanceId !== null && activeVariantLayerTarget === null) {
     event.preventDefault();
-    removeVariantInstance(selectedVariantInstanceId);
+    removeVariantInstance(activeVariantInstanceId);
     return;
   }
 
-  if (selectedVariantInstanceId !== null && activeVariantLayerTarget !== null) {
+  if (activeVariantInstanceId !== null && activeVariantLayerTarget !== null) {
     const [type, rawId] = activeVariantLayerTarget.split(":");
     const id = Number(rawId);
     if (!["frame", "text", "vector"].includes(type) || !Number.isFinite(id)) return;
-    selectedLayerKeys.clear();
-    selectedLayerKeys.add(getLayerKey(type, id));
-    selectedVariantLayerTarget = null;
+    selectLayerKeys([getLayerKey(type, id)], getLayerKey(type, id));
   }
 
   if (selectedComponentId !== null) {
@@ -246,10 +246,7 @@ document.addEventListener("keydown", (event) => {
   vectorRecords = vectorRecords.filter((record) => !vectorIdsToDelete.has(record.id));
   frameIdsToDelete.forEach((frameId) => expandedFrameIds.delete(frameId));
   applyAllLayerSizing();
-  selectedLayerKeys.clear();
-  selectedCanvasFrame = null;
-  selectedCanvasText = null;
-  selectedCanvasVector = null;
+  selectCanvasState();
   syncElementSelectionStyles();
   renderTree();
 });
