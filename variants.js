@@ -720,7 +720,7 @@ function renderVariantInstances() {
       text.addEventListener("blur", () => {
         endHistoryGesture(text);
         text.contentEditable = "false";
-        renderVariantInstances();
+        scheduleVariantInstanceRender();
       });
     });
     content.append(clone);
