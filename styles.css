@@ -1140,6 +1140,10 @@ textarea:focus-visible {
   cursor: default;
 }
 
+.variant-preview:focus {
+  outline: 0;
+}
+
 .variant-preview.is-variant-dragging {
   opacity: 0.45;
 }

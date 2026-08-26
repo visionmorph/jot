@@ -1945,6 +1945,46 @@ function doRectsIntersect(elementBounds, selectionBounds) {
 
 function applyMarqueeSelection(selectionBounds) {
   if (!selectionDrag || !currentComponent) return;
+  if (variantInstances.length > 0) {
+    const matches = [];
+    variantInstances.forEach((instance) => {
+      const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`);
+      const root = preview?.querySelector(".canvas-root-stack");
+      if (!(root instanceof HTMLElement)) return;
+      if (isRectEnclosed(root.getBoundingClientRect(), selectionBounds)) {
+        matches.push({ instanceId: instance.id, target: null });
+        return;
+      }
+      root.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((element) => {
+        const type = element.classList.contains("canvas-frame")
+          ? "frame"
+          : element.classList.contains("canvas-text") ? "text" : "vector";
+        const id = Number(element.dataset[`${type}Id`]);
+        if (!Number.isFinite(id)) return;
+        const isMatch = type === "frame"
+          ? isRectEnclosed(element.getBoundingClientRect(), selectionBounds)
+          : doRectsIntersect(element.getBoundingClientRect(), selectionBounds);
+        if (isMatch) matches.push({ instanceId: instance.id, target: `${type}:${id}` });
+      });
+    });
+    const match = matches[matches.length - 1];
+    if (match) {
+      selectedVariantInstanceId = match.instanceId;
+      selectedVariantLayerTarget = match.target;
+      clearMasterSelectionForVariant();
+    } else if (!selectionDrag.additive) {
+      selectedVariantInstanceId = null;
+      selectedVariantLayerTarget = null;
+      selectedLayerKeys.clear();
+      selectedComponentId = null;
+      selectedCanvasFrame = null;
+      selectedCanvasText = null;
+      selectedCanvasVector = null;
+      clearElementSelection();
+    }
+    renderTree();
+    return;
+  }
   const nextKeys = new Set(selectionDrag.additive ? selectionDrag.initialKeys : []);
   let nextComponentId = selectionDrag.additive ? selectionDrag.initialComponentId : null;
   const componentIsEnclosed = isRectEnclosed(canvasRootStack.getBoundingClientRect(), selectionBounds);
