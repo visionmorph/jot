@@ -871,8 +871,24 @@ function requestAddVariant(event = null) {
   event?.stopPropagation();
   const instance = addVariantInstance();
   if (!instance) return false;
-  requestAnimationFrame(() => {
-    let preview = componentSet?.querySelector(
+
+  // Creation must commit its canvas result immediately. Layout callbacks only
+  // refine overlays; they are not responsible for making the preview exist.
+  renderVariantInstances();
+  selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
+  let preview = componentSet?.querySelector(
+    `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
+  );
+  if (preview instanceof HTMLElement) void preview.getBoundingClientRect();
+  syncResizeOverlay();
+  if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
+
+  setTimeout(() => {
+    const renderedPreviews = componentSet?.querySelectorAll(":scope > .variant-preview") ?? [];
+    if (renderedPreviews.length !== variantInstances.length) {
+      renderVariantInstances();
+    }
+    preview = componentSet?.querySelector(
       `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
     );
     if (!(preview instanceof HTMLElement)) {
@@ -881,12 +897,11 @@ function requestAddVariant(event = null) {
         `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
       );
     }
-    selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
-    if (preview instanceof HTMLElement) void preview.offsetWidth;
+    if (selectedVariantInstanceId === instance.id) {
+      selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
+    }
     syncResizeOverlay();
-    if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
-    requestAnimationFrame(syncResizeOverlay);
-  });
+  }, 0);
   return true;
 }
 
