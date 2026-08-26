@@ -619,16 +619,7 @@ function renderVariantInstances() {
       layerElement.addEventListener("pointerdown", (event) => {
         if (event.button !== 0 || activeTool !== "select") return;
         event.stopPropagation();
-        selectVariantInstance(instance.id, { render: false });
-        selectedVariantLayerTarget = target;
-        preview.querySelectorAll(".canvas-frame.is-selected, .canvas-text.is-selected, .canvas-vector.is-selected").forEach((element) => {
-          element.classList.remove("is-selected");
-          element.setAttribute("aria-selected", "false");
-        });
-        layerElement.classList.add("is-selected");
-        layerElement.setAttribute("aria-selected", "true");
-        updateInspector();
-        syncResizeOverlay();
+        selectVariantInstance(instance.id, { render: false, layerTarget: target });
       });
       if (type === "frame") {
         layerElement.addEventListener("click", (event) => {
@@ -658,7 +649,7 @@ function renderVariantInstances() {
       text.addEventListener("click", (event) => {
         if (activeTool !== "text") return;
         selectTool("select");
-        selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
+        selectVariantInstance(instance.id, { render: false, layerTarget: target });
         beginEditing(event);
       });
       text.addEventListener("keydown", (event) => {
@@ -717,7 +708,10 @@ function clearMasterSelectionForVariant() {
 function selectVariantInstance(instanceId, options = {}) {
   if (!getVariantInstance(instanceId)) return false;
   clearMasterSelectionForVariant();
-  if (selectedVariantInstanceId !== instanceId || options.preserveLayerSelection !== true) {
+  const hasLayerTarget = Object.prototype.hasOwnProperty.call(options, "layerTarget");
+  if (hasLayerTarget) {
+    selectedVariantLayerTarget = options.layerTarget;
+  } else if (selectedVariantInstanceId !== instanceId || options.preserveLayerSelection !== true) {
     selectedVariantLayerTarget = null;
   }
   selectedVariantInstanceId = instanceId;
@@ -1272,8 +1266,7 @@ function createInstanceTreeRow(label, depth, icon, selected, instanceId, target 
   labelSpan.textContent = label;
   row.append(iconCell, labelSpan);
   row.addEventListener("click", () => {
-    selectVariantInstance(instanceId, { render: false });
-    selectedVariantLayerTarget = target;
+    selectVariantInstance(instanceId, { render: false, layerTarget: target });
     renderTree();
   });
   return row;
