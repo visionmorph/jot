@@ -291,7 +291,14 @@ function syncFramePaddingAxisInputs(element) {
   framePaddingAxisInputs.forEach((input) => {
     if (!(input instanceof HTMLInputElement)) return;
     const sides = input.dataset.framePaddingAxis === "y" ? ["top", "bottom"] : ["left", "right"];
-    const values = sides.map((side) => Number(element.dataset[`padding${side[0].toUpperCase()}${side.slice(1)}`] || "10"));
+    const values = sides.map((side) => {
+      const property = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+      const fallback = `${element.dataset[property] || "10"}px`;
+      const value = selectedVariantInstanceId !== null
+        ? getSelectedVariantTargetStyleOverride(property, fallback)
+        : fallback;
+      return Number(String(value).replace(/px$/i, ""));
+    });
     input.value = values[0] === values[1] ? String(values[0]) : "";
   });
 }
@@ -578,6 +585,7 @@ function setBooleanPropProperty(prop, property) {
     prop.targetTextId = null;
     prop.targetVectorId = null;
   }
+  syncComponentPropVariantDefinition(prop);
   renderComponentProps();
 }
 
@@ -965,11 +973,21 @@ function renderComponentProps() {
       valueInput.setAttribute("aria-label", `Default ${prop.name} value`);
       const commitStringValue = () => {
         if (valueInput.value === String(prop.defaultValue ?? "")) return;
-        recordHistory();
+        recordHistoryForGesture(valueInput);
         prop.defaultValue = valueInput.value;
+        const target = getTextRecord(prop.targetTextId);
+        if (target) {
+          target.element.textContent = valueInput.value;
+          applyLayerSizing("text", target);
+          requestAnimationFrame(syncResizeOverlay);
+        }
+        if (variantInstances.length > 0) scheduleVariantInstanceRender();
+        redoHistory.length = 0;
+        renderTree();
       };
-      valueInput.addEventListener("change", commitStringValue);
+      valueInput.addEventListener("input", commitStringValue);
       valueInput.addEventListener("blur", commitStringValue);
+      bindHistoryGesture(valueInput);
       defaultCell.append(valueInput);
     } else {
       const valueTag = document.createElement("span");
@@ -2175,6 +2193,7 @@ framePaddingAxisInputs.forEach((input) => {
       if (!hasVariantChange) return;
       recordHistoryForGesture(input);
       sides.forEach((side) => setSelectedVariantFrameStyleOverride(`padding${side[0].toUpperCase()}${side.slice(1)}`, `${value}px`, { record: false }));
+      syncFramePaddingAxisInputs(record.element);
       return;
     }
     const hasChange = sides.some((side) => {
@@ -2252,8 +2271,7 @@ frameDirectionOptions.forEach((option) => {
 });
 
 frameAlignmentOptions.forEach((option) => {
-  let wasSelectedAtFirstClick = false;
-  option.addEventListener("click", (event) => {
+  option.addEventListener("click", () => {
     option.focus();
     const record = getSelectedFrameRecord();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
@@ -2268,9 +2286,6 @@ frameAlignmentOptions.forEach((option) => {
       setSelectedVariantFrameStyleOverride("justifyContent", values.justifyContent, { record: false });
       return;
     }
-    if (event.detail === 1) {
-      wasSelectedAtFirstClick = Boolean(record && isFrameAlignmentOptionSelected(record.element, alignment));
-    }
     if (!record || isFrameAlignmentOptionSelected(record.element, alignment)) return;
     recordHistory();
     record.element.dataset.alignment = alignment;
@@ -2280,20 +2295,20 @@ frameAlignmentOptions.forEach((option) => {
   });
   option.addEventListener("dblclick", (event) => {
     const record = getSelectedFrameRecord();
-    const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
-    if (
-      !record
-      || !wasSelectedAtFirstClick
-      || !isFrameAlignmentOptionSelected(record.element, alignment)
-    ) return;
     event.preventDefault();
+    if (!record) return;
+    if (selectedVariantInstanceId !== null) {
+      if (getSelectedVariantTargetStyleOverride("justifyContent", record.element.style.justifyContent || "flex-start") === "space-between") return;
+      recordHistory();
+      setSelectedVariantFrameStyleOverride("justifyContent", "space-between", { record: false });
+      return;
+    }
+    if (record.element.dataset.gapMode === "auto") return;
     recordHistory();
-    const enableSpaceBetween = record.element.dataset.gapMode !== "auto";
-    record.element.dataset.gapMode = enableSpaceBetween ? "auto" : "fixed";
-    record.element.style.gap = enableSpaceBetween ? "0px" : `${record.element.dataset.gap || "10"}px`;
+    record.element.dataset.gapMode = "auto";
+    record.element.style.gap = "0px";
     applyFrameAlignment(record.element);
     syncInspectorToSelectedFrame();
-    wasSelectedAtFirstClick = false;
   });
 });
 

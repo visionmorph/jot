@@ -39,6 +39,8 @@ let variantRenderFrame = null;
 
 let selectedVariantLayerTarget = null;
 
+let draggedVariantInstanceId = null;
+
 function getVariantPropValues(prop) {
   if (prop.type === "boolean") return [false, true];
   if (prop.type === "enum") return prop.options?.length ? prop.options : ["default"];
@@ -589,6 +591,7 @@ function renderVariantInstances() {
     const content = document.createElement("div");
     const clone = canvasRootStack.cloneNode(true);
     preview.className = "variant-preview";
+    preview.draggable = true;
     preview.classList.toggle("is-selected", instance.id === selectedVariantInstanceId);
     preview.dataset.variantInstanceId = String(instance.id);
     preview.setAttribute("role", "group");
@@ -678,9 +681,53 @@ function renderVariantInstances() {
     preview.addEventListener("pointerdown", selectPreview);
     preview.addEventListener("keydown", (event) => {
       if (event.target !== preview) return;
+      const move = event.key === "ArrowLeft" || event.key === "ArrowUp"
+        ? -1
+        : event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : 0;
+      if (move !== 0) {
+        event.preventDefault();
+        reorderVariantInstance(instance.id, variantInstances.indexOf(instance) + move);
+        return;
+      }
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       selectVariantInstance(instance.id);
+    });
+    preview.addEventListener("dragstart", (event) => {
+      draggedVariantInstanceId = instance.id;
+      preview.classList.add("is-variant-dragging");
+      event.dataTransfer?.setData("text/plain", String(instance.id));
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    });
+    preview.addEventListener("dragover", (event) => {
+      if (draggedVariantInstanceId == null || draggedVariantInstanceId === instance.id) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      const bounds = preview.getBoundingClientRect();
+      preview.dataset.variantDropPosition = event.clientX < bounds.left + bounds.width / 2 ? "before" : "after";
+      preview.classList.toggle("is-variant-drop-before", preview.dataset.variantDropPosition === "before");
+      preview.classList.toggle("is-variant-drop-after", preview.dataset.variantDropPosition === "after");
+    });
+    preview.addEventListener("dragleave", (event) => {
+      if (event.relatedTarget instanceof Node && preview.contains(event.relatedTarget)) return;
+      preview.classList.remove("is-variant-drop-before", "is-variant-drop-after");
+      delete preview.dataset.variantDropPosition;
+    });
+    preview.addEventListener("drop", (event) => {
+      if (draggedVariantInstanceId == null || draggedVariantInstanceId === instance.id) return;
+      event.preventDefault();
+      const sourceIndex = variantInstances.findIndex((candidate) => candidate.id === draggedVariantInstanceId);
+      const targetIndex = variantInstances.indexOf(instance);
+      const after = preview.dataset.variantDropPosition === "after";
+      const destination = targetIndex + (after ? 1 : 0) - (sourceIndex < targetIndex + (after ? 1 : 0) ? 1 : 0);
+      reorderVariantInstance(draggedVariantInstanceId, destination);
+    });
+    preview.addEventListener("dragend", () => {
+      draggedVariantInstanceId = null;
+      componentSet?.querySelectorAll(".variant-preview").forEach((item) => {
+        item.classList.remove("is-variant-dragging", "is-variant-drop-before", "is-variant-drop-after");
+        delete item.dataset.variantDropPosition;
+      });
     });
     componentSet.append(preview);
     setVariantLabelTooltip(label, label.textContent);
@@ -736,6 +783,22 @@ function selectVariantInstance(instanceId, options = {}) {
     updateInspector();
     syncResizeOverlay();
   }
+  return true;
+}
+
+function reorderVariantInstance(instanceId, destinationIndex) {
+  const sourceIndex = variantInstances.findIndex((instance) => instance.id === instanceId);
+  if (sourceIndex < 0) return false;
+  const nextIndex = Math.max(0, Math.min(variantInstances.length - 1, destinationIndex));
+  if (sourceIndex === nextIndex) return false;
+  recordHistory();
+  const [instance] = variantInstances.splice(sourceIndex, 1);
+  variantInstances.splice(nextIndex, 0, instance);
+  renderTree();
+  requestAnimationFrame(() => {
+    const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`);
+    if (preview instanceof HTMLElement) preview.focus();
+  });
   return true;
 }
 

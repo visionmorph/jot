@@ -1140,6 +1140,18 @@ textarea:focus-visible {
   cursor: default;
 }
 
+.variant-preview.is-variant-dragging {
+  opacity: 0.45;
+}
+
+.variant-preview.is-variant-drop-before {
+  box-shadow: inset 2px 0 #992cff;
+}
+
+.variant-preview.is-variant-drop-after {
+  box-shadow: inset -2px 0 #992cff;
+}
+
 .variant-preview-label,
 .component-preview-label {
   position: absolute;
