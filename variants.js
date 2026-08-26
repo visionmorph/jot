@@ -864,7 +864,7 @@ function reorderVariantInstance(instanceId, destinationIndex) {
   return true;
 }
 
-function addVariantInstance() {
+function addVariantInstance({ render = true } = {}) {
   if (!currentComponent) return null;
   recordHistory();
   if (variantInstances.length === 0) {
@@ -896,19 +896,18 @@ function addVariantInstance() {
   variantInstances.push(instance);
   selectVariantState(instance.id, null);
   clearMasterSelectionForVariant();
-  renderTree();
+  if (render) renderTree();
   return instance;
 }
 
 function requestAddVariant(event = null) {
   event?.preventDefault();
   event?.stopPropagation();
-  const instance = addVariantInstance();
+  const instance = addVariantInstance({ render: false });
   if (!instance) return false;
 
-  // Creation must commit its canvas result immediately. Layout callbacks only
-  // refine overlays; they are not responsible for making the preview exist.
-  renderVariantInstances();
+  // Render the document and all dependent panels once from the completed state.
+  renderTree();
   selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
   let preview = componentSet?.querySelector(
     `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
@@ -917,25 +916,18 @@ function requestAddVariant(event = null) {
   syncResizeOverlay();
   if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
 
-  setTimeout(() => {
-    const renderedPreviews = componentSet?.querySelectorAll(":scope > .variant-preview") ?? [];
-    if (renderedPreviews.length !== variantInstances.length) {
-      renderVariantInstances();
-    }
+  // Commit again on the next paint even when the preview node already exists.
+  // A DOM-count check cannot detect a preview that was created but not laid out.
+  requestAnimationFrame(() => {
+    if (!getVariantInstance(instance.id)) return;
+    renderVariantInstances();
+    selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
     preview = componentSet?.querySelector(
       `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
     );
-    if (!(preview instanceof HTMLElement)) {
-      renderVariantInstances();
-      preview = componentSet?.querySelector(
-        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
-      );
-    }
-    if (selectedVariantInstanceId === instance.id) {
-      selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
-    }
+    if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
     syncResizeOverlay();
-  }, 0);
+  });
   return true;
 }
 
