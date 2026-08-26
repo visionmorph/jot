@@ -1319,6 +1319,10 @@ function applyCustomColorValue(control, color, opacity) {
 
   recordHistoryForGesture(control);
   const renderedColor = getColorWithOpacity(normalizedColor, normalizedOpacity);
+  const shouldEnableFrameOutline = state.property === "frame-outline"
+    && Boolean(normalizedColor)
+    && !normalizeHexColor(state.color)
+    && Number(state.record?.element.dataset.outlineWeight || "0") <= 0;
   if (state.property === "canvas") {
     canvasColorValue = normalizedColor;
     canvasColorOpacity = normalizedOpacity;
@@ -1334,6 +1338,10 @@ function applyCustomColorValue(control, color, opacity) {
   } else if (state.property === "frame-outline") {
     state.record.element.dataset.outlineColor = normalizedColor;
     state.record.element.dataset.outlineColorOpacity = String(normalizedOpacity);
+    if (shouldEnableFrameOutline) {
+      state.record.element.dataset.outlineWeight = "1";
+      if (frameOutlineWeightInput instanceof HTMLInputElement) frameOutlineWeightInput.value = "1";
+    }
     applyFrameOutline(state.record.element);
   } else if (state.property === "vector") {
     state.record.element.dataset.vectorColorOpacity = String(normalizedOpacity);

@@ -267,7 +267,7 @@ function getDefaultComponentFrameState() {
       htmlTag: "div",
       layerVisibility: "visible",
     },
-    style: "width: 100px; height: 100px; padding: 10px; gap: 10px; flex-direction: row; align-items: flex-start; justify-content: flex-start; border: 0; border-radius: 0px; outline: none; box-shadow: none; background-color: #ffffff; box-sizing: border-box;",
+    style: "width: 100px; height: 100px; padding: 10px; gap: 10px; flex-direction: row; align-items: flex-start; justify-content: flex-start; border: 0; border-radius: 0px; box-shadow: none; background-color: #ffffff; box-sizing: border-box;",
   };
 }
 
@@ -545,6 +545,7 @@ function restoreWorkspaceState(snapshot, options = {}) {
     }
     const componentFrameState = snapshot.componentFrame ?? getDefaultComponentFrameState();
     restoreElementState(canvasRootStack, componentFrameState.dataset, componentFrameState.style);
+    canvasRootStack.style.removeProperty("outline");
     syncLayerVisibility(canvasRootStack);
     canvasRootStack.setAttribute("aria-label", currentComponent?.name || "Component");
     canvasRootStack.setAttribute("aria-selected", "false");

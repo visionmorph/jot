@@ -23,6 +23,8 @@
   --text-inverse: #121619;
   --text-disabled: rgba(244, 244, 244, 0.25);
   --field-01: #21272a;
+  --canvas-hover-outline: #78a9ff;
+  --canvas-selected-outline: #992cff;
 }
 
 * {
@@ -1113,14 +1115,6 @@ textarea:focus-visible {
   display: none;
 }
 
-.canvas-root-stack.is-selected {
-  outline: 1px solid #992CFF;
-}
-
-.canvas-root-stack:hover {
-  outline: 2px solid #992CFF;
-}
-
 .variant-preview {
   position: relative;
   z-index: 2;
@@ -1207,10 +1201,6 @@ textarea:focus-visible {
 .canvas.is-text-tool-active .variant-preview-content .canvas-text,
 .canvas.is-text-tool-active .variant-preview-content .canvas-vector {
   cursor: text;
-}
-
-.variant-preview.is-selected .variant-preview-content {
-  outline-color: #992cff;
 }
 
 .variant-preview .canvas-root-stack {
@@ -1496,14 +1486,6 @@ textarea:focus-visible {
   touch-action: none;
 }
 
-.canvas-frame.is-selected {
-  outline: 1px solid #992CFF;
-}
-
-.canvas-frame:hover {
-  outline: 2px solid #992CFF;
-}
-
 .canvas-frame > .canvas-frame {
   position: relative;
   left: auto !important;
@@ -1602,20 +1584,25 @@ textarea:focus-visible {
   pointer-events: none !important;
 }
 
-.canvas-text.is-selected {
-  outline: 1px solid #992CFF;
+.canvas-root-stack:hover:not(.is-selected),
+.canvas-frame:hover:not(.is-selected),
+.canvas-text:hover:not(.is-selected):not(.is-new-empty),
+.canvas-vector:hover:not(.is-selected) {
+  outline: 1px solid var(--canvas-hover-outline);
 }
 
-.canvas-text:hover:not(.is-new-empty) {
-  outline: 2px solid #992CFF;
-}
-
+.canvas-root-stack.is-selected,
+.canvas-frame.is-selected,
+.canvas-text.is-selected,
 .canvas-vector.is-selected {
-  outline: 1px solid #992CFF;
+  outline: 1px solid var(--canvas-selected-outline);
 }
 
-.canvas-vector:hover {
-  outline: 2px solid #992CFF;
+.canvas-root-stack.is-selected:hover,
+.canvas-frame.is-selected:hover,
+.canvas-text.is-selected:hover:not(.is-new-empty),
+.canvas-vector.is-selected:hover {
+  outline: 2px solid var(--canvas-selected-outline);
 }
 
 .resize-overlay {

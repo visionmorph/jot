@@ -605,6 +605,9 @@ function renderVariantInstances() {
     prepareVariantClone(clone, instance.id);
     resolveVariantOperations(instance).forEach((operation) => applyVariantOperation(clone, operation));
     syncVariantFlexbox(clone);
+    const isSelectedRoot = instance.id === selectedVariantInstanceId && selectedVariantLayerTarget === null;
+    clone.classList.toggle("is-selected", isSelectedRoot);
+    clone.setAttribute("aria-selected", String(isSelectedRoot));
     clone.addEventListener("click", (event) => {
       if (event.target === clone) handleVariantStructureToolClick(instance, "component:0", event);
     });
@@ -767,6 +770,12 @@ function selectVariantInstance(instanceId, options = {}) {
     document.querySelectorAll(".variant-preview").forEach((preview) => {
       const isSelectedInstance = Number(preview.dataset.variantInstanceId) === instanceId;
       preview.classList.toggle("is-selected", isSelectedInstance);
+      const root = preview.querySelector(".canvas-root-stack");
+      if (root instanceof HTMLElement) {
+        const isSelectedRoot = isSelectedInstance && selectedVariantLayerTarget === null;
+        root.classList.toggle("is-selected", isSelectedRoot);
+        root.setAttribute("aria-selected", String(isSelectedRoot));
+      }
       preview.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((layerElement) => {
         const type = layerElement.classList.contains("canvas-frame")
           ? "frame"
