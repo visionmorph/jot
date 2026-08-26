@@ -131,6 +131,10 @@ function positionResizeOverlay() {
 
   const canvasBounds = canvas.getBoundingClientRect();
   const bounds = element.getBoundingClientRect();
+  if (bounds.width <= 0 || bounds.height <= 0) {
+    resizeOverlay.hidden = true;
+    return;
+  }
   resizeOverlay.hidden = false;
   resizeOverlay.style.left = `${bounds.left - canvasBounds.left}px`;
   resizeOverlay.style.top = `${bounds.top - canvasBounds.top}px`;
@@ -156,18 +160,25 @@ function syncVariantActionOverlay() {
   variantAddButtonTooltip.hidden = isVariantLayerSelected;
   const canvasBounds = canvas.getBoundingClientRect();
   const bounds = anchorElement.getBoundingClientRect();
+  const selectedBounds = selectedElement.getBoundingClientRect();
+  const fallbackVariantRoot = selectedComponentId === currentComponent?.id && variantInstances.length > 0
+    ? componentSet?.querySelector(".variant-preview .canvas-root-stack")
+    : null;
+  const measurementElement = selectedBounds.width > 0 && selectedBounds.height > 0
+    ? selectedElement
+    : fallbackVariantRoot instanceof HTMLElement ? fallbackVariantRoot : selectedElement;
+  const measurementBounds = measurementElement.getBoundingClientRect();
   const getDimensionLabel = (dimension) => {
     const override = selectedVariantInstanceId !== null
       ? getSelectedVariantStyleOverride(dimension, "")
       : "";
-    const defaultMode = selectedElement === selectedCanvasText ? "hug" : "fixed";
+    const defaultMode = measurementElement === selectedCanvasText ? "hug" : "fixed";
     const mode = override === "auto"
       ? "hug"
       : override === "100%"
         ? "fill"
-        : override ? "fixed" : getLayerDimensionMode(selectedElement, dimension, defaultMode);
-    const selectedBounds = selectedElement.getBoundingClientRect();
-    const value = Math.round(selectedBounds[dimension]);
+        : override ? "fixed" : getLayerDimensionMode(measurementElement, dimension, defaultMode);
+    const value = Math.round(measurementBounds[dimension]);
     const suffix = mode === "hug" ? " Hug" : mode === "fill" ? " Fill" : "";
     return `${value}${suffix}`;
   };

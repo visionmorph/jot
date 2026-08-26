@@ -521,6 +521,9 @@ function namespaceVariantCloneIds(clone, instanceId) {
 
 function prepareVariantClone(clone, instanceId) {
   clone.removeAttribute("data-canvas-root-stack");
+  clone.removeAttribute("aria-hidden");
+  clone.removeAttribute("hidden");
+  clone.style.removeProperty("display");
   clone.querySelectorAll(".component-preview-label").forEach((label) => label.remove());
   clone.classList.remove("is-selected", "is-canvas-drop-inside", "is-canvas-dragging");
   clone.setAttribute("aria-selected", "false");
@@ -869,11 +872,20 @@ function requestAddVariant(event = null) {
   const instance = addVariantInstance();
   if (!instance) return false;
   requestAnimationFrame(() => {
-    syncResizeOverlay();
-    const preview = componentSet?.querySelector(
+    let preview = componentSet?.querySelector(
       `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
     );
+    if (!(preview instanceof HTMLElement)) {
+      renderVariantInstances();
+      preview = componentSet?.querySelector(
+        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
+      );
+    }
+    selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
+    if (preview instanceof HTMLElement) void preview.offsetWidth;
+    syncResizeOverlay();
     if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
+    requestAnimationFrame(syncResizeOverlay);
   });
   return true;
 }
