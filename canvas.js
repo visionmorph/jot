@@ -1092,6 +1092,7 @@ function createCanvasVector(svgDefinition, x, y, parentRecord = null, options = 
 
   vector.className = "canvas-vector";
   vector.draggable = true;
+  vector.tabIndex = -1;
   vector.dataset.vectorId = String(vectorId);
   vector.dataset.width = String(width);
   vector.dataset.height = String(height);
@@ -1144,19 +1145,23 @@ function createCanvasText(parentRecord, x, y, options = {}) {
   const textId = nextTextId;
   nextTextId += 1;
   const text = document.createElement("div");
+  const initialTextContent = options.textContent == null ? "" : String(options.textContent);
   const record = {
     id: textId,
     parentFrameId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
     element: text,
     order: nextLayerOrder,
-    isNew: true,
+    isNew: options.isNew !== false,
     name: undefined,
   };
   nextLayerOrder += 1;
 
-  text.className = "canvas-text is-new-empty";
+  text.className = "canvas-text";
+  text.classList.toggle("is-new-empty", record.isNew && initialTextContent.length === 0);
   text.draggable = true;
+  text.tabIndex = -1;
   text.dataset.textId = String(textId);
+  text.textContent = initialTextContent;
   text.contentEditable = "false";
   text.spellcheck = false;
   text.setAttribute("aria-label", `Text ${textId}`);
@@ -1276,6 +1281,7 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
 
   frame.className = "canvas-frame";
   frame.draggable = true;
+  frame.tabIndex = -1;
   frame.dataset.frameId = String(frameId);
   frame.setAttribute("aria-label", `Frame ${frameId}`);
   frame.setAttribute("aria-selected", "false");
@@ -1363,13 +1369,15 @@ function copyElementDataset(source, target, excludedKeys) {
   });
 }
 
-function duplicateTextRecord(sourceRecord, parentRecord, offsetRoot = false) {
+function duplicateTextRecord(sourceRecord, parentRecord, offsetRoot = false, textContent = sourceRecord.element.textContent ?? "") {
   const source = sourceRecord.element;
   const x = Number.parseFloat(source.style.left || "0") + (offsetRoot ? 16 : 0);
   const y = Number.parseFloat(source.style.top || "0") + (offsetRoot ? 16 : 0);
   const duplicateRecord = createCanvasText(parentRecord, x, y, {
     beginEditing: false,
     recordHistory: false,
+    isNew: false,
+    textContent,
   });
   if (!duplicateRecord) return;
 
@@ -1378,9 +1386,7 @@ function duplicateTextRecord(sourceRecord, parentRecord, offsetRoot = false) {
   duplicate.setAttribute("style", source.getAttribute("style") || "");
   duplicate.style.left = parentRecord ? "" : `${x}px`;
   duplicate.style.top = parentRecord ? "" : `${y}px`;
-  duplicate.textContent = source.textContent ?? "";
   duplicate.contentEditable = "false";
-  duplicateRecord.isNew = false;
   duplicateRecord.name = sourceRecord.name;
   duplicate.setAttribute("aria-label", duplicateRecord.name || `Text ${duplicateRecord.id}`);
   return duplicateRecord;
@@ -1440,6 +1446,7 @@ function duplicateSelectedLayer() {
   let selectedFrameRecord = getSelectedFrameRecord();
   let selectedTextRecord = getSelectedTextRecord();
   let selectedVectorRecord = getSelectedVectorRecord();
+  const selectedTextContent = selectedTextRecord?.element.textContent ?? null;
   if (variantSelection) {
     if (selectedFrameRecord?.isVariantInstance) selectedFrameRecord = getFrameRecord(selectedFrameRecord.id);
     if (selectedTextRecord?.isVariantInstance) selectedTextRecord = getTextRecord(selectedTextRecord.id);
@@ -1488,6 +1495,7 @@ function duplicateSelectedLayer() {
         selectedTextRecord,
         parentRecord,
         selectedTextRecord.parentFrameId === null,
+        selectedTextContent ?? "",
       );
       if (!duplicateRecord) return;
       moveLayerRelative(
@@ -1934,6 +1942,8 @@ canvas?.addEventListener("pointerdown", (event) => {
   const element = getCanvasLayerElementFromTarget(event.target);
   const draggedLayer = getCanvasLayerDescriptor(element);
   if (!(element instanceof HTMLElement) || !draggedLayer || element.isContentEditable) return;
+  if (!event.shiftKey && !event.ctrlKey && !event.metaKey) selectDraggedCanvasLayer(draggedLayer);
+  element.focus({ preventScroll: true });
   const bounds = element.getBoundingClientRect();
 
   canvasPointerDrag = {
