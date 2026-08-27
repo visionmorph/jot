@@ -1175,6 +1175,14 @@ textarea:focus-visible {
   display: none;
 }
 
+.component-set.has-variants {
+  pointer-events: none;
+}
+
+.component-set.has-variants > .variant-preview {
+  pointer-events: auto;
+}
+
 .variant-preview {
   position: relative;
   z-index: 2;

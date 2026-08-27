@@ -98,10 +98,35 @@ function getFrameAlignmentValues(element) {
 
 function syncFrameAlignmentDistribution(element) {
   if (!(frameAlignmentGrid instanceof HTMLElement)) return;
-  frameAlignmentGrid.dataset.spaceBetween = String(element.dataset.gapMode === "auto");
+  const isVariantSelected = selectedVariantInstanceId !== null;
+  const direction = (isVariantSelected
+    ? getSelectedVariantTargetStyleOverride("flexDirection", element.dataset.direction === "vertical" ? "column" : "row")
+    : element.dataset.direction === "vertical" ? "column" : "row") === "column"
+      ? "vertical"
+      : "horizontal";
+  const fallbackValues = getFrameAlignmentValues({
+    dataset: {
+      alignment: element.dataset.alignment,
+      direction,
+    },
+  });
+  const alignItems = isVariantSelected
+    ? getSelectedVariantTargetStyleOverride("alignItems", element.style.alignItems || fallbackValues.alignItems)
+    : element.style.alignItems || fallbackValues.alignItems;
+  const justifyContent = isVariantSelected
+    ? getSelectedVariantTargetStyleOverride("justifyContent", element.style.justifyContent || fallbackValues.justifyContent)
+    : element.style.justifyContent || fallbackValues.justifyContent;
+  const isSpaceBetween = isVariantSelected
+    ? justifyContent === "space-between"
+    : element.dataset.gapMode === "auto";
+
+  frameAlignmentGrid.dataset.direction = direction;
+  frameAlignmentGrid.dataset.spaceBetween = String(isSpaceBetween);
   frameAlignmentOptions.forEach((option) => {
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
-    const isSelected = isFrameAlignmentOptionSelected(element, alignment);
+    const values = getFrameAlignmentValues({ dataset: { alignment, direction } });
+    const isSelected = values.alignItems === alignItems
+      && (isSpaceBetween || values.justifyContent === justifyContent);
     option.classList.toggle("is-selected", isSelected);
     option.setAttribute("aria-pressed", String(isSelected));
   });
@@ -316,7 +341,8 @@ function syncInspectorToSelectedFrame() {
   const record = getSelectedFrameRecord();
   if (!record) return;
   const { element } = record;
-  const getValue = (property, fallback) => selectedVariantInstanceId !== null
+  const isVariantSelected = selectedVariantInstanceId !== null;
+  const getValue = (property, fallback) => isVariantSelected
     ? getSelectedVariantTargetStyleOverride(property, fallback)
     : fallback;
 
@@ -335,9 +361,6 @@ function syncInspectorToSelectedFrame() {
     option.classList.toggle("is-selected", isSelected);
     option.setAttribute("aria-pressed", String(isSelected));
   });
-  if (frameAlignmentGrid instanceof HTMLElement) {
-    frameAlignmentGrid.dataset.direction = element.dataset.direction === "vertical" ? "vertical" : "horizontal";
-  }
   syncFrameAlignmentDistribution(element);
   if (frameGapInput instanceof HTMLInputElement) {
     const gap = getValue("gap", element.dataset.gapMode === "auto" ? "0px" : `${element.dataset.gap || "10"}px`);
@@ -2463,6 +2486,7 @@ frameAlignmentOptions.forEach((option) => {
       recordHistory();
       setSelectedVariantFrameStyleOverride("alignItems", values.alignItems, { record: false });
       setSelectedVariantFrameStyleOverride("justifyContent", values.justifyContent, { record: false });
+      syncInspectorToSelectedFrame();
       return;
     }
     if (!record || isFrameAlignmentOptionSelected(record.element, alignment)) return;
@@ -2486,6 +2510,7 @@ frameAlignmentOptions.forEach((option) => {
         setSelectedVariantFrameStyleOverride("justifyContent", "space-between", { record: false });
       }
       variantWasSpaceBetweenAtFirstClick = false;
+      syncInspectorToSelectedFrame();
       return;
     }
     recordHistory();
