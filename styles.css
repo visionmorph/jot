@@ -2127,54 +2127,78 @@ textarea:focus-visible {
   content: "";
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="top"]:hover)::after {
-  top: 1px;
-  right: 1px;
-  left: 1px;
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="top"].is-selected)::after {
+  top: 0;
+  right: 0;
+  left: 0;
   display: block;
   height: var(--alignment-track-size);
+  border-radius: 3px 3px 0 0;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"]:hover)::after,
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment="center"]:hover)::after {
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"].is-selected)::after,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment="center"].is-selected)::after {
   top: calc(2px + var(--alignment-track-size));
-  right: 1px;
-  left: 1px;
+  right: 0;
+  left: 0;
   display: block;
   height: var(--alignment-track-size);
+  border-radius: 0;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="bottom"]:hover)::after {
-  top: calc(3px + (var(--alignment-track-size) * 2));
-  right: 1px;
-  left: 1px;
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="bottom"].is-selected)::after {
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: block;
   height: var(--alignment-track-size);
+  border-radius: 0 0 3px 3px;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-left"]:hover)::after {
-  top: 1px;
-  bottom: 1px;
-  left: 1px;
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="top"]:hover) [data-frame-alignment^="top"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"]:hover) [data-frame-alignment^="center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment^="center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"]:hover) [data-frame-alignment="center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="bottom"]:hover) [data-frame-alignment^="bottom"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-left"]:hover) [data-frame-alignment$="-left"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"]:hover) [data-frame-alignment$="-center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment$="-center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"]:hover) [data-frame-alignment="center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment="center"] .alignment-dot,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-right"]:hover) [data-frame-alignment$="-right"] .alignment-dot {
+  background: var(--icon-primary);
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-left"].is-selected)::after {
+  top: 0;
+  bottom: 0;
+  left: 0;
   display: block;
   width: var(--alignment-track-size);
+  border-radius: 3px 0 0 3px;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"]:hover)::after,
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"]:hover)::after {
-  top: 1px;
-  bottom: 1px;
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"].is-selected)::after,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"].is-selected)::after {
+  top: 0;
+  bottom: 0;
   left: calc(2px + var(--alignment-track-size));
   display: block;
   width: var(--alignment-track-size);
+  border-radius: 0;
 }
 
-.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-right"]:hover)::after {
-  top: 1px;
-  bottom: 1px;
-  left: calc(3px + (var(--alignment-track-size) * 2));
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-right"].is-selected)::after {
+  top: 0;
+  right: 0;
+  bottom: 0;
   display: block;
   width: var(--alignment-track-size);
+  border-radius: 0 3px 3px 0;
+}
+
+.frame-alignment-grid[data-space-between="true"] .frame-alignment-option:focus {
+  outline: 0;
 }
 
 .frame-alignment-option {
