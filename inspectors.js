@@ -962,7 +962,9 @@ function renderComponentProps() {
       };
       addValueInput.className = "prop-value-tag-add-input";
       addValueInput.type = "text";
-      addValueInput.placeholder = `Add ${prop.name.trim().toLowerCase() || "variant"}`;
+      const propName = prop.name.trim().toLowerCase();
+      const placeholderName = propName === "size" || propName === "type" ? propName : "variant";
+      addValueInput.placeholder = `Add ${placeholderName}`;
       addValueInput.setAttribute("aria-label", `Add ${prop.name} value`);
       addValueInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {

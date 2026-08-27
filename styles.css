@@ -397,6 +397,11 @@ textarea:focus-visible {
   padding: 0;
 }
 
+.props-property-row .props-table-value-cell:has(.prop-value-tag-add-input:focus) {
+  outline: 1px solid var(--background-brand);
+  outline-offset: -1px;
+}
+
 .prop-value-tag {
   display: inline-flex;
   align-items: center;
@@ -441,7 +446,7 @@ textarea:focus-visible {
 }
 
 .prop-value-tag.is-active {
-  background: var(--background-selected);
+  background: var(--layer-selected-01);
   color: var(--text-primary);
 }
 
@@ -535,6 +540,7 @@ textarea:focus-visible {
 }
 
 .prop-value-tag-add-input:focus {
+  outline: 0;
   color: var(--text-primary);
 }
 
