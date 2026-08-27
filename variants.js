@@ -47,10 +47,7 @@ function getVariantPropValues(prop) {
 
 function getVariantPropDefaultValue(prop) {
   if (prop.type === "boolean") return prop.defaultValue === true || prop.defaultValue === "true";
-  if (prop.type === "enum") {
-    const values = getVariantPropValues(prop);
-    return values.includes(prop.defaultValue) ? prop.defaultValue : values[0] ?? "Default";
-  }
+  if (prop.type === "enum") return getVariantPropValues(prop)[0] ?? "Default";
   if (prop.type === "string") return String(prop.defaultValue ?? "");
   return null;
 }
@@ -1008,7 +1005,8 @@ function renderVariantPropAuthoring() {
     typeSelect.value = prop.type;
     defaultControl.value = String(getVariantPropDefaultValue(prop) ?? "");
     optionsInput.disabled = prop.type !== "enum";
-    defaultControl.disabled = prop.type === "action";
+    defaultControl.disabled = prop.type === "enum" || prop.type === "action";
+    if (prop.type === "enum") defaultControl.title = "The first value is the default.";
     removeButton.className = "variant-row-remove";
     removeButton.type = "button";
     removeButton.setAttribute("aria-label", `Remove ${prop.name}`);
@@ -1038,9 +1036,8 @@ function renderVariantPropAuthoring() {
       const options = [...new Set(optionsInput.value.split(",").map((value) => value.trim()).filter(Boolean))];
       if (options.length === 0 || options.join("|") === prop.options.join("|")) return;
       recordHistory();
-      const previousDefault = getVariantPropDefaultValue(prop);
       prop.options = options;
-      prop.defaultValue = options.includes(previousDefault) ? previousDefault : options[0];
+      prop.defaultValue = options[0];
       variantInstances.forEach((instance) => {
         if (!options.includes(instance.propValues[prop.id])) instance.propValues[prop.id] = prop.defaultValue;
       });

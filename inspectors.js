@@ -1156,7 +1156,6 @@ function renderComponentProps() {
         "options",
         "Variant property",
         () => {},
-        true,
       ));
     } else if (prop.type === "boolean") {
       propertyCell.append(createPropSelect(
