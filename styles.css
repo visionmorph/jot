@@ -12,6 +12,7 @@
   --background-selected-hover: rgba(141, 141, 141, 0.32);
   --background-active: rgba(141, 141, 141, 0.4);
   --layer-selected-01: #343a3f;
+  --layer-selected-hover-01: #4d5358;
   --layer-02: #343a3f;
   --border-subtle-00: #343a3f;
   --border-subtle-01: #4d5358;
@@ -142,7 +143,7 @@ textarea:focus-visible {
 .add-prop-button:hover,
 .prop-remove-button:hover {
   background: var(--layer-hover-01);
-  color: var(--icon-on-color);
+  color: var(--icon-primary);
 }
 
 .add-prop-button:focus-visible,
@@ -384,7 +385,7 @@ textarea:focus-visible {
   align-content: flex-start;
   align-items: flex-start;
   justify-content: flex-start;
-  padding: 7px 16px;
+  padding: 4px 16px;
   row-gap: 4px;
   column-gap: 4px;
   flex-wrap: wrap;
@@ -397,13 +398,15 @@ textarea:focus-visible {
 .prop-value-tag {
   display: inline-flex;
   align-items: center;
-  min-height: 18px;
-  padding: 1px 4px;
+  width: fit-content;
+  height: 24px;
+  padding: 0 0 0 4px;
+  gap: 4px;
   border-radius: 9px;
   background: var(--layer-01);
   color: var(--text-secondary);
-  font-family: "JetBrains Mono", monospace;
-  font-size: 12px;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
   font-weight: 400;
   line-height: 16px;
   white-space: normal;
@@ -412,7 +415,7 @@ textarea:focus-visible {
 
 .prop-value-tag--editable {
   min-width: 0;
-  height: 18px;
+  height: 24px;
   flex: 0 0 auto;
   margin: 0;
   border: 0;
@@ -422,7 +425,7 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.prop-value-tag--editable:hover {
+.prop-value-tag:hover {
   background: var(--layer-hover-01);
   color: var(--text-primary);
 }
@@ -481,7 +484,7 @@ textarea:focus-visible {
 
 .prop-tag-add-button:hover {
   background: var(--layer-hover-01);
-  color: var(--icon-on-color);
+  color: var(--icon-primary);
 }
 
 .prop-tag-add-button:focus-visible {
@@ -562,7 +565,7 @@ textarea:focus-visible {
 
 .components-add-button:hover {
   background: var(--layer-hover-01);
-  color: var(--icon-on-color);
+  color: var(--icon-primary);
 }
 
 .components-add-button:focus-visible {
@@ -700,7 +703,7 @@ textarea:focus-visible {
 
 .variant-row-remove:hover {
   background: var(--layer-hover-01);
-  color: var(--icon-on-color);
+  color: var(--icon-primary);
 }
 
 .variant-empty-state {
@@ -874,7 +877,7 @@ textarea:focus-visible {
 
 .layer-visibility-button:hover {
   background: var(--layer-hover-01);
-  color: var(--icon-on-color);
+  color: var(--icon-primary);
 }
 
 .layer-visibility-button:focus-visible {
@@ -1881,7 +1884,7 @@ textarea:focus-visible {
 
 .tool-button:not(.is-toggled):hover {
   background: var(--layer-hover-01);
-  color: var(--icon-on-color);
+  color: var(--icon-primary);
 }
 
 .tool-button.is-toggled {
@@ -1986,6 +1989,7 @@ textarea:focus-visible {
   width: 100%;
   height: 24px;
   gap: 0;
+  border-radius: 4px;
   background: var(--layer-01);
 }
 
@@ -2009,6 +2013,15 @@ textarea:focus-visible {
 .frame-direction-option.is-selected {
   background: var(--layer-selected-01);
   color: var(--text-primary);
+}
+
+.frame-direction-option:hover {
+  background: var(--layer-hover-01);
+  color: var(--text-primary);
+}
+
+.frame-direction-option.is-selected:hover {
+  background: var(--layer-selected-hover-01);
 }
 
 .frame-direction-option:focus {
@@ -2060,19 +2073,19 @@ textarea:focus-visible {
 }
 
 .frame-alignment-option:nth-child(1) {
-  border-radius: 4px 0 0;
+  border-radius: 3px 0 0;
 }
 
 .frame-alignment-option:nth-child(3) {
-  border-radius: 0 4px 0 0;
+  border-radius: 0 3px 0 0;
 }
 
 .frame-alignment-option:nth-child(7) {
-  border-radius: 0 0 0 4px;
+  border-radius: 0 0 0 3px;
 }
 
 .frame-alignment-option:nth-child(9) {
-  border-radius: 0 0 4px;
+  border-radius: 0 0 3px;
 }
 
 .frame-alignment-option:hover {
@@ -2083,11 +2096,19 @@ textarea:focus-visible {
   background: var(--layer-selected-01);
 }
 
+.frame-alignment-option.is-selected:hover {
+  background: var(--layer-selected-hover-01);
+}
+
 .alignment-dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--layer-02);
+  width: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--icon-secondary);
+}
+
+.frame-alignment-option:hover .alignment-dot {
+  background: var(--icon-primary);
 }
 
 .alignment-lines {
@@ -2236,7 +2257,7 @@ textarea:focus-visible {
 .frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"]:hover) [data-frame-alignment="center"],
 .frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment="center"],
 .frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-right"]:hover) [data-frame-alignment$="-right"] {
-  background: var(--background-selected-hover);
+  background: var(--layer-selected-hover-01);
 }
 
 .inspector-section-divider {
@@ -2395,7 +2416,7 @@ textarea:focus-visible {
 
 .padding-mode-toggle:hover {
   background: var(--layer-hover-01);
-  color: var(--icon-on-color);
+  color: var(--icon-primary);
 }
 
 .padding-mode-toggle[aria-pressed="true"] {
@@ -2951,7 +2972,7 @@ textarea:focus-visible {
 
 .paint-section-action:hover {
   background: var(--layer-hover-01);
-  color: var(--icon-on-color);
+  color: var(--icon-primary);
 }
 
 .paint-section-action:focus-visible {

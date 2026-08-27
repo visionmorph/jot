@@ -343,7 +343,7 @@ function syncInspectorToSelectedFrame() {
     const gap = getValue("gap", element.dataset.gapMode === "auto" ? "0px" : `${element.dataset.gap || "10"}px`);
     frameGapInput.value = element.dataset.gapMode === "auto" && !isVariantSelected
       ? "Auto"
-      : gap;
+      : String(gap).replace(/px$/i, "");
   }
 
   frameSizeInputs.forEach((input) => {
@@ -2463,7 +2463,7 @@ function applyFrameGapValue(normalize = true) {
     const gap = `${Math.max(0, Number(variantMatch[1]))}px`;
     recordHistoryForGesture(frameGapInput);
     setSelectedVariantFrameStyleOverride("gap", gap, { record: false });
-    if (normalize) frameGapInput.value = gap;
+    if (normalize) frameGapInput.value = String(Math.max(0, Number(variantMatch[1])));
     return true;
   }
 
@@ -2488,7 +2488,7 @@ function applyFrameGapValue(normalize = true) {
   record.element.style.gap = `${gap}px`;
   applyFrameAlignment(record.element);
   syncFrameAlignmentDistribution(record.element);
-  if (normalize) frameGapInput.value = `${gap}px`;
+  if (normalize) frameGapInput.value = String(gap);
   return true;
 }
 
