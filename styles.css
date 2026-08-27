@@ -531,7 +531,8 @@ textarea:focus-visible {
 .prop-value-tag-add-input {
   min-width: 0;
   height: 24px;
-  flex: 0 1 96px;
+  flex: 0 0 auto;
+  field-sizing: content;
   margin: 0;
   padding: 0;
   border: 0;
