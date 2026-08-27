@@ -195,9 +195,11 @@ function syncVariantActionOverlay() {
     variantActionOverlay.hidden = true;
     return;
   }
-  const isVariantLayerSelected = selectedVariantInstanceId !== null && selectedVariantLayerTarget !== null;
-  variantAddButton.hidden = isVariantLayerSelected;
-  variantAddButtonTooltip.hidden = isVariantLayerSelected;
+  const isComponentRootSelected = selectedComponentId === currentComponent?.id;
+  const isVariantRootSelected = selectedVariantInstanceId !== null && selectedVariantLayerTarget === null;
+  const canAddVariant = isComponentRootSelected || isVariantRootSelected;
+  variantAddButton.hidden = !canAddVariant;
+  variantAddButtonTooltip.hidden = !canAddVariant;
   const canvasBounds = canvas.getBoundingClientRect();
   const bounds = anchorElement.getBoundingClientRect();
   const selectedBounds = selectedElement.getBoundingClientRect();
