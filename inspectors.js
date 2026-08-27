@@ -1764,6 +1764,7 @@ colorControls.forEach((control) => {
       beginHistoryGesture(control);
       applyCustomColorValue(control, "", state.opacity);
       endHistoryGesture(control);
+      if (activeColorControl === control) closeColorPicker();
     }
   });
 });
