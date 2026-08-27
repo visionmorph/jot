@@ -968,7 +968,14 @@ function renderComponentProps() {
         defaultCell.append(valueTag);
       });
       const addValueInput = document.createElement("input");
-      const addValue = () => {
+      const focusAddValueInput = () => {
+        requestAnimationFrame(() => {
+          propRowsContainer
+            ?.querySelector(`[data-prop-value-cell="${prop.id}"] .prop-value-tag-add-input`)
+            ?.focus();
+        });
+      };
+      const addValue = (retainFocus = false) => {
         const nextValue = addValueInput.value.trim();
         if (!nextValue) return false;
         const existing = getComponentPropOptions(prop);
@@ -981,6 +988,7 @@ function renderComponentProps() {
         if (instance && prop.variantPropId != null) instance.propValues[prop.variantPropId] = nextValue;
         syncComponentPropVariantDefinition(prop);
         renderComponentProps();
+        if (retainFocus) focusAddValueInput();
         return true;
       };
       addValueInput.className = "prop-value-tag-add-input";
@@ -992,13 +1000,13 @@ function renderComponentProps() {
       addValueInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
-          addValue();
+          addValue(true);
         } else if (event.key === "Escape") {
           addValueInput.value = "";
           addValueInput.blur();
         }
       });
-      addValueInput.addEventListener("blur", addValue);
+      addValueInput.addEventListener("blur", () => addValue());
       defaultCell.addEventListener("pointerdown", (event) => {
         if (event.target instanceof Element && event.target.closest(".prop-value-tag, .prop-value-tag-add-input")) return;
         event.preventDefault();
