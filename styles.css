@@ -2132,17 +2132,17 @@ textarea:focus-visible {
   right: 0;
   left: 0;
   display: block;
-  height: var(--alignment-track-size);
-  border-radius: 3px 3px 0 0;
+  height: calc(var(--alignment-track-size) + 2px);
+  border-radius: 4px 4px 0 0;
 }
 
 .frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"].is-selected)::after,
 .frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment="center"].is-selected)::after {
-  top: calc(2px + var(--alignment-track-size));
+  top: calc(1px + var(--alignment-track-size));
   right: 0;
   left: 0;
   display: block;
-  height: var(--alignment-track-size);
+  height: calc(var(--alignment-track-size) + 2px);
   border-radius: 0;
 }
 
@@ -2151,8 +2151,8 @@ textarea:focus-visible {
   bottom: 0;
   left: 0;
   display: block;
-  height: var(--alignment-track-size);
-  border-radius: 0 0 3px 3px;
+  height: calc(var(--alignment-track-size) + 2px);
+  border-radius: 0 0 4px 4px;
 }
 
 .frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="top"]:hover) [data-frame-alignment^="top"] .alignment-dot,
@@ -2174,17 +2174,17 @@ textarea:focus-visible {
   bottom: 0;
   left: 0;
   display: block;
-  width: var(--alignment-track-size);
-  border-radius: 3px 0 0 3px;
+  width: calc(var(--alignment-track-size) + 2px);
+  border-radius: 4px 0 0 4px;
 }
 
 .frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"].is-selected)::after,
 .frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"].is-selected)::after {
   top: 0;
   bottom: 0;
-  left: calc(2px + var(--alignment-track-size));
+  left: calc(1px + var(--alignment-track-size));
   display: block;
-  width: var(--alignment-track-size);
+  width: calc(var(--alignment-track-size) + 2px);
   border-radius: 0;
 }
 
@@ -2193,8 +2193,8 @@ textarea:focus-visible {
   right: 0;
   bottom: 0;
   display: block;
-  width: var(--alignment-track-size);
-  border-radius: 0 3px 3px 0;
+  width: calc(var(--alignment-track-size) + 2px);
+  border-radius: 0 4px 4px 0;
 }
 
 .frame-alignment-grid[data-space-between="true"] .frame-alignment-option:focus {
@@ -2334,7 +2334,7 @@ textarea:focus-visible {
   height: 16px;
   flex: 0 0 16px;
   border-radius: 0;
-  background: transparent;
+  background: transparent !important;
 }
 
 .frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-dot::before {
