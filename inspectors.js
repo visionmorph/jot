@@ -827,9 +827,17 @@ function renderComponentProps() {
 
     const defaultCell = createCell();
     defaultCell.classList.add("props-table-value-cell");
+    defaultCell.dataset.propValueCell = String(prop.id);
+    defaultCell.tabIndex = -1;
     if (isOptionComponentProp(prop)) {
       const options = getComponentPropOptions(prop);
       const instance = getVariantInstance();
+      let retainValueCellFocusAfterEdit = false;
+      const focusValueCell = () => {
+        requestAnimationFrame(() => {
+          propRowsContainer?.querySelector(`[data-prop-value-cell="${prop.id}"]`)?.focus();
+        });
+      };
       const currentValue = instance && prop.variantPropId != null
         ? instance.propValues[prop.variantPropId]
         : options[0];
@@ -884,7 +892,10 @@ function renderComponentProps() {
           valueInput.select();
         });
         valueInput.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") valueInput.blur();
+          if (event.key === "Enter") {
+            retainValueCellFocusAfterEdit = true;
+            valueInput.blur();
+          }
           if (event.key === "Escape") {
             valueInput.value = optionValue;
             valueInput.blur();
@@ -899,10 +910,18 @@ function renderComponentProps() {
           const nextValue = valueInput.value.trim();
           if (!nextValue || nextValue === optionValue) {
             valueInput.value = optionValue;
+            if (retainValueCellFocusAfterEdit) {
+              retainValueCellFocusAfterEdit = false;
+              focusValueCell();
+            }
             return;
           }
           if (getComponentPropOptions(prop).some((value) => value !== optionValue && value === nextValue)) {
             valueInput.value = optionValue;
+            if (retainValueCellFocusAfterEdit) {
+              retainValueCellFocusAfterEdit = false;
+              focusValueCell();
+            }
             return;
           }
           recordHistory();
@@ -920,6 +939,10 @@ function renderComponentProps() {
           }
           syncComponentPropVariantDefinition(prop);
           renderComponentProps();
+          if (retainValueCellFocusAfterEdit) {
+            retainValueCellFocusAfterEdit = false;
+            focusValueCell();
+          }
         });
         dismissTooltip.className = "tooltip props-action-tooltip prop-value-tag-dismiss-tooltip";
         dismissButton.className = "prop-value-tag-dismiss";
