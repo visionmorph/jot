@@ -400,9 +400,9 @@ textarea:focus-visible {
   align-items: center;
   width: fit-content;
   height: 24px;
-  padding: 0 0 0 4px;
+  padding: 0 0 0 8px;
   gap: 4px;
-  border-radius: 9px;
+  border-radius: 12px;
   background: var(--layer-01);
   color: var(--text-secondary);
   font-family: Inter, "Segoe UI", Arial, sans-serif;
@@ -439,7 +439,12 @@ textarea:focus-visible {
   box-shadow: inset 0 -1px 0 var(--background-brand);
 }
 
-.prop-value-tag--editable:focus {
+.prop-value-tag--editable.is-editing {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.prop-value-tag--editable.is-editing:focus {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
 }

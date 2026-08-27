@@ -839,6 +839,7 @@ function renderComponentProps() {
         valueInput.type = "text";
         valueInput.value = optionValue;
         valueInput.style.width = `${Math.max(1, optionValue.length)}ch`;
+        valueInput.readOnly = true;
         valueInput.classList.toggle("is-active", optionValue === currentValue);
         valueInput.classList.toggle("is-default", optionIndex === 0);
         valueInput.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
@@ -846,6 +847,13 @@ function renderComponentProps() {
         valueInput.addEventListener("pointerdown", () => setActiveOption(optionValue));
         valueInput.addEventListener("click", () => setActiveOption(optionValue));
         valueInput.addEventListener("focus", () => setActiveOption(optionValue));
+        valueInput.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          valueInput.readOnly = false;
+          valueInput.classList.add("is-editing");
+          valueInput.focus();
+          valueInput.select();
+        });
         valueInput.addEventListener("input", () => {
           valueInput.style.width = `${Math.max(1, valueInput.value.length)}ch`;
         });
@@ -857,6 +865,10 @@ function renderComponentProps() {
           }
         });
         valueInput.addEventListener("blur", () => {
+          const wasEditing = valueInput.classList.contains("is-editing");
+          valueInput.readOnly = true;
+          valueInput.classList.remove("is-editing");
+          if (!wasEditing) return;
           const nextValue = valueInput.value.trim();
           if (!nextValue || nextValue === optionValue) {
             valueInput.value = optionValue;
