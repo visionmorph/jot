@@ -445,6 +445,10 @@ textarea:focus-visible {
   cursor: default;
 }
 
+.prop-value-tag-text.prop-value-tag--editable.is-editing:focus {
+  outline: 0;
+}
+
 .prop-value-tag:hover:not(:has(.prop-value-tag-dismiss:hover)) {
   background: var(--layer-hover-01);
   color: var(--text-primary);
