@@ -2090,7 +2090,6 @@ textarea:focus-visible {
   position: relative;
   z-index: 2;
   outline: 1px solid var(--background-brand);
-  outline-offset: 1px;
 }
 
 .frame-alignment-field {
