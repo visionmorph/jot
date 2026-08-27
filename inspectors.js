@@ -944,43 +944,43 @@ function renderComponentProps() {
         valueTag.append(valueInput, dismissTooltip);
         defaultCell.append(valueTag);
       });
-      const addValueButton = document.createElement("button");
-      const addValueIcon = document.createElement("span");
-      const addValueTooltip = document.createElement("span");
-      const addValueTooltipContent = document.createElement("span");
-      addValueTooltip.className = "tooltip";
-      addValueTooltipContent.className = "tooltip-content";
-      addValueTooltipContent.setAttribute("role", "tooltip");
-      addValueTooltipContent.textContent = "Add variant";
-      addValueButton.className = "prop-tag-add-button";
-      addValueButton.type = "button";
-      addValueButton.setAttribute("aria-label", `Add ${prop.name} value`);
-      addValueIcon.className = "plus-icon";
-      addValueIcon.setAttribute("aria-hidden", "true");
-      addValueButton.append(addValueIcon);
-      addValueButton.addEventListener("click", () => {
+      const addValueInput = document.createElement("input");
+      const addValue = () => {
+        const nextValue = addValueInput.value.trim();
+        if (!nextValue) return false;
+        const existing = getComponentPropOptions(prop);
+        if (existing.includes(nextValue)) {
+          addValueInput.select();
+          return false;
+        }
         recordHistory();
-        const existing = new Set(getComponentPropOptions(prop));
-        let index = existing.size + 1;
-        let nextValue = `value ${index}`;
-        while (existing.has(nextValue)) nextValue = `value ${index += 1}`;
-        prop.options = [...getComponentPropOptions(prop), nextValue];
+        prop.options = [...existing, nextValue];
         if (instance && prop.variantPropId != null) instance.propValues[prop.variantPropId] = nextValue;
         syncComponentPropVariantDefinition(prop);
         renderComponentProps();
-        requestAnimationFrame(() => {
-          const tags = propRowsContainer.querySelectorAll(".prop-value-tag--editable");
-          const lastTag = tags[tags.length - 1];
-          if (lastTag instanceof HTMLInputElement) {
-            lastTag.readOnly = false;
-            lastTag.classList.add("is-editing");
-            lastTag.focus();
-            lastTag.select();
-          }
-        });
+        return true;
+      };
+      addValueInput.className = "prop-value-tag-add-input";
+      addValueInput.type = "text";
+      addValueInput.placeholder = `Add ${prop.name.trim().toLowerCase() || "variant"}`;
+      addValueInput.setAttribute("aria-label", `Add ${prop.name} value`);
+      addValueInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          addValue();
+        } else if (event.key === "Escape") {
+          addValueInput.value = "";
+          addValueInput.blur();
+        }
       });
-      addValueTooltip.append(addValueButton, addValueTooltipContent);
-      defaultCell.append(addValueTooltip);
+      addValueInput.addEventListener("blur", addValue);
+      defaultCell.addEventListener("pointerdown", (event) => {
+        if (event.target instanceof Element && event.target.closest(".prop-value-tag, .prop-value-tag-add-input")) return;
+        event.preventDefault();
+        addValueInput.focus();
+        addValueInput.setSelectionRange(0, 0);
+      });
+      defaultCell.append(addValueInput);
     } else if (prop.type === "boolean" && prop.variantPropId != null) {
       const instance = getVariantInstance();
       const currentValue = instance
