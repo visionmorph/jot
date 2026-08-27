@@ -684,14 +684,10 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
   return wrap;
 }
 
-const ENUM_COMPONENT_PROP_PRESETS = {
-  size: ["small", "medium", "large"],
-  variant: ["primary", "secondary", "tertiary"],
-  shape: ["square", "rounded", "circle"],
-};
+const DEFAULT_ENUM_OPTION = "Default";
 
 const OPTION_COMPONENT_PROP_CONFIG = {
-  enum: { name: "size", label: "Enum", options: ENUM_COMPONENT_PROP_PRESETS.size },
+  enum: { label: "Enum", options: [DEFAULT_ENUM_OPTION] },
 };
 
 function isOptionComponentProp(propOrType) {
@@ -700,15 +696,18 @@ function isOptionComponentProp(propOrType) {
 }
 
 function getComponentPropOptions(prop) {
-  const fallbackOptions = OPTION_COMPONENT_PROP_CONFIG[prop.type]?.options ?? ["default"];
+  const fallbackOptions = OPTION_COMPONENT_PROP_CONFIG[prop.type]?.options ?? [DEFAULT_ENUM_OPTION];
   return Array.isArray(prop.options) && prop.options.length > 0 ? prop.options : fallbackOptions;
 }
 
 function getAvailableEnumPropName(currentProp = null) {
   const usedNames = new Set(componentProps
     .filter((prop) => prop !== currentProp && isOptionComponentProp(prop))
-    .map((prop) => prop.name));
-  return Object.keys(ENUM_COMPONENT_PROP_PRESETS).find((name) => !usedNames.has(name)) || "size";
+    .map((prop) => prop.name.toLowerCase()));
+  let index = 1;
+  let name = "Variant";
+  while (usedNames.has(name.toLowerCase())) name = `Variant ${index += 1}`;
+  return name;
 }
 
 function configureOptionComponentProp(prop, type) {
@@ -716,7 +715,7 @@ function configureOptionComponentProp(prop, type) {
   if (!config) return;
   prop.name = getAvailableEnumPropName(prop);
   prop.type = type;
-  prop.options = [...ENUM_COMPONENT_PROP_PRESETS[prop.name]];
+  prop.options = [...config.options];
   prop.defaultValue = prop.options[0];
   prop.targetFrameId = null;
   prop.targetTextId = null;
@@ -829,19 +828,24 @@ function renderComponentProps() {
           instance.propValues[prop.variantPropId] = value;
         } else return;
         defaultCell.querySelectorAll(".prop-value-tag--editable").forEach((tag) => {
-          tag.classList.toggle("is-active", tag.value === value);
+          tag.closest(".prop-value-tag")?.classList.toggle("is-active", tag.value === value);
         });
         renderVariantInstances();
       };
       options.forEach((optionValue, optionIndex) => {
+        const valueTag = document.createElement("div");
         const valueInput = document.createElement("input");
-        valueInput.className = "prop-value-tag prop-value-tag--editable";
+        const dismissTooltip = document.createElement("span");
+        const dismissButton = document.createElement("button");
+        const dismissTooltipContent = document.createElement("span");
+        valueTag.className = "prop-value-tag";
         valueInput.type = "text";
+        valueInput.className = "prop-value-tag-text prop-value-tag--editable";
         valueInput.value = optionValue;
         valueInput.style.width = `${Math.max(1, optionValue.length)}ch`;
         valueInput.readOnly = true;
-        valueInput.classList.toggle("is-active", optionValue === currentValue);
-        valueInput.classList.toggle("is-default", optionIndex === 0);
+        valueTag.classList.toggle("is-active", optionValue === currentValue);
+        valueTag.classList.toggle("is-default", optionIndex === 0);
         valueInput.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
         if (optionIndex === 0) valueInput.title = "Default value";
         valueInput.addEventListener("pointerdown", () => setActiveOption(optionValue));
@@ -894,7 +898,27 @@ function renderComponentProps() {
           syncComponentPropVariantDefinition(prop);
           renderComponentProps();
         });
-        defaultCell.append(valueInput);
+        dismissTooltip.className = "tooltip";
+        dismissButton.className = "prop-value-tag-dismiss";
+        dismissButton.type = "button";
+        dismissButton.disabled = options.length <= 1;
+        dismissButton.setAttribute("aria-label", `Dismiss ${optionValue}`);
+        dismissButton.append(createSvgAssetIcon("close"));
+        dismissTooltipContent.className = "tooltip-content";
+        dismissTooltipContent.setAttribute("role", "tooltip");
+        dismissTooltipContent.textContent = "Dismiss";
+        dismissButton.addEventListener("click", (event) => {
+          event.stopPropagation();
+          if (options.length <= 1) return;
+          recordHistory();
+          prop.options = options.filter((value) => value !== optionValue);
+          syncComponentPropVariantDefinition(prop);
+          renderVariantInstances();
+          renderComponentProps();
+        });
+        dismissTooltip.append(dismissButton, dismissTooltipContent);
+        valueTag.append(valueInput, dismissTooltip);
+        defaultCell.append(valueTag);
       });
       const addValueButton = document.createElement("button");
       const addValueIcon = document.createElement("span");
@@ -924,6 +948,8 @@ function renderComponentProps() {
           const tags = propRowsContainer.querySelectorAll(".prop-value-tag--editable");
           const lastTag = tags[tags.length - 1];
           if (lastTag instanceof HTMLInputElement) {
+            lastTag.readOnly = false;
+            lastTag.classList.add("is-editing");
             lastTag.focus();
             lastTag.select();
           }
@@ -1130,18 +1156,11 @@ function renderComponentProps() {
     const propertyCell = createCell();
     if (isOptionProp) {
       propertyCell.append(createPropSelect(
-        Object.keys(ENUM_COMPONENT_PROP_PRESETS).map((name) => ({ value: name, label: name })),
-        prop.name,
-        "Enum property",
-        (value) => {
-          if (value === prop.name || !ENUM_COMPONENT_PROP_PRESETS[value]) return;
-          recordHistory();
-          prop.name = value;
-          prop.options = [...ENUM_COMPONENT_PROP_PRESETS[value]];
-          prop.defaultValue = prop.options[0];
-          syncComponentPropVariantDefinition(prop);
-          renderComponentProps();
-        },
+        [{ value: "options", label: "Options" }],
+        "options",
+        "Variant property",
+        () => {},
+        true,
       ));
     } else if (prop.type === "boolean") {
       propertyCell.append(createPropSelect(
@@ -1200,7 +1219,7 @@ function renderComponentProps() {
 function addComponentProp() {
   recordHistory();
   const name = getAvailableEnumPropName();
-  const options = [...ENUM_COMPONENT_PROP_PRESETS[name]];
+  const options = [DEFAULT_ENUM_OPTION];
   componentProps.push({
     id: nextComponentPropId,
     name,

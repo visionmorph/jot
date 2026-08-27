@@ -179,6 +179,7 @@ textarea:focus-visible {
 
 .svg-icon--cursor-1 { -webkit-mask-image: url("src/icons/cursor--1.svg"); mask-image: url("src/icons/cursor--1.svg"); }
 .svg-icon--cursor-2 { -webkit-mask-image: url("src/icons/cursor--2.svg"); mask-image: url("src/icons/cursor--2.svg"); }
+.svg-icon--close { -webkit-mask-image: url("src/icons/close.svg"); mask-image: url("src/icons/close.svg"); }
 .svg-icon--diamond-filled { -webkit-mask-image: url("src/icons/diamond--filled.svg"); mask-image: url("src/icons/diamond--filled.svg"); }
 .svg-icon--diamond-group { -webkit-mask-image: url("src/icons/diamond--group.svg"); mask-image: url("src/icons/diamond--group.svg"); }
 .svg-icon--diamond-outline { -webkit-mask-image: url("src/icons/diamond--outline.svg"); mask-image: url("src/icons/diamond--outline.svg"); }
@@ -413,16 +414,23 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.prop-value-tag--editable {
+.prop-value-tag-text {
   min-width: 0;
   height: 24px;
   flex: 0 0 auto;
   margin: 0;
+  padding: 0;
   border: 0;
   box-sizing: content-box;
   outline: 0;
+  background: transparent;
+  color: inherit;
   text-align: center;
   white-space: nowrap;
+}
+
+.prop-value-tag-text.prop-value-tag--editable {
+  cursor: default;
 }
 
 .prop-value-tag:hover {
@@ -430,16 +438,16 @@ textarea:focus-visible {
   color: var(--text-primary);
 }
 
-.prop-value-tag--editable.is-active {
+.prop-value-tag.is-active {
   background: var(--background-selected);
   color: var(--text-primary);
 }
 
-.prop-value-tag--editable.is-default {
+.prop-value-tag.is-default {
   box-shadow: inset 0 -1px 0 var(--background-brand);
 }
 
-.prop-value-tag--editable.is-editing {
+.prop-value-tag:has(.prop-value-tag--editable.is-editing) {
   background: transparent;
   color: var(--text-primary);
 }
@@ -447,6 +455,38 @@ textarea:focus-visible {
 .prop-value-tag--editable.is-editing:focus {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
+}
+
+.prop-value-tag-dismiss {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--layer-01);
+  color: var(--icon-secondary);
+  cursor: pointer;
+}
+
+.prop-value-tag-dismiss:hover,
+.prop-value-tag-dismiss:active {
+  background: var(--layer-hover-01);
+  color: var(--icon-primary);
+}
+
+.prop-value-tag-dismiss:focus {
+  outline: 1px solid var(--background-brand);
+  outline-offset: -1px;
+}
+
+.prop-value-tag-dismiss .svg-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .prop-boolean-default {

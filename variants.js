@@ -41,13 +41,13 @@ let draggedVariantInstanceId = null;
 
 function getVariantPropValues(prop) {
   if (prop.type === "boolean") return [false, true];
-  if (prop.type === "enum") return prop.options?.length ? prop.options : ["default"];
+  if (prop.type === "enum") return prop.options?.length ? prop.options : ["Default"];
   return [];
 }
 
 function getVariantPropDefaultValue(prop) {
   if (prop.type === "boolean") return prop.defaultValue === true || prop.defaultValue === "true";
-  if (prop.type === "enum") return getVariantPropValues(prop)[0] ?? "default";
+  if (prop.type === "enum") return getVariantPropValues(prop)[0] ?? "Default";
   if (prop.type === "string") return String(prop.defaultValue ?? "");
   return null;
 }
@@ -1023,7 +1023,7 @@ function renderVariantPropAuthoring() {
       recordHistory();
       prop.type = typeSelect.value;
       if (prop.type === "enum") {
-        prop.options = prop.options?.length ? prop.options : ["default", "alternate"];
+        prop.options = prop.options?.length ? prop.options : ["Default"];
         prop.defaultValue = prop.options[0];
       } else if (prop.type === "boolean") prop.defaultValue = false;
       else if (prop.type === "string") prop.defaultValue = "";
@@ -1185,8 +1185,8 @@ function addVariantProp() {
     id: nextVariantPropId++,
     name,
     type: "enum",
-    options: ["default", "alternate"],
-    defaultValue: "default",
+    options: ["Default"],
+    defaultValue: "Default",
   });
   variantInstances.forEach((instance) => {
     const prop = variantProps[variantProps.length - 1];
