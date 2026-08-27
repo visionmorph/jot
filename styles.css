@@ -453,9 +453,13 @@ textarea:focus-visible {
   color: var(--text-primary);
 }
 
-.prop-value-tag--editable.is-editing:focus {
+.prop-value-tag:has(.prop-value-tag-text:focus) {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
+}
+
+.prop-value-tag:has(.prop-value-tag--editable.is-editing) .prop-value-tag-dismiss-tooltip {
+  display: none;
 }
 
 .prop-value-tag-dismiss {

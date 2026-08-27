@@ -690,6 +690,19 @@ const OPTION_COMPONENT_PROP_CONFIG = {
   enum: { label: "Enum", options: [DEFAULT_ENUM_OPTION] },
 };
 
+const ENUM_COMPONENT_PROPERTY_OPTIONS = [
+  { value: "size", label: "Size" },
+  { value: "type", label: "Type" },
+  { value: "variant", label: "Variant" },
+];
+
+function getEnumComponentProperty(prop) {
+  const property = String(prop?.property ?? "").toLowerCase();
+  if (ENUM_COMPONENT_PROPERTY_OPTIONS.some((option) => option.value === property)) return property;
+  const name = String(prop?.name ?? "").trim().toLowerCase();
+  return ENUM_COMPONENT_PROPERTY_OPTIONS.some((option) => option.value === name) ? name : "variant";
+}
+
 function isOptionComponentProp(propOrType) {
   const type = typeof propOrType === "string" ? propOrType : propOrType?.type;
   return Object.prototype.hasOwnProperty.call(OPTION_COMPONENT_PROP_CONFIG, type);
@@ -720,7 +733,7 @@ function configureOptionComponentProp(prop, type) {
   prop.targetFrameId = null;
   prop.targetTextId = null;
   prop.targetVectorId = null;
-  prop.property = "options";
+  prop.property = "variant";
 }
 
 function renderComponentProps() {
@@ -850,7 +863,8 @@ function renderComponentProps() {
         valueInput.addEventListener("pointerdown", () => setActiveOption(optionValue));
         valueInput.addEventListener("click", () => setActiveOption(optionValue));
         valueInput.addEventListener("focus", () => setActiveOption(optionValue));
-        valueInput.addEventListener("dblclick", (event) => {
+        valueTag.addEventListener("dblclick", (event) => {
+          if (event.target instanceof Element && event.target.closest(".prop-value-tag-dismiss")) return;
           event.preventDefault();
           valueInput.readOnly = false;
           valueInput.classList.add("is-editing");
@@ -894,7 +908,7 @@ function renderComponentProps() {
           syncComponentPropVariantDefinition(prop);
           renderComponentProps();
         });
-        dismissTooltip.className = "tooltip";
+        dismissTooltip.className = "tooltip props-action-tooltip prop-value-tag-dismiss-tooltip";
         dismissButton.className = "prop-value-tag-dismiss";
         dismissButton.type = "button";
         dismissButton.disabled = options.length <= 1;
@@ -913,6 +927,7 @@ function renderComponentProps() {
           renderComponentProps();
         });
         dismissTooltip.append(dismissButton, dismissTooltipContent);
+        bindPropsActionTooltip(dismissTooltip, dismissButton);
         valueTag.append(valueInput, dismissTooltip);
         defaultCell.append(valueTag);
       });
@@ -1151,11 +1166,17 @@ function renderComponentProps() {
 
     const propertyCell = createCell();
     if (isOptionProp) {
+      const enumProperty = getEnumComponentProperty(prop);
       propertyCell.append(createPropSelect(
-        [{ value: "options", label: "Options" }],
-        "options",
+        ENUM_COMPONENT_PROPERTY_OPTIONS,
+        enumProperty,
         "Variant property",
-        () => {},
+        (value) => {
+          if (value === enumProperty) return;
+          recordHistory();
+          prop.property = value;
+          renderComponentProps();
+        },
       ));
     } else if (prop.type === "boolean") {
       propertyCell.append(createPropSelect(
@@ -1224,7 +1245,7 @@ function addComponentProp() {
     targetFrameId: null,
     targetTextId: null,
     targetVectorId: null,
-    property: "options",
+    property: "variant",
   });
   syncComponentPropVariantDefinition(componentProps[componentProps.length - 1]);
   nextComponentPropId += 1;

@@ -740,10 +740,13 @@ function restoreWorkspaceState(snapshot, options = {}) {
       ...prop,
       ...(Array.isArray(prop.options) ? { options: [...prop.options] } : {}),
     };
-    if (["size", "variant", "shape"].includes(normalizedProp.type)) {
+    const legacyEnumType = normalizedProp.type;
+    if (["size", "variant", "shape"].includes(legacyEnumType)) {
       normalizedProp.name = normalizedProp.name || normalizedProp.type;
       normalizedProp.type = "enum";
-      normalizedProp.property = "options";
+      normalizedProp.property = legacyEnumType === "size"
+        ? "size"
+        : legacyEnumType === "shape" ? "type" : "variant";
     }
     if (normalizedProp.type === "enum") {
       const options = Array.isArray(normalizedProp.options) && normalizedProp.options.length > 0
@@ -751,6 +754,12 @@ function restoreWorkspaceState(snapshot, options = {}) {
         : ["default"];
       normalizedProp.options = options;
       normalizedProp.defaultValue = options[0];
+      const enumProperties = ["size", "type", "variant"];
+      const savedProperty = String(normalizedProp.property ?? "").toLowerCase();
+      const namedProperty = String(normalizedProp.name ?? "").trim().toLowerCase();
+      normalizedProp.property = enumProperties.includes(savedProperty)
+        ? savedProperty
+        : enumProperties.includes(namedProperty) ? namedProperty : "variant";
     } else if (normalizedProp.type === "boolean") {
       normalizedProp.defaultValue = normalizedProp.defaultValue === true || normalizedProp.defaultValue === "true";
     }
