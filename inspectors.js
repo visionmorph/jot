@@ -842,7 +842,6 @@ function renderComponentProps() {
         valueInput.type = "text";
         valueInput.className = "prop-value-tag-text prop-value-tag--editable";
         valueInput.value = optionValue;
-        valueInput.style.width = `${Math.max(1, optionValue.length)}ch`;
         valueInput.readOnly = true;
         valueTag.classList.toggle("is-active", optionValue === currentValue);
         valueTag.classList.toggle("is-default", optionIndex === 0);
@@ -857,9 +856,6 @@ function renderComponentProps() {
           valueInput.classList.add("is-editing");
           valueInput.focus();
           valueInput.select();
-        });
-        valueInput.addEventListener("input", () => {
-          valueInput.style.width = `${Math.max(1, valueInput.value.length)}ch`;
         });
         valueInput.addEventListener("keydown", (event) => {
           if (event.key === "Enter") valueInput.blur();

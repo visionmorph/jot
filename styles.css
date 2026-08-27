@@ -415,7 +415,7 @@ textarea:focus-visible {
 }
 
 .prop-value-tag-text {
-  min-width: 0;
+  min-width: 1ch;
   height: 24px;
   flex: 0 0 auto;
   margin: 0;
@@ -425,7 +425,8 @@ textarea:focus-visible {
   outline: 0;
   background: transparent;
   color: inherit;
-  text-align: center;
+  field-sizing: content;
+  text-align: left;
   white-space: nowrap;
 }
 
