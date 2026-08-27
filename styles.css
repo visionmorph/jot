@@ -2102,6 +2102,8 @@ textarea:focus-visible {
 }
 
 .frame-alignment-grid {
+  --alignment-track-size: calc((100% - 4px) / 3);
+  position: relative;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
@@ -2112,6 +2114,67 @@ textarea:focus-visible {
   border-radius: 4px;
   background: var(--border-subtle-01);
   overflow: visible;
+}
+
+.frame-alignment-grid[data-space-between="true"]::after {
+  position: absolute;
+  z-index: 3;
+  display: none;
+  box-sizing: border-box;
+  border: 1px solid var(--background-brand);
+  border-radius: 3px;
+  pointer-events: none;
+  content: "";
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="top"]:hover)::after {
+  top: 1px;
+  right: 1px;
+  left: 1px;
+  display: block;
+  height: var(--alignment-track-size);
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"]:hover)::after,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment="center"]:hover)::after {
+  top: calc(2px + var(--alignment-track-size));
+  right: 1px;
+  left: 1px;
+  display: block;
+  height: var(--alignment-track-size);
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="bottom"]:hover)::after {
+  top: calc(3px + (var(--alignment-track-size) * 2));
+  right: 1px;
+  left: 1px;
+  display: block;
+  height: var(--alignment-track-size);
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-left"]:hover)::after {
+  top: 1px;
+  bottom: 1px;
+  left: 1px;
+  display: block;
+  width: var(--alignment-track-size);
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"]:hover)::after,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"]:hover)::after {
+  top: 1px;
+  bottom: 1px;
+  left: calc(2px + var(--alignment-track-size));
+  display: block;
+  width: var(--alignment-track-size);
+}
+
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-right"]:hover)::after {
+  top: 1px;
+  bottom: 1px;
+  left: calc(3px + (var(--alignment-track-size) * 2));
+  display: block;
+  width: var(--alignment-track-size);
 }
 
 .frame-alignment-option {
@@ -2317,7 +2380,17 @@ textarea:focus-visible {
   background: var(--layer-hover-01);
 }
 
-.frame-alignment-grid[data-space-between="true"]:has(.frame-alignment-option:hover) .frame-alignment-option.is-selected {
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="top"]:hover) [data-frame-alignment^="top"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"]:hover) [data-frame-alignment^="center"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment^="center"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="center"]:hover) [data-frame-alignment="center"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="horizontal"]:has([data-frame-alignment^="bottom"]:hover) [data-frame-alignment^="bottom"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-left"]:hover) [data-frame-alignment$="-left"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"]:hover) [data-frame-alignment$="-center"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment$="-center"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-center"]:hover) [data-frame-alignment="center"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment="center"]:hover) [data-frame-alignment="center"].is-selected,
+.frame-alignment-grid[data-space-between="true"][data-direction="vertical"]:has([data-frame-alignment$="-right"]:hover) [data-frame-alignment$="-right"].is-selected {
   background: var(--layer-selected-hover-01);
 }
 
