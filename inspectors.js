@@ -852,21 +852,33 @@ function renderComponentProps() {
         const dismissButton = document.createElement("button");
         const dismissTooltipContent = document.createElement("span");
         valueTag.className = "prop-value-tag";
+        valueTag.tabIndex = 0;
         valueInput.type = "text";
         valueInput.className = "prop-value-tag-text prop-value-tag--editable";
         valueInput.value = optionValue;
         valueInput.readOnly = true;
+        valueInput.tabIndex = -1;
         valueTag.classList.toggle("is-active", optionValue === currentValue);
         valueTag.classList.toggle("is-default", optionIndex === 0);
         valueInput.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
         if (optionIndex === 0) valueInput.title = "Default value";
-        valueInput.addEventListener("pointerdown", () => setActiveOption(optionValue));
-        valueInput.addEventListener("click", () => setActiveOption(optionValue));
-        valueInput.addEventListener("focus", () => setActiveOption(optionValue));
+        valueTag.addEventListener("focus", () => setActiveOption(optionValue));
+        valueTag.addEventListener("click", (event) => {
+          if (event.target instanceof Element && event.target.closest(".prop-value-tag-dismiss")) return;
+          setActiveOption(optionValue);
+          if (!valueInput.classList.contains("is-editing")) valueTag.focus();
+        });
+        valueInput.addEventListener("pointerdown", (event) => {
+          if (valueInput.classList.contains("is-editing")) return;
+          event.preventDefault();
+          setActiveOption(optionValue);
+          valueTag.focus();
+        });
         valueTag.addEventListener("dblclick", (event) => {
           if (event.target instanceof Element && event.target.closest(".prop-value-tag-dismiss")) return;
           event.preventDefault();
           valueInput.readOnly = false;
+          valueInput.tabIndex = 0;
           valueInput.classList.add("is-editing");
           valueInput.focus();
           valueInput.select();
@@ -881,6 +893,7 @@ function renderComponentProps() {
         valueInput.addEventListener("blur", () => {
           const wasEditing = valueInput.classList.contains("is-editing");
           valueInput.readOnly = true;
+          valueInput.tabIndex = -1;
           valueInput.classList.remove("is-editing");
           if (!wasEditing) return;
           const nextValue = valueInput.value.trim();

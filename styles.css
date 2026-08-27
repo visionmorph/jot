@@ -434,7 +434,7 @@ textarea:focus-visible {
   cursor: default;
 }
 
-.prop-value-tag:hover {
+.prop-value-tag:hover:not(:has(.prop-value-tag-dismiss:hover)) {
   background: var(--layer-hover-01);
   color: var(--text-primary);
 }
@@ -444,18 +444,14 @@ textarea:focus-visible {
   color: var(--text-primary);
 }
 
-.prop-value-tag.is-default {
-  box-shadow: inset 0 -1px 0 var(--background-brand);
-}
-
 .prop-value-tag:has(.prop-value-tag--editable.is-editing) {
+  padding-right: 8px;
   background: transparent;
   color: var(--text-primary);
 }
 
-.prop-value-tag:has(.prop-value-tag-text:focus) {
+.prop-value-tag:focus {
   outline: 1px solid var(--background-brand);
-  outline-offset: -1px;
 }
 
 .prop-value-tag:has(.prop-value-tag--editable.is-editing) .prop-value-tag-dismiss-tooltip {
