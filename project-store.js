@@ -112,6 +112,7 @@ document.querySelectorAll("[data-text-input-prefix]").forEach((prefix) => {
     const didDrag = drag.didDrag;
     drag = null;
     prefix.classList.remove("is-dragging");
+    shell?.classList.remove("is-scrubbing");
     if (prefix.hasPointerCapture(event.pointerId)) prefix.releasePointerCapture(event.pointerId);
     endHistoryGesture(input);
     if (!didDrag && shouldFocus) input.focus();
@@ -129,6 +130,7 @@ document.querySelectorAll("[data-text-input-prefix]").forEach((prefix) => {
       didDrag: false,
     };
     beginHistoryGesture(input);
+    shell?.classList.add("is-scrubbing");
     prefix.setPointerCapture(event.pointerId);
     event.preventDefault();
   });

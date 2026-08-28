@@ -502,7 +502,8 @@ textarea:focus-visible {
 .prop-select-wrap.is-selection-focused,
 .inspector-combobox-wrap.is-selection-focused,
 .size-mode-combobox.is-selection-focused,
-.text-input-shell.is-selection-focused {
+.text-input-shell.is-selection-focused,
+.text-input-shell.is-scrubbing {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
 }
