@@ -364,7 +364,9 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
     node.classList.add("is-renaming", "is-selected");
     node.setAttribute("aria-selected", "true");
     node.draggable = false;
-    input.className = "tree-node-rename-input";
+    input.className = "text-input text-input--semibold";
+    input.dataset.treeRenameInput = "";
+    input.dataset.selectOnFocus = "";
     input.type = "text";
     input.value = treeRenameState.originalName;
     input.setAttribute("aria-label", `Rename ${treeRenameState.originalName}`);
@@ -404,7 +406,6 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
     requestAnimationFrame(() => {
       if (input.isConnected) {
         input.focus();
-        input.select();
       }
     });
   } else {

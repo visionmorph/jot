@@ -2049,10 +2049,6 @@ function applyLineHeightValue() {
   return true;
 }
 
-lineHeightInput?.addEventListener("focus", () => {
-  if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.select();
-});
-
 lineHeightInput?.addEventListener("click", () => {
   if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.select();
 });
@@ -2373,9 +2369,8 @@ framePaddingInputs.forEach((input) => {
 
 framePaddingAxisInputs.forEach((input) => {
   if (!(input instanceof HTMLInputElement)) return;
-  const wrapper = input.closest(".prefixed-number-control");
+  const wrapper = input.closest(".text-input-shell");
   input.addEventListener("focus", () => {
-    input.select();
     wrapper?.classList.add("is-selection-focused");
   });
   input.addEventListener("input", () => {
@@ -2423,10 +2418,6 @@ framePaddingModeToggle?.addEventListener("click", () => {
   setFramePaddingControlMode(isIndividual);
   const record = getSelectedFrameRecord();
   if (record) syncFramePaddingAxisInputs(record.element);
-});
-
-frameRadiusInput?.addEventListener("focus", () => {
-  if (frameRadiusInput instanceof HTMLInputElement) frameRadiusInput.select();
 });
 
 frameRadiusInput?.addEventListener("input", () => {
@@ -2537,10 +2528,6 @@ frameOutlinePositionSelect?.addEventListener("change", () => {
   recordHistory();
   record.element.dataset.outlinePosition = position;
   applyFrameOutline(record.element);
-});
-
-frameOutlineWeightInput?.addEventListener("focus", () => {
-  if (frameOutlineWeightInput instanceof HTMLInputElement) frameOutlineWeightInput.select();
 });
 
 frameOutlineWeightInput?.addEventListener("input", () => {

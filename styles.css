@@ -196,6 +196,84 @@ textarea:focus-visible {
   background: var(--background-selected-hover);
 }
 
+.text-input {
+  width: 119.5px;
+  height: 24px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border-subtle-01);
+  border-radius: 4px;
+  background: var(--layer-01);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0;
+}
+
+.text-input--semibold {
+  font-weight: 600;
+}
+
+.text-input:focus-visible {
+  outline: 1px solid var(--background-brand);
+  outline-offset: -1px;
+}
+
+.text-input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.text-input[type="number"]::-webkit-inner-spin-button,
+.text-input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.text-input-shell {
+  display: flex;
+  align-items: center;
+  width: 119.5px;
+  height: 24px;
+  padding: 4px 8px;
+  gap: 0;
+  border: 1px solid var(--border-subtle-01);
+  border-radius: 4px;
+  background: var(--layer-01);
+}
+
+.text-input-shell--prefixed {
+  gap: 4px;
+}
+
+.text-input-shell > .text-input {
+  width: 100%;
+  min-width: 0;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.text-input-shell:focus-within {
+  outline: 1px solid var(--background-brand);
+  outline-offset: -1px;
+}
+
+.text-input__prefix {
+  width: 12px;
+  flex: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  pointer-events: none;
+  user-select: none;
+}
+
 .plus-icon {
   display: block;
   width: 16px;
@@ -399,7 +477,8 @@ textarea:focus-visible {
 .inspector-select-wrap.is-selection-focused,
 .prop-select-wrap.is-selection-focused,
 .inspector-combobox-wrap.is-selection-focused,
-.size-mode-combobox.is-selection-focused {
+.size-mode-combobox.is-selection-focused,
+.text-input-shell.is-selection-focused {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
 }
@@ -931,7 +1010,7 @@ textarea:focus-visible {
   color: var(--icon-primary);
 }
 
-.tree-node.is-disabled .tree-node-rename-input {
+.tree-node.is-disabled [data-tree-rename-input] {
   color: var(--text-disabled);
 }
 
@@ -1006,25 +1085,10 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.tree-node-rename-input {
+.tree-node-label-wrap > .text-input {
   width: 100%;
   min-width: 0;
-  height: 24px;
-  margin: 0;
   padding: 4px;
-  border: 1px solid var(--border-subtle-01);
-  border-radius: 4px;
-  outline: 0;
-  background: var(--layer-01);
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 16px;
-}
-
-.tree-node-rename-input:focus {
-  outline: 1px solid var(--background-brand);
-  outline-offset: -1px;
 }
 
 .chevron {
@@ -2505,7 +2569,7 @@ textarea:focus-visible {
   gap: 8px;
 }
 
-.frame-padding-axis-row .prefixed-number-control {
+.frame-padding-axis-row .text-input-shell {
   width: 100%;
   min-width: 0;
   flex: 1 1 0;

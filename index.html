@@ -205,7 +205,7 @@
 
               <div class="inspector-field">
                 <label class="inspector-label" for="frame-radius">Radius</label>
-                <input class="inspector-control" id="frame-radius" type="number" min="0" step="1" value="0" />
+                <input class="text-input" id="frame-radius" type="number" min="0" step="1" value="0" data-select-on-focus />
               </div>
             </div>
           </div>
@@ -239,13 +239,13 @@
               </label>
             </div>
             <div class="frame-padding-axis-row" role="group" aria-labelledby="frame-padding-label" data-padding-axes>
-              <label class="prefixed-number-control">
-                <span class="number-control-prefix" aria-hidden="true">x</span>
-                <input aria-label="Horizontal padding" data-frame-padding-axis="x" type="number" min="0" step="1" value="10" />
+              <label class="text-input-shell text-input-shell--prefixed">
+                <span class="text-input__prefix" aria-hidden="true">x</span>
+                <input class="text-input" aria-label="Horizontal padding" data-frame-padding-axis="x" data-select-on-focus type="number" min="0" step="1" value="10" />
               </label>
-              <label class="prefixed-number-control">
-                <span class="number-control-prefix" aria-hidden="true">y</span>
-                <input aria-label="Vertical padding" data-frame-padding-axis="y" type="number" min="0" step="1" value="10" />
+              <label class="text-input-shell text-input-shell--prefixed">
+                <span class="text-input__prefix" aria-hidden="true">y</span>
+                <input class="text-input" aria-label="Vertical padding" data-frame-padding-axis="y" data-select-on-focus type="number" min="0" step="1" value="10" />
               </label>
             </div>
           </div>
@@ -318,7 +318,7 @@
             </div>
             <div class="inspector-field">
               <label class="inspector-label" for="frame-outline-weight">Weight</label>
-              <input class="inspector-control" id="frame-outline-weight" type="number" min="0" step="1" value="1" />
+              <input class="text-input" id="frame-outline-weight" type="number" min="0" step="1" value="1" data-select-on-focus />
             </div>
           </div>
 
@@ -445,12 +445,12 @@
           <div class="text-inspector-row">
           <div class="inspector-field">
             <label class="inspector-label" for="text-line-height">Line height</label>
-            <input class="inspector-control" id="text-line-height" type="text" inputmode="text" value="Auto" />
+            <input class="text-input" id="text-line-height" type="text" inputmode="text" value="Auto" data-select-on-focus />
           </div>
 
           <div class="inspector-field">
             <label class="inspector-label" for="text-letter-spacing">Letter spacing</label>
-            <input class="inspector-control" id="text-letter-spacing" type="text" inputmode="decimal" value="0%" />
+            <input class="text-input" id="text-letter-spacing" type="text" inputmode="decimal" value="0%" />
           </div>
           </div>
           </div>

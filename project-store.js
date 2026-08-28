@@ -92,6 +92,13 @@ const frameOutlineControls = document.querySelector("[data-frame-outline-control
 
 const frameGapInput = document.querySelector("#frame-gap");
 
+document.addEventListener("focusin", (event) => {
+  const input = event.target;
+  if (input instanceof HTMLInputElement && input.matches(".text-input[data-select-on-focus]")) {
+    input.select();
+  }
+});
+
 const frameGapCombobox = document.querySelector("[data-gap-combobox]");
 
 const frameGapToggle = document.querySelector("[data-gap-toggle]");
