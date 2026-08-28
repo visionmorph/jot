@@ -182,23 +182,24 @@
             <div class="frame-gap-radius-stack">
               <div class="inspector-field">
                 <label class="inspector-label" for="frame-gap">Gap</label>
-                <div class="inspector-combobox-wrap" data-gap-combobox>
+                <div class="dropdown dropdown--combobox" data-dropdown data-gap-combobox>
                   <input
-                    class="inspector-control inspector-combobox-input"
+                    class="dropdown__input"
                     id="frame-gap"
                     type="text"
                     inputmode="decimal"
                     value="10px"
+                    data-select-on-focus
                     role="combobox"
                     aria-autocomplete="none"
                     aria-expanded="false"
                     aria-controls="frame-gap-menu"
                   />
-                  <button class="inspector-combobox-toggle icon-margin" type="button" aria-label="Open gap options" aria-expanded="false" data-gap-toggle>
+                  <button class="dropdown__toggle" type="button" aria-label="Open gap options" aria-expanded="false" data-dropdown-toggle data-gap-toggle>
                     <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
                   </button>
-                  <div class="inspector-combobox-menu" id="frame-gap-menu" role="listbox" data-gap-menu hidden>
-                    <button class="inspector-combobox-option" type="button" role="option" data-gap-option="auto">Auto</button>
+                  <div class="dropdown__menu" id="frame-gap-menu" role="listbox" data-dropdown-menu data-gap-menu hidden>
+                    <button class="dropdown__option" type="button" role="option" data-dropdown-value="auto" data-gap-option="auto">Auto</button>
                   </div>
                 </div>
               </div>
@@ -307,13 +308,14 @@
           <div class="frame-outline-row" data-frame-outline-controls hidden>
             <div class="inspector-field">
               <label class="inspector-label" for="frame-outline-position">Position</label>
-              <div class="inspector-select-wrap">
-                <select class="inspector-control inspector-select" id="frame-outline-position">
-                  <option value="inside" selected>Inside</option>
-                  <option value="outside">Outside</option>
-                  <option value="center">Center</option>
-                </select>
-                <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+              <div class="dropdown dropdown--default" data-dropdown>
+                <input class="dropdown__input" id="frame-outline-position" type="text" value="Inside" data-value="inside" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-outline-position-menu" readonly />
+                <button class="dropdown__toggle" type="button" aria-label="Open border position options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="frame-outline-position-menu" role="listbox" data-dropdown-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="inside">Inside</button>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="outside">Outside</button>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="center">Center</button>
+                </div>
               </div>
             </div>
             <div class="inspector-field">
@@ -327,12 +329,13 @@
             <h3 class="inspector-section-title">Accessibility</h3>
             <div class="inspector-field">
               <label class="inspector-label" for="frame-html-tag">HTML tag</label>
-              <div class="inspector-select-wrap">
-                <select class="inspector-control inspector-select" id="frame-html-tag">
-                  <option value="div" selected>div</option>
-                  <option value="button">button</option>
-                </select>
-                <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+              <div class="dropdown dropdown--default" data-dropdown>
+                <input class="dropdown__input" id="frame-html-tag" type="text" value="div" data-value="div" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-html-tag-menu" readonly />
+                <button class="dropdown__toggle" type="button" aria-label="Open HTML tag options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="frame-html-tag-menu" role="listbox" data-dropdown-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="div">div</button>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="button">button</button>
+                </div>
               </div>
             </div>
           </div>
@@ -396,47 +399,49 @@
 
           <div class="inspector-field text-font-field">
             <label class="inspector-label" for="text-font">Font</label>
-            <div class="inspector-select-wrap">
-              <select class="inspector-control inspector-select" id="text-font">
-                <option value="Inter" selected>Inter</option>
-              </select>
-              <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+            <div class="dropdown dropdown--default" data-dropdown>
+              <input class="dropdown__input" id="text-font" type="text" value="Inter" data-value="Inter" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-font-menu" readonly />
+              <button class="dropdown__toggle" type="button" aria-label="Open font family options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+              <div class="dropdown__menu" id="text-font-menu" role="listbox" data-dropdown-menu hidden>
+                <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="Inter">Inter</button>
+              </div>
             </div>
           </div>
 
           <div class="text-inspector-row">
           <div class="inspector-field">
             <label class="inspector-label" for="text-weight">Weight</label>
-            <div class="inspector-select-wrap">
-              <select class="inspector-control inspector-select" id="text-weight">
-                <option value="400" selected>Regular</option>
-              </select>
-              <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+            <div class="dropdown dropdown--default" data-dropdown>
+              <input class="dropdown__input" id="text-weight" type="text" value="Regular" data-value="400" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-weight-menu" readonly />
+              <button class="dropdown__toggle" type="button" aria-label="Open font weight options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+              <div class="dropdown__menu" id="text-weight-menu" role="listbox" data-dropdown-menu hidden>
+                <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="400">Regular</button>
+              </div>
             </div>
           </div>
 
           <div class="inspector-field">
             <label class="inspector-label" for="text-size">Size</label>
-            <div class="inspector-combobox-wrap text-size-combobox" data-text-size-combobox>
-              <input class="inspector-control inspector-combobox-input" id="text-size" type="text" inputmode="decimal" value="14" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-size-menu" />
-              <button class="inspector-combobox-toggle icon-margin" type="button" aria-label="Open text size options" aria-expanded="false" data-text-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
-              <div class="inspector-combobox-menu" id="text-size-menu" role="listbox" data-text-size-menu hidden>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="10">10</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="11">11</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="12">12</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="13">13</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="14" aria-selected="true">14</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="15">15</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="16">16</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="20">20</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="24">24</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="32">32</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="36">36</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="40">40</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="48">48</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="64">64</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="96">96</button>
-                <button class="inspector-combobox-option" type="button" role="option" data-text-size-option="128">128</button>
+            <div class="dropdown dropdown--combobox text-size-combobox" data-dropdown data-text-size-combobox>
+              <input class="dropdown__input" id="text-size" type="text" inputmode="decimal" value="14" data-select-on-focus role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-size-menu" />
+              <button class="dropdown__toggle" type="button" aria-label="Open text size options" aria-expanded="false" data-dropdown-toggle data-text-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+              <div class="dropdown__menu" id="text-size-menu" role="listbox" data-dropdown-menu data-text-size-menu hidden>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="10" data-text-size-option="10">10</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="11" data-text-size-option="11">11</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="12" data-text-size-option="12">12</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="13" data-text-size-option="13">13</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="14" data-text-size-option="14" aria-selected="true">14</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="15" data-text-size-option="15">15</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="16" data-text-size-option="16">16</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="20" data-text-size-option="20">20</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="24" data-text-size-option="24">24</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="32" data-text-size-option="32">32</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="36" data-text-size-option="36">36</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="40" data-text-size-option="40">40</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="48" data-text-size-option="48">48</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="64" data-text-size-option="64">64</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="96" data-text-size-option="96">96</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="128" data-text-size-option="128">128</button>
               </div>
             </div>
           </div>

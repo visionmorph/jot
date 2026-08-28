@@ -195,8 +195,24 @@ function loadGoogleFont(family, weight) {
   loadedGoogleFonts.add(key);
 }
 
+function replaceDropdownOptions(input, options, selectedValue) {
+  if (!(input instanceof HTMLInputElement)) return;
+  const menu = input.closest("[data-dropdown]")?.querySelector("[data-dropdown-menu]");
+  if (!(menu instanceof HTMLElement)) return;
+  menu.replaceChildren(...options.map(({ value, label }) => {
+    const option = document.createElement("button");
+    option.className = "dropdown__option";
+    option.type = "button";
+    option.setAttribute("role", "option");
+    option.dataset.dropdownValue = String(value);
+    option.textContent = label;
+    return option;
+  }));
+  setDropdownValue(input, selectedValue);
+}
+
 function populateWeightOptions(family, selectedWeight = DEFAULT_FONT_WEIGHT) {
-  if (!(weightSelect instanceof HTMLSelectElement)) return;
+  if (!(weightSelect instanceof HTMLInputElement)) return;
   const font = getFontRecord(family);
   const weights = font?.weights?.length ? font.weights : [DEFAULT_FONT_WEIGHT];
   const resolvedWeight = weights.includes(Number(selectedWeight))
@@ -205,25 +221,19 @@ function populateWeightOptions(family, selectedWeight = DEFAULT_FONT_WEIGHT) {
       ? DEFAULT_FONT_WEIGHT
       : weights[0];
 
-  weightSelect.replaceChildren(...weights.map((weight) => {
-    const option = document.createElement("option");
-    option.value = String(weight);
-    option.textContent = WEIGHT_LABELS[weight] ?? String(weight);
-    option.selected = weight === resolvedWeight;
-    return option;
-  }));
+  replaceDropdownOptions(weightSelect, weights.map((weight) => ({
+    value: weight,
+    label: WEIGHT_LABELS[weight] ?? String(weight),
+  })), resolvedWeight);
 }
 
 function populateFontOptions() {
-  if (!(fontSelect instanceof HTMLSelectElement)) return;
-  const currentFamily = fontSelect.value || DEFAULT_FONT_FAMILY;
-  fontSelect.replaceChildren(...fontCatalog.map((font) => {
-    const option = document.createElement("option");
-    option.value = font.family;
-    option.textContent = font.family;
-    option.selected = font.family === currentFamily;
-    return option;
-  }));
+  if (!(fontSelect instanceof HTMLInputElement)) return;
+  const currentFamily = getDropdownValue(fontSelect) || DEFAULT_FONT_FAMILY;
+  replaceDropdownOptions(fontSelect, fontCatalog.map((font) => ({
+    value: font.family,
+    label: font.family,
+  })), currentFamily);
 }
 
 async function loadFontCatalog() {
@@ -238,7 +248,7 @@ async function loadFontCatalog() {
   }
 
   populateFontOptions();
-  populateWeightOptions(fontSelect instanceof HTMLSelectElement ? fontSelect.value : DEFAULT_FONT_FAMILY);
+  populateWeightOptions(getDropdownValue(fontSelect) || DEFAULT_FONT_FAMILY);
 }
 
 function syncSelectedTextSizeInputs() {
@@ -269,7 +279,7 @@ function syncInspectorToSelectedText() {
     ? styles.fontFamily.split(",")[0].replace(/^['"]|['"]$/g, "").trim() || DEFAULT_FONT_FAMILY
     : element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
   const weight = Number(record.isVariantInstance ? styles.fontWeight : element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
-  if (fontSelect instanceof HTMLSelectElement) fontSelect.value = family;
+  if (fontSelect instanceof HTMLInputElement) setDropdownValue(fontSelect, family);
   populateWeightOptions(family, weight);
   if (sizeSelect instanceof HTMLInputElement) {
     sizeSelect.value = record.isVariantInstance ? String(Number.parseFloat(styles.fontSize) || 14) : element.dataset.fontSize || "14";
@@ -415,16 +425,16 @@ function syncInspectorToSelectedFrame() {
     const color = element.dataset.outlineColor || "";
     syncCustomColorControl(frameOutlineColorPicker, color, element.dataset.outlineColorOpacity || "100");
   }
-  if (frameOutlinePositionSelect instanceof HTMLSelectElement) {
-    frameOutlinePositionSelect.value = ["inside", "outside", "center"].includes(element.dataset.outlinePosition)
+  if (frameOutlinePositionSelect instanceof HTMLInputElement) {
+    setDropdownValue(frameOutlinePositionSelect, ["inside", "outside", "center"].includes(element.dataset.outlinePosition)
       ? element.dataset.outlinePosition
-      : "inside";
+      : "inside");
   }
   if (frameOutlineWeightInput instanceof HTMLInputElement) {
     frameOutlineWeightInput.value = element.dataset.outlineWeight || "1";
   }
-  if (frameHtmlTagInput instanceof HTMLSelectElement) {
-    frameHtmlTagInput.value = normalizeFrameHtmlTag(element.dataset.htmlTag || "div");
+  if (frameHtmlTagInput instanceof HTMLInputElement) {
+    setDropdownValue(frameHtmlTagInput, normalizeFrameHtmlTag(element.dataset.htmlTag || "div"));
   }
 }
 
@@ -648,12 +658,6 @@ function bindNativeSelectChevron(select, wrap) {
     else if (event.key === "ArrowDown" && event.altKey) wrap.classList.add("is-open");
   });
 }
-
-document.querySelectorAll(".inspector-select-wrap > select").forEach((select) => {
-  if (select instanceof HTMLSelectElement && select.parentElement instanceof HTMLElement) {
-    bindNativeSelectChevron(select, select.parentElement);
-  }
-});
 
 function createPropSelectIcon(iconType, record = null) {
   if (iconType === "prop-boolean") return createSvgAssetIcon("toggle-on", "layer-type-icon prop-type-icon");
@@ -1905,13 +1909,13 @@ function persistVariantTextStyle(record, property, value) {
 
 fontSelect?.addEventListener("change", () => {
   const record = getSelectedTextRecord();
-  if (!record || !(fontSelect instanceof HTMLSelectElement)) return;
-  const family = fontSelect.value;
+  if (!record || !(fontSelect instanceof HTMLInputElement)) return;
+  const family = getDropdownValue(fontSelect);
   const font = getFontRecord(family);
   const previousWeight = Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
   populateWeightOptions(family, previousWeight);
-  const weight = weightSelect instanceof HTMLSelectElement
-    ? Number(weightSelect.value)
+  const weight = weightSelect instanceof HTMLInputElement
+    ? Number(getDropdownValue(weightSelect))
     : DEFAULT_FONT_WEIGHT;
   if (record.element.dataset.fontFamily !== family || previousWeight !== weight) recordHistory();
   record.element.dataset.fontFamily = family;
@@ -1926,9 +1930,9 @@ fontSelect?.addEventListener("change", () => {
 
 weightSelect?.addEventListener("change", () => {
   const record = getSelectedTextRecord();
-  if (!record || !(weightSelect instanceof HTMLSelectElement)) return;
+  if (!record || !(weightSelect instanceof HTMLInputElement)) return;
   const family = record.element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
-  const weight = Number(weightSelect.value);
+  const weight = Number(getDropdownValue(weightSelect));
   if (Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT) !== weight) recordHistory();
   record.element.dataset.fontWeight = String(weight);
   record.element.style.fontWeight = String(weight);
@@ -1944,10 +1948,7 @@ function syncTextSizeCombobox(value) {
 }
 
 function setTextSizeComboboxOpen(isOpen) {
-  if (!(textSizeMenu instanceof HTMLElement) || !(sizeSelect instanceof HTMLInputElement)) return;
-  textSizeMenu.hidden = !isOpen;
-  sizeSelect.setAttribute("aria-expanded", String(isOpen));
-  textSizeToggle?.setAttribute("aria-expanded", String(isOpen));
+  setDropdownOpen(textSizeCombobox, isOpen);
 }
 
 function applyTextSizeValue(rawValue = sizeSelect?.value, normalize = true) {
@@ -2007,30 +2008,7 @@ sizeSelect?.addEventListener("keydown", (event) => {
   sizeSelect.select();
 });
 if (sizeSelect instanceof HTMLElement) bindHistoryGesture(sizeSelect);
-
-textSizeToggle?.addEventListener("click", () => {
-  if (!(textSizeMenu instanceof HTMLElement) || !(sizeSelect instanceof HTMLInputElement)) return;
-  setTextSizeComboboxOpen(textSizeMenu.hidden);
-});
-
-textSizeOptions.forEach((option) => {
-  option.addEventListener("pointerdown", (event) => event.preventDefault());
-  option.addEventListener("click", () => {
-    const value = option.getAttribute("data-text-size-option");
-    if (value) applyTextSizeValue(value);
-    setTextSizeComboboxOpen(false);
-    if (sizeSelect instanceof HTMLInputElement) {
-      sizeSelect.focus();
-      sizeSelect.select();
-    }
-    textSizeCombobox?.classList.add("is-selection-focused");
-  });
-});
-
-document.addEventListener("pointerdown", (event) => {
-  if (!(event.target instanceof Node) || !(textSizeCombobox instanceof HTMLElement)) return;
-  if (!textSizeCombobox.contains(event.target)) setTextSizeComboboxOpen(false);
-});
+sizeSelect?.addEventListener("change", () => applyTextSizeValue());
 
 function applyLineHeightValue() {
   const record = getSelectedTextRecord();
@@ -2522,9 +2500,10 @@ frameAlignmentOptions.forEach((option) => {
 
 frameOutlinePositionSelect?.addEventListener("change", () => {
   const record = getSelectedFrameRecord();
-  if (!record || !(frameOutlinePositionSelect instanceof HTMLSelectElement)) return;
-  const position = ["outside", "center"].includes(frameOutlinePositionSelect.value)
-    ? frameOutlinePositionSelect.value
+  if (!record || !(frameOutlinePositionSelect instanceof HTMLInputElement)) return;
+  const selectedPosition = getDropdownValue(frameOutlinePositionSelect);
+  const position = ["outside", "center"].includes(selectedPosition)
+    ? selectedPosition
     : "inside";
   if ((record.element.dataset.outlinePosition || "inside") === position) return;
   if (selectedVariantInstanceId !== null && record.isVariantInstance) {
@@ -2554,10 +2533,7 @@ frameOutlineWeightInput?.addEventListener("blur", syncInspectorToSelectedFrame);
 if (frameOutlineWeightInput instanceof HTMLElement) bindHistoryGesture(frameOutlineWeightInput);
 
 function setFrameGapMenuOpen(isOpen) {
-  if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;
-  frameGapMenu.hidden = !isOpen;
-  frameGapInput.setAttribute("aria-expanded", String(isOpen));
-  frameGapToggle?.setAttribute("aria-expanded", String(isOpen));
+  setDropdownOpen(frameGapCombobox, isOpen);
 }
 
 function applyFrameGapValue(normalize = true) {
@@ -2635,33 +2611,12 @@ frameGapInput?.addEventListener("keydown", (event) => {
   setFrameGapMenuOpen(false);
 });
 if (frameGapInput instanceof HTMLElement) bindHistoryGesture(frameGapInput);
-
-frameGapToggle?.addEventListener("click", () => {
-  if (!(frameGapMenu instanceof HTMLElement) || !(frameGapInput instanceof HTMLInputElement)) return;
-  const willOpen = frameGapMenu.hidden;
-  setFrameGapMenuOpen(willOpen);
-});
-
-frameGapAutoOption?.addEventListener("pointerdown", (event) => event.preventDefault());
-
-frameGapAutoOption?.addEventListener("click", () => {
-  if (!(frameGapInput instanceof HTMLInputElement)) return;
-  frameGapInput.value = "Auto";
-  applyFrameGapValue();
-  setFrameGapMenuOpen(false);
-  frameGapInput.focus();
-  frameGapCombobox?.classList.add("is-selection-focused");
-});
-
-document.addEventListener("pointerdown", (event) => {
-  if (!(frameGapCombobox instanceof HTMLElement) || !(event.target instanceof Node)) return;
-  if (!frameGapCombobox.contains(event.target)) setFrameGapMenuOpen(false);
-});
+frameGapInput?.addEventListener("change", () => applyFrameGapValue());
 
 frameHtmlTagInput?.addEventListener("change", () => {
   const record = getSelectedFrameRecord();
-  if (!record || !(frameHtmlTagInput instanceof HTMLSelectElement)) return;
-  const htmlTag = normalizeFrameHtmlTag(frameHtmlTagInput.value);
+  if (!record || !(frameHtmlTagInput instanceof HTMLInputElement)) return;
+  const htmlTag = normalizeFrameHtmlTag(getDropdownValue(frameHtmlTagInput));
   const sourceRecord = record.isVariantInstance
     ? selectedVariantLayerTarget?.startsWith("frame:")
       ? getFrameRecord(record.id)
