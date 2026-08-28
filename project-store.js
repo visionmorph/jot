@@ -99,6 +99,62 @@ document.addEventListener("focusin", (event) => {
   }
 });
 
+document.querySelectorAll("[data-text-input-suffix]").forEach((suffix) => {
+  if (!(suffix instanceof HTMLElement)) return;
+  const shell = suffix.closest(".text-input-shell");
+  const input = shell?.querySelector("input.text-input[type='number']");
+  if (!(input instanceof HTMLInputElement)) return;
+
+  let drag = null;
+
+  const finishDrag = (event, shouldFocus) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const didDrag = drag.didDrag;
+    drag = null;
+    suffix.classList.remove("is-dragging");
+    if (suffix.hasPointerCapture(event.pointerId)) suffix.releasePointerCapture(event.pointerId);
+    endHistoryGesture(input);
+    if (!didDrag && shouldFocus) input.focus();
+    event.preventDefault();
+  };
+
+  suffix.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const startValue = Number(input.value);
+    if (!Number.isFinite(startValue)) return;
+    drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startValue,
+      didDrag: false,
+    };
+    beginHistoryGesture(input);
+    suffix.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  suffix.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dragUnits = Math.trunc(event.clientX - drag.startX);
+    if (!drag.didDrag && Math.abs(dragUnits) < 2) return;
+    drag.didDrag = true;
+    suffix.classList.add("is-dragging");
+    const multiplier = event.shiftKey ? 10 : 1;
+    const minimum = input.min === "" ? -Infinity : Number(input.min);
+    const maximum = input.max === "" ? Infinity : Number(input.max);
+    const nextValue = Math.min(maximum, Math.max(minimum, drag.startValue + dragUnits * multiplier));
+    if (Number(input.value) === nextValue) return;
+    input.value = String(nextValue);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    event.preventDefault();
+  });
+
+  suffix.addEventListener("pointerup", (event) => finishDrag(event, true));
+  suffix.addEventListener("pointercancel", (event) => finishDrag(event, false));
+  suffix.addEventListener("lostpointercapture", (event) => finishDrag(event, false));
+  suffix.addEventListener("click", (event) => event.preventDefault());
+});
+
 const frameGapCombobox = document.querySelector("[data-gap-combobox]");
 
 const frameGapToggle = document.querySelector("[data-gap-toggle]");
