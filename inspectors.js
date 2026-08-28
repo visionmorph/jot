@@ -895,7 +895,7 @@ function renderComponentProps() {
         if (optionIndex === 0) valueInput.title = "Default value";
         valueTag.addEventListener("focus", () => setActiveOption(optionValue));
         valueTag.addEventListener("click", (event) => {
-          if (event.target instanceof Element && event.target.closest(".prop-value-tag-dismiss")) return;
+          if (event.target instanceof Element && event.target.closest('[data-icon-button="prop-value-dismiss"]')) return;
           setActiveOption(optionValue);
           if (!valueInput.classList.contains("is-editing")) valueTag.focus();
         });
@@ -906,7 +906,7 @@ function renderComponentProps() {
           valueTag.focus();
         });
         valueTag.addEventListener("dblclick", (event) => {
-          if (event.target instanceof Element && event.target.closest(".prop-value-tag-dismiss")) return;
+          if (event.target instanceof Element && event.target.closest('[data-icon-button="prop-value-dismiss"]')) return;
           event.preventDefault();
           valueInput.readOnly = false;
           valueInput.tabIndex = 0;
@@ -968,7 +968,8 @@ function renderComponentProps() {
           }
         });
         dismissTooltip.className = "tooltip props-action-tooltip prop-value-tag-dismiss-tooltip";
-        dismissButton.className = "prop-value-tag-dismiss";
+        dismissButton.className = "icon-button icon-button--size-24 icon-button--circle";
+        dismissButton.dataset.iconButton = "prop-value-dismiss";
         dismissButton.type = "button";
         dismissButton.disabled = options.length <= 1;
         dismissButton.setAttribute("aria-label", `Dismiss ${optionValue}`);
@@ -1276,7 +1277,7 @@ function renderComponentProps() {
     const removeIcon = document.createElement("span");
     const removeTooltipContent = document.createElement("span");
     removeTooltip.className = "tooltip props-action-tooltip";
-    removeButton.className = "prop-remove-button";
+    removeButton.className = "icon-button icon-button--size-32 icon-button--square";
     removeButton.type = "button";
     removeButton.setAttribute("aria-label", `Remove ${prop.name} prop`);
     removeIcon.className = "subtract-icon";

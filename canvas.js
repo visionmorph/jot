@@ -460,7 +460,6 @@ function selectTool(toolName) {
 
   toolButtons.forEach((toolButton) => {
     const isSelected = toolButton.getAttribute("data-tool") === activeTool;
-    toolButton.classList.toggle("is-toggled", isSelected);
     toolButton.setAttribute("aria-pressed", String(isSelected));
   });
   requestAnimationFrame(syncResizeOverlay);

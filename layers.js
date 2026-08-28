@@ -430,10 +430,12 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
     labelWrapper.append(label);
   }
 
-  visibilityButton.className = `layer-visibility-button${isVisible ? "" : " is-layer-hidden"}${disabledState === "top-level" ? " is-top-level" : disabledState === "child" ? " is-child-layer" : ""}`;
+  visibilityButton.className = `icon-button icon-button--size-24 icon-button--rounded${isVisible ? "" : " is-layer-hidden"}${disabledState === "top-level" ? " is-top-level" : disabledState === "child" ? " is-child-layer" : ""}`;
+  visibilityButton.dataset.iconButton = "layer-visibility";
   visibilityButton.type = "button";
   visibilityButton.draggable = false;
   visibilityButton.setAttribute("aria-label", `${isVisible ? "Hide" : "Show"} ${name}`);
+  visibilityButton.title = `${isVisible ? "Hide" : "Show"} ${name}`;
   visibilityButton.setAttribute("aria-pressed", String(!isVisible));
   visibilityButton.append(createLayerVisibilityGraphic(isVisible, disabledState));
   visibilityButton.addEventListener("pointerdown", (event) => event.stopPropagation());

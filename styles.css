@@ -126,31 +126,74 @@ textarea:focus-visible {
   background: var(--background);
 }
 
-.add-prop-button {
-  display: flex;
+.icon-button {
+  --icon-button-icon-size: 16px;
+
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  flex: 0 0 auto;
   margin: 0;
-  padding: 8px;
+  padding: 0;
   border: 0;
-  border-radius: 0;
   background: transparent;
   color: var(--icon-secondary);
   cursor: pointer;
 }
 
-.add-prop-button:hover,
-.prop-remove-button:hover {
+.icon-button--size-24 {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+}
+
+.icon-button--size-32 {
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+}
+
+.icon-button--rounded {
+  border-radius: 4px;
+}
+
+.icon-button--circle {
+  border-radius: 50%;
+}
+
+.icon-button--square {
+  border-radius: 0;
+}
+
+.icon-button--icon-20 {
+  --icon-button-icon-size: 20px;
+}
+
+.icon-button > :is(.svg-icon, .plus-icon, .subtract-icon, .layer-visibility-icon, svg) {
+  width: var(--icon-button-icon-size);
+  height: var(--icon-button-icon-size);
+  flex: 0 0 var(--icon-button-icon-size);
+  color: inherit;
+}
+
+.icon-button:hover,
+.icon-button:active {
   background: var(--layer-hover-01);
   color: var(--icon-primary);
 }
 
-.add-prop-button:focus-visible,
-.prop-remove-button:focus-visible {
+.icon-button:focus-visible {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
+}
+
+.icon-button--toggle[aria-pressed="true"] {
+  background: var(--background-selected);
+  color: var(--icon-brand);
+}
+
+.icon-button--toggle[aria-pressed="true"]:hover {
+  background: var(--background-selected-hover);
 }
 
 .plus-icon {
@@ -296,6 +339,12 @@ textarea:focus-visible {
   appearance: none;
 }
 
+.prop-select option {
+  background-color: var(--layer-01);
+  color: var(--text-primary);
+  border: 0;
+}
+
 .prop-select--has-layer-icon {
   color: transparent;
 }
@@ -367,22 +416,6 @@ textarea:focus-visible {
   line-height: 16px;
 }
 
-.prop-remove-button {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--icon-secondary);
-  cursor: pointer;
-}
-
 .props-property-row .props-table-value-cell {
   align-content: flex-start;
   align-items: flex-start;
@@ -449,7 +482,7 @@ textarea:focus-visible {
   outline: 0;
 }
 
-.prop-value-tag:hover:not(:has(.prop-value-tag-dismiss:hover)) {
+.prop-value-tag:hover:not(:has([data-icon-button="prop-value-dismiss"]:hover)) {
   background: var(--layer-hover-01);
   color: var(--text-primary);
 }
@@ -472,38 +505,6 @@ textarea:focus-visible {
 
 .prop-value-tag:has(.prop-value-tag--editable.is-editing) .prop-value-tag-dismiss-tooltip {
   display: none;
-}
-
-.prop-value-tag-dismiss {
-  display: inline-flex;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--icon-secondary);
-  cursor: pointer;
-}
-
-.prop-value-tag-dismiss:hover,
-.prop-value-tag-dismiss:active {
-  background: var(--layer-hover-01);
-  color: var(--icon-primary);
-}
-
-.prop-value-tag-dismiss:focus {
-  outline: 1px solid var(--background-brand);
-  outline-offset: -1px;
-}
-
-.prop-value-tag-dismiss .svg-icon {
-  width: 16px;
-  height: 16px;
 }
 
 .prop-boolean-default {
@@ -603,31 +604,6 @@ textarea:focus-visible {
   width: 100%;
   height: 24px;
   padding-left: 8px;
-}
-
-.components-add-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--icon-secondary);
-  cursor: pointer;
-}
-
-.components-add-button:hover {
-  background: var(--layer-hover-01);
-  color: var(--icon-primary);
-}
-
-.components-add-button:focus-visible {
-  outline: 1px solid var(--background-brand);
-  outline-offset: -1px;
 }
 
 .panel-heading-wrap {
@@ -835,7 +811,7 @@ textarea:focus-visible {
 
 .tree-node:hover .icon-cell,
 .tree-node:hover .text-layer-icon,
-.tree-node:hover .layer-visibility-button {
+.tree-node:hover [data-icon-button="layer-visibility"] {
   color: var(--icon-primary);
 }
 
@@ -850,7 +826,7 @@ textarea:focus-visible {
 
 .tree-node.is-selected .icon-cell,
 .tree-node.is-selected .text-layer-icon,
-.tree-node.is-selected .layer-visibility-button {
+.tree-node.is-selected [data-icon-button="layer-visibility"] {
   color: var(--icon-on-color);
 }
 
@@ -906,40 +882,17 @@ textarea:focus-visible {
   flex: 1 1 auto;
 }
 
-.layer-visibility-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-  margin: 0;
-  padding: 4px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--icon-secondary);
-  cursor: pointer;
+[data-icon-button="layer-visibility"] {
   opacity: 0;
   pointer-events: none;
 }
 
-.tree-node-content:hover > .layer-visibility-button,
-.layer-visibility-button:focus-visible,
-.layer-visibility-button.is-layer-hidden,
-.layer-visibility-button.is-child-layer {
+.tree-node-content:hover > [data-icon-button="layer-visibility"],
+[data-icon-button="layer-visibility"]:focus-visible,
+[data-icon-button="layer-visibility"].is-layer-hidden,
+[data-icon-button="layer-visibility"].is-child-layer {
   opacity: 1;
   pointer-events: auto;
-}
-
-.layer-visibility-button:hover {
-  background: var(--layer-hover-01);
-  color: var(--icon-primary);
-}
-
-.layer-visibility-button:focus-visible {
-  outline: 1px solid var(--background-brand);
-  outline-offset: -1px;
 }
 
 .layer-visibility-icon {
@@ -966,15 +919,15 @@ textarea:focus-visible {
 
 .tree-node.is-disabled .icon-cell,
 .tree-node.is-disabled .text-layer-icon,
-.tree-node.is-disabled .layer-visibility-button {
+.tree-node.is-disabled [data-icon-button="layer-visibility"] {
   color: var(--icon-disabled);
 }
 
-.tree-node.is-disabled-top-level .layer-visibility-button {
+.tree-node.is-disabled-top-level [data-icon-button="layer-visibility"] {
   color: var(--icon-primary);
 }
 
-.tree-node.is-disabled-child .layer-visibility-button {
+.tree-node.is-disabled-child [data-icon-button="layer-visibility"] {
   color: var(--icon-primary);
 }
 
@@ -982,8 +935,8 @@ textarea:focus-visible {
   color: var(--text-disabled);
 }
 
-.tree-node.is-disabled .layer-visibility-button:hover,
-.tree-node.is-disabled .layer-visibility-button:focus-visible {
+.tree-node.is-disabled [data-icon-button="layer-visibility"]:hover,
+.tree-node.is-disabled [data-icon-button="layer-visibility"]:focus-visible {
   color: var(--icon-on-color);
 }
 
@@ -998,7 +951,7 @@ textarea:focus-visible {
   padding-left: 0;
 }
 
-.tree-node.is-renaming .layer-visibility-button {
+.tree-node.is-renaming [data-icon-button="layer-visibility"] {
   display: none;
 }
 
@@ -1932,41 +1885,12 @@ textarea:focus-visible {
   transform: translate(-50%, -100%);
 }
 
-.tool-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--icon-secondary);
-  cursor: pointer;
-}
-
-.tool-button:not(.is-toggled):hover {
-  background: var(--layer-hover-01);
-  color: var(--icon-primary);
-}
-
-.tool-button.is-toggled {
-  background: var(--layer-selected-01);
-  color: var(--icon-brand);
-}
-
-.tool-button:focus-visible,
 .canvas-color-picker:focus-visible {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
 }
 
 .tool-icon {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
   color: currentColor;
 }
 
@@ -2568,40 +2492,6 @@ textarea:focus-visible {
   gap: 0;
 }
 
-.padding-mode-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  margin: 0;
-  padding: 4px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--icon-secondary);
-  cursor: pointer;
-}
-
-.padding-mode-toggle:hover {
-  background: var(--layer-hover-01);
-  color: var(--icon-primary);
-}
-
-.padding-mode-toggle[aria-pressed="true"] {
-  background: var(--background-selected);
-  color: var(--icon-brand);
-}
-
-.padding-mode-toggle[aria-pressed="true"]:hover {
-  background: var(--background-selected-hover);
-}
-
-.padding-mode-toggle:focus {
-  outline: 1px solid var(--background-brand);
-  outline-offset: -1px;
-}
-
 .frame-padding-grid {
   display: grid;
   grid-template-columns: repeat(2, 119.5px);
@@ -3120,33 +3010,6 @@ textarea:focus-visible {
   height: 24px;
   flex: 0 0 1px;
   background: var(--border-subtle-01);
-}
-
-.paint-section-action {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
-  margin: 0;
-  padding: 4px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--icon-secondary);
-  cursor: pointer;
-}
-
-.paint-section-action:hover {
-  background: var(--layer-hover-01);
-  color: var(--icon-primary);
-}
-
-.paint-section-action:focus-visible {
-  outline: 1px solid var(--background-brand);
-  outline-offset: -1px;
 }
 
 .subtract-icon {
