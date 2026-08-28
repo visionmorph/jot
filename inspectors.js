@@ -2343,7 +2343,6 @@ document.addEventListener("pointerdown", (event) => {
 
 framePaddingInputs.forEach((input) => {
   if (!(input instanceof HTMLInputElement)) return;
-  input.addEventListener("focus", () => input.select());
   input.addEventListener("input", () => {
     const record = getSelectedFrameRecord();
     const side = input.dataset.framePadding;
