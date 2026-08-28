@@ -325,8 +325,16 @@ function syncFramePaddingAxisInputs(element) {
         : fallback;
       return Number(String(value).replace(/px$/i, ""));
     });
-    input.value = values[0] === values[1] ? String(values[0]) : "";
+    input.value = values[0] === values[1] ? String(values[0]) : `${values[0]}, ${values[1]}`;
   });
+}
+
+function parseFramePaddingAxisValue(value) {
+  const parts = String(value).split(",").map((part) => part.trim());
+  if (parts.length < 1 || parts.length > 2 || parts.some((part) => part === "")) return null;
+  const values = parts.map(Number);
+  if (values.some((number) => !Number.isFinite(number) || number < 0)) return null;
+  return values.length === 1 ? [values[0], values[0]] : values;
 }
 
 function setFramePaddingControlMode(isIndividual) {
@@ -2374,31 +2382,31 @@ framePaddingAxisInputs.forEach((input) => {
   input.addEventListener("input", () => {
     const record = getSelectedFrameRecord();
     const axis = input.dataset.framePaddingAxis;
-    const value = Number(input.value);
-    if (!record || (axis !== "x" && axis !== "y") || input.value.trim() === "" || !Number.isFinite(value) || value < 0) return;
+    const values = parseFramePaddingAxisValue(input.value);
+    if (!record || (axis !== "x" && axis !== "y") || !values) return;
     const sides = axis === "x" ? ["left", "right"] : ["top", "bottom"];
     if (selectedVariantInstanceId !== null) {
-      const hasVariantChange = sides.some((side) => {
+      const hasVariantChange = sides.some((side, index) => {
         const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
-        return getSelectedVariantTargetStyleOverride(propertyName, `${record.element.dataset[propertyName] || "10"}px`) !== `${value}px`;
+        return getSelectedVariantTargetStyleOverride(propertyName, `${record.element.dataset[propertyName] || "10"}px`) !== `${values[index]}px`;
       });
       if (!hasVariantChange) return;
       recordHistoryForGesture(input);
-      sides.forEach((side) => setSelectedVariantFrameStyleOverride(`padding${side[0].toUpperCase()}${side.slice(1)}`, `${value}px`, { record: false }));
+      sides.forEach((side, index) => setSelectedVariantFrameStyleOverride(`padding${side[0].toUpperCase()}${side.slice(1)}`, `${values[index]}px`, { record: false }));
       syncFramePaddingAxisInputs(record.element);
       return;
     }
-    const hasChange = sides.some((side) => {
+    const hasChange = sides.some((side, index) => {
       const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
-      return Number(record.element.dataset[propertyName] || "10") !== value;
+      return Number(record.element.dataset[propertyName] || "10") !== values[index];
     });
     if (hasChange) recordHistoryForGesture(input);
-    sides.forEach((side) => {
+    sides.forEach((side, index) => {
       const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
-      record.element.dataset[propertyName] = String(value);
-      record.element.style[propertyName] = `${value}px`;
+      record.element.dataset[propertyName] = String(values[index]);
+      record.element.style[propertyName] = `${values[index]}px`;
       const sideInput = framePaddingInputs.find((candidate) => candidate.dataset.framePadding === side);
-      if (sideInput instanceof HTMLInputElement) sideInput.value = String(value);
+      if (sideInput instanceof HTMLInputElement) sideInput.value = String(values[index]);
     });
     requestAnimationFrame(syncResizeOverlay);
   });

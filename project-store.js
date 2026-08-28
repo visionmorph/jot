@@ -102,7 +102,7 @@ document.addEventListener("focusin", (event) => {
 document.querySelectorAll("[data-text-input-prefix]").forEach((prefix) => {
   if (!(prefix instanceof HTMLElement)) return;
   const shell = prefix.closest(".text-input-shell");
-  const input = shell?.querySelector("input.text-input[type='number']");
+  const input = shell?.querySelector("input.text-input");
   if (!(input instanceof HTMLInputElement)) return;
 
   let drag = null;
@@ -121,12 +121,16 @@ document.querySelectorAll("[data-text-input-prefix]").forEach((prefix) => {
 
   prefix.addEventListener("pointerdown", (event) => {
     if (event.button !== 0) return;
-    const startValue = Number(input.value);
-    if (!Number.isFinite(startValue)) return;
+    const startValues = input.value.split(",").map((part) => Number(part.trim()));
+    if (startValues.length < 1 || startValues.length > 2 || startValues.some((value) => !Number.isFinite(value))) return;
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    document.querySelectorAll(".text-input-shell.is-scrubbing").forEach((activeShell) => {
+      if (activeShell !== shell) activeShell.classList.remove("is-scrubbing");
+    });
     drag = {
       pointerId: event.pointerId,
       startX: event.clientX,
-      startValue,
+      startValues,
       didDrag: false,
     };
     beginHistoryGesture(input);
@@ -142,11 +146,16 @@ document.querySelectorAll("[data-text-input-prefix]").forEach((prefix) => {
     drag.didDrag = true;
     prefix.classList.add("is-dragging");
     const multiplier = event.shiftKey ? 10 : 1;
-    const minimum = input.min === "" ? -Infinity : Number(input.min);
-    const maximum = input.max === "" ? Infinity : Number(input.max);
-    const nextValue = Math.min(maximum, Math.max(minimum, drag.startValue + dragUnits * multiplier));
-    if (Number(input.value) === nextValue) return;
-    input.value = String(nextValue);
+    const minimumValue = input.min || input.dataset.min;
+    const maximumValue = input.max || input.dataset.max;
+    const minimum = minimumValue == null || minimumValue === "" ? -Infinity : Number(minimumValue);
+    const maximum = maximumValue == null || maximumValue === "" ? Infinity : Number(maximumValue);
+    const nextValues = drag.startValues.map((startValue) => (
+      Math.min(maximum, Math.max(minimum, startValue + dragUnits * multiplier))
+    ));
+    const nextValue = nextValues.join(", ");
+    if (input.value === nextValue) return;
+    input.value = nextValue;
     input.dispatchEvent(new Event("input", { bubbles: true }));
     event.preventDefault();
   });
