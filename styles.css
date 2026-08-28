@@ -242,7 +242,7 @@ textarea:focus-visible {
   background: var(--layer-01);
 }
 
-.text-input__suffix {
+.text-input__prefix {
   display: inline-flex;
   width: 20px;
   height: 24px;
@@ -259,12 +259,12 @@ textarea:focus-visible {
   user-select: none;
 }
 
-.text-input__suffix-value {
+.text-input__prefix-value {
   width: max-content;
 }
 
-.text-input__suffix:hover,
-.text-input__suffix.is-dragging {
+.text-input__prefix:hover,
+.text-input__prefix.is-dragging {
   background: var(--layer-hover-01);
   color: var(--text-primary);
 }
@@ -278,7 +278,7 @@ textarea:focus-visible {
   padding: 0 8px;
 }
 
-.text-input-shell--suffix .text-input__text-wrapper {
+.text-input-shell--prefix .text-input__text-wrapper {
   padding-left: 4px;
 }
 
