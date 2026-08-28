@@ -2149,7 +2149,6 @@ textAlignmentOptions.forEach((option) => {
 
 vectorSizeInputs.forEach((input) => {
   if (!(input instanceof HTMLInputElement)) return;
-  input.addEventListener("focus", () => input.select());
   input.addEventListener("input", () => {
     const record = getSelectedVectorRecord();
     const dimension = input.dataset.vectorSize;

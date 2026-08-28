@@ -2590,7 +2590,8 @@ textarea:focus-visible {
   gap: 8px;
 }
 
-.layer-size-row .prefixed-number-control {
+.layer-size-row .prefixed-number-control,
+.layer-size-row .text-input-shell {
   flex: 1 1 0;
   width: 100%;
 }
@@ -2644,25 +2645,6 @@ textarea:focus-visible {
   font-size: 14px;
   font-weight: 400;
   line-height: 16px;
-}
-
-.prefixed-number-control input[type="number"],
-#frame-radius,
-#frame-outline-weight {
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.prefixed-number-control input[type="number"]::-webkit-inner-spin-button,
-.prefixed-number-control input[type="number"]::-webkit-outer-spin-button,
-#frame-radius::-webkit-inner-spin-button,
-#frame-radius::-webkit-outer-spin-button,
-#frame-outline-weight::-webkit-inner-spin-button,
-#frame-outline-weight::-webkit-outer-spin-button,
-[data-vector-size]::-webkit-inner-spin-button,
-[data-vector-size]::-webkit-outer-spin-button {
-  margin: 0;
-  -webkit-appearance: none;
 }
 
 .prefixed-number-control:focus-within {
