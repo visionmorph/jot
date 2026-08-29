@@ -1067,26 +1067,36 @@ function renderComponentProps() {
           instance.propValues[prop.variantPropId],
         )
         : Boolean(prop.defaultValue);
-      const valueToggle = document.createElement("div");
-      valueToggle.className = "text-toggle prop-boolean-value-toggle";
-      valueToggle.setAttribute("role", "group");
+      const valueToggle = document.createElement("button");
+      const valueToggleTrack = document.createElement("span");
+      const valueToggleHandle = document.createElement("span");
+      const valueToggleCheckmark = document.createElement("span");
+      const valueToggleLabel = document.createElement("span");
+      valueToggle.className = "toggle";
+      valueToggle.type = "button";
+      valueToggle.setAttribute("role", "switch");
+      valueToggle.setAttribute("aria-checked", String(currentValue));
       valueToggle.setAttribute("aria-label", `${prop.name} value`);
-      [false, true].forEach((optionValue) => {
-        const valueButton = document.createElement("button");
-        valueButton.className = "text-toggle__item";
-        valueButton.type = "button";
-        valueButton.textContent = String(optionValue);
-        valueButton.classList.toggle("is-selected", optionValue === currentValue);
-        valueButton.setAttribute("aria-pressed", String(optionValue === currentValue));
-        valueButton.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
-        valueButton.addEventListener("click", () => {
-          if (!instance || currentValue === optionValue) return;
-          recordHistory();
-          instance.propValues[prop.variantPropId] = optionValue;
+      valueToggleTrack.className = "toggle__track";
+      valueToggleTrack.setAttribute("aria-hidden", "true");
+      valueToggleHandle.className = "toggle__handle";
+      valueToggleCheckmark.className = "toggle__checkmark";
+      valueToggleLabel.className = "toggle__label";
+      valueToggleLabel.textContent = currentValue ? "True" : "False";
+      valueToggleHandle.append(valueToggleCheckmark);
+      valueToggleTrack.append(valueToggleHandle);
+      valueToggle.append(valueToggleTrack, valueToggleLabel);
+      valueToggle.addEventListener("click", () => {
+        const nextValue = !currentValue;
+        recordHistory();
+        if (instance) {
+          instance.propValues[prop.variantPropId] = nextValue;
           renderVariantInstances();
-          renderComponentProps();
-        });
-        valueToggle.append(valueButton);
+        } else {
+          prop.defaultValue = nextValue;
+          syncComponentPropVariantDefinition(prop);
+        }
+        renderComponentProps();
       });
       defaultCell.append(valueToggle);
       const booleanDefaultLabel = document.createElement("label");

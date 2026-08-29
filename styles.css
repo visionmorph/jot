@@ -2,6 +2,7 @@
   color-scheme: dark;
   --text-primary: #ffffff;
   --icon-primary: #f4f4f4;
+  --icon-inverse: #161616;
   --icon-secondary: #c1c7cd;
   --icon-disabled: rgba(244, 244, 244, 0.25);
   --icon-on-color: #ffffff;
@@ -24,6 +25,8 @@
   --link-primary: #78a9ff;
   --link-primary-hover: #a6c8ff;
   --layer-hover-01: #343a3f;
+  --toggle-off: #697077;
+  --support-success: #42be65;
   --text-secondary: #c1c7cd;
   --text-placeholder: #8d8d8d;
   --text-inverse: #121619;
@@ -2198,6 +2201,97 @@ textarea:focus-visible {
 .text-toggle__item:focus {
   outline: 1px solid var(--focus);
   outline-offset: -1px;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.toggle:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.toggle__track {
+  display: flex;
+  align-items: center;
+  width: 32px;
+  height: 16px;
+  padding: 0 2px;
+  flex: 0 0 32px;
+  border-radius: 8px;
+  background: var(--toggle-off);
+  transition: background-color 120ms cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+
+.toggle__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  border-radius: 6px;
+  background: var(--icon-inverse);
+  transform: translateX(0);
+  transition: transform 120ms cubic-bezier(0.2, 0, 0.38, 0.9);
+}
+
+.toggle__checkmark {
+  display: block;
+  width: 7px;
+  height: 6px;
+  background: var(--support-success);
+  opacity: 0;
+  transform: scale(0.75);
+  transition:
+    opacity 80ms linear,
+    transform 120ms cubic-bezier(0.2, 0, 0.38, 0.9);
+  -webkit-mask: url("src/icons/checkmark.svg") center / contain no-repeat;
+  mask: url("src/icons/checkmark.svg") center / contain no-repeat;
+}
+
+.toggle__label {
+  color: var(--text-secondary);
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.toggle[aria-checked="true"] .toggle__track {
+  background: var(--support-success);
+}
+
+.toggle[aria-checked="true"] .toggle__handle {
+  transform: translateX(16px);
+}
+
+.toggle[aria-checked="true"] .toggle__checkmark {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle__track,
+  .toggle__handle,
+  .toggle__checkmark {
+    transition: none;
+  }
 }
 
 .frame-alignment-option:focus {
