@@ -1297,7 +1297,7 @@ function renderComponentProps() {
     const removeIcon = document.createElement("span");
     const removeTooltipContent = document.createElement("span");
     removeTooltip.className = "tooltip tooltip--top tooltip--align-center tooltip--fixed";
-    removeButton.className = "icon-button icon-button--size-32 icon-button--square";
+    removeButton.className = "icon-button icon-button--size-24 icon-button--rounded";
     removeButton.type = "button";
     removeButton.setAttribute("aria-label", `Remove ${prop.name} prop`);
     removeIcon.className = "subtract-icon";
@@ -1381,10 +1381,9 @@ function setAddPropMenuOpen(isOpen, focusPosition = "selected") {
   addPropMenu.hidden = !isOpen;
   addPropButton.setAttribute("aria-expanded", String(isOpen));
   if (!isOpen) return;
-  const selectedIndex = addPropTypeOptions.findIndex((option) => option.getAttribute("aria-selected") === "true");
   const index = focusPosition === "last"
     ? addPropTypeOptions.length - 1
-    : selectedIndex >= 0 ? selectedIndex : 0;
+    : 0;
   requestAnimationFrame(() => addPropTypeOptions[index]?.focus());
 }
 
@@ -1392,12 +1391,10 @@ function selectAddPropType(option) {
   if (!(option instanceof HTMLButtonElement)) return;
   const type = option.dataset.propType;
   if (!type) return;
-  addPropTypeOptions.forEach((candidate) => {
-    candidate.setAttribute("aria-selected", String(candidate === option));
-  });
+  addPropTypeOptions.forEach((candidate) => candidate.setAttribute("aria-selected", "false"));
   addComponentProp(type);
   setAddPropMenuOpen(false);
-  addPropButton?.focus();
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 }
 
 function getCustomColorState(control) {

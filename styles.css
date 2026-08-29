@@ -435,15 +435,13 @@ textarea:focus-visible {
   flex: 0 0 24px;
 }
 
-.overflow-menu__icon {
-  display: block;
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  background:
-    radial-gradient(circle at 50% 3px, currentColor 1.5px, transparent 1.75px),
-    radial-gradient(circle at 50% 8px, currentColor 1.5px, transparent 1.75px),
-    radial-gradient(circle at 50% 13px, currentColor 1.5px, transparent 1.75px);
+.overflow-menu.is-open {
+  background: var(--layer-01);
+  border-radius: 4px;
+}
+
+.overflow-menu.is-open > .tooltip > .icon-button {
+  background: transparent;
 }
 
 .overflow-menu.is-open .tooltip > .tooltip__content {
@@ -468,6 +466,22 @@ textarea:focus-visible {
 
 .dropdown__option.overflow-menu__option .prop-type-icon {
   color: currentColor;
+}
+
+.dropdown__option.overflow-menu__option[aria-selected="true"] {
+  padding-right: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.dropdown__option.overflow-menu__option[aria-selected="true"]::after {
+  display: none;
+}
+
+.dropdown__option.overflow-menu__option[aria-selected="true"]:hover,
+.dropdown__option.overflow-menu__option[aria-selected="true"]:focus-visible {
+  background: var(--layer-hover-01);
+  color: var(--text-primary);
 }
 
 .props-table-body {
