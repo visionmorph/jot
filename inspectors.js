@@ -1555,22 +1555,92 @@ function hexToHsv(color) {
   };
 }
 
-const colorPickerPopup = document.createElement("div");
-colorPickerPopup.className = "color-picker-popup";
-colorPickerPopup.hidden = true;
-colorPickerPopup.setAttribute("role", "dialog");
-colorPickerPopup.setAttribute("aria-label", "Color picker");
-colorPickerPopup.innerHTML = `
-  <div class="color-picker-sv" data-picker-sv role="slider" aria-label="Saturation and value">${colorPickerKnobMarkup()}</div>
-  <div class="color-picker-sliders">
-    <div class="color-picker-slider color-picker-hue" data-picker-hue role="slider" aria-label="Hue">${colorPickerKnobMarkup()}</div>
-    <div class="color-picker-slider color-picker-opacity" data-picker-opacity role="slider" aria-label="Opacity">${colorPickerKnobMarkup()}</div>
-  </div>
-  <div class="color-picker-fields">
-    <div class="custom-color-value"><input class="custom-color-hex" type="text" inputmode="text" maxlength="6" aria-label="Hex color value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-picker-hex></div>
-    <div class="custom-color-divider" aria-hidden="true"></div>
-    <div class="custom-color-opacity"><input type="text" inputmode="decimal" maxlength="3" aria-label="Color opacity" data-picker-opacity-input><span aria-hidden="true">%</span></div>
-  </div>`;
+function bindNumberSuffixScrubber(suffix, input, root, getGestureTarget) {
+  if (!(suffix instanceof HTMLElement) || !(input instanceof HTMLInputElement) || !(root instanceof HTMLElement)) return;
+  suffix.tabIndex = 0;
+  let drag = null;
+
+  const finishDrag = (event, shouldFocus) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const didDrag = drag.didDrag;
+    const gestureTarget = drag.gestureTarget;
+    drag = null;
+    suffix.classList.remove("is-dragging");
+    root.classList.remove("is-scrubbing");
+    if (suffix.hasPointerCapture(event.pointerId)) suffix.releasePointerCapture(event.pointerId);
+    if (gestureTarget) endHistoryGesture(gestureTarget);
+    if (!didDrag && shouldFocus) input.focus();
+    event.preventDefault();
+  };
+
+  suffix.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const startValue = Number(input.value);
+    if (!Number.isFinite(startValue)) return;
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    const gestureTarget = getGestureTarget?.() ?? null;
+    if (gestureTarget) beginHistoryGesture(gestureTarget);
+    drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startValue,
+      didDrag: false,
+      gestureTarget,
+    };
+    root.classList.add("is-scrubbing");
+    suffix.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  suffix.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dragUnits = Math.trunc(event.clientX - drag.startX);
+    if (!drag.didDrag && Math.abs(dragUnits) < 2) return;
+    drag.didDrag = true;
+    suffix.classList.add("is-dragging");
+    const multiplier = event.shiftKey ? 10 : 1;
+    const minimum = Number(suffix.dataset.suffixMin ?? 0);
+    const maximum = Number(suffix.dataset.suffixMax ?? 100);
+    const nextValue = Math.min(maximum, Math.max(minimum, drag.startValue + dragUnits * multiplier));
+    if (input.value === String(nextValue)) return;
+    input.value = String(nextValue);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    event.preventDefault();
+  });
+
+  suffix.addEventListener("pointerup", (event) => finishDrag(event, true));
+  suffix.addEventListener("pointercancel", (event) => finishDrag(event, false));
+  suffix.addEventListener("lostpointercapture", (event) => finishDrag(event, false));
+  suffix.addEventListener("click", (event) => event.preventDefault());
+  suffix.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    input.focus();
+  });
+}
+
+function createColorPicker() {
+  const colorPicker = document.createElement("div");
+  colorPicker.className = "color-picker";
+  colorPicker.hidden = true;
+  colorPicker.setAttribute("role", "dialog");
+  colorPicker.setAttribute("aria-label", "Color picker");
+  colorPicker.dataset.colorPicker = "";
+  colorPicker.innerHTML = `
+    <div class="color-picker-sv" data-picker-sv role="slider" aria-label="Saturation and value">${colorPickerKnobMarkup()}</div>
+    <div class="color-picker-sliders">
+      <div class="color-picker-slider color-picker-hue" data-picker-hue role="slider" aria-label="Hue">${colorPickerKnobMarkup()}</div>
+      <div class="color-picker-slider color-picker-opacity" data-picker-opacity role="slider" aria-label="Opacity">${colorPickerKnobMarkup()}</div>
+    </div>
+    <div class="color-picker-fields">
+      <div class="custom-color-value"><input class="custom-color-hex" type="text" inputmode="text" maxlength="6" aria-label="Hex color value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-picker-hex></div>
+      <div class="custom-color-divider" aria-hidden="true"></div>
+      <div class="custom-color-opacity"><input type="text" inputmode="decimal" maxlength="3" aria-label="Color opacity" data-picker-opacity-input><span class="text-input__suffix" role="button" aria-label="Adjust color opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span></div>
+    </div>`;
+  return colorPicker;
+}
+
+const colorPickerPopup = createColorPicker();
 document.body.append(colorPickerPopup);
 
 const colorPickerSv = colorPickerPopup.querySelector("[data-picker-sv]");
@@ -1578,6 +1648,7 @@ const colorPickerHue = colorPickerPopup.querySelector("[data-picker-hue]");
 const colorPickerOpacity = colorPickerPopup.querySelector("[data-picker-opacity]");
 const colorPickerHex = colorPickerPopup.querySelector("[data-picker-hex]");
 const colorPickerOpacityInput = colorPickerPopup.querySelector("[data-picker-opacity-input]");
+const colorPickerOpacitySuffix = colorPickerPopup.querySelector("[data-number-suffix]");
 let activeColorControl = null;
 let pickerHue = 0;
 let pickerSaturation = 0;
@@ -1762,6 +1833,12 @@ colorPickerOpacityInput?.addEventListener("focus", () => {
 colorPickerOpacityInput?.addEventListener("blur", () => {
   if (activeColorControl) endHistoryGesture(activeColorControl);
 });
+bindNumberSuffixScrubber(
+  colorPickerOpacitySuffix,
+  colorPickerOpacityInput,
+  colorPickerOpacityInput?.closest(".custom-color-opacity"),
+  () => activeColorControl,
+);
 
 document.addEventListener("pointerdown", (event) => {
   if (colorPickerPopup.hidden || colorPickerPopup.contains(event.target)) return;
@@ -1784,6 +1861,7 @@ colorControls.forEach((control) => {
   const picker = control.querySelector("input[type='color']");
   const hexInput = control.querySelector("[data-color-hex]");
   const opacityInput = control.querySelector("[data-color-opacity]");
+  const opacitySuffix = control.querySelector("[data-number-suffix]");
   const section = control.closest("[data-paint-section]");
   const actionButton = section?.querySelector("[data-color-action]");
   const removeButton = control.querySelector("[data-color-remove-action]");
@@ -1872,6 +1950,12 @@ colorControls.forEach((control) => {
     }
     endHistoryGesture(control);
   });
+  bindNumberSuffixScrubber(
+    opacitySuffix,
+    opacityInput,
+    opacityInput?.closest(".custom-color-opacity"),
+    () => control,
+  );
 
   actionButton?.addEventListener("click", () => {
     const state = getCustomColorState(control);

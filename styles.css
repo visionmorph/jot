@@ -276,8 +276,31 @@ textarea:focus-visible {
   width: max-content;
 }
 
+.text-input__suffix {
+  display: inline-flex;
+  width: 20px;
+  height: 24px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 16px;
+  cursor: ew-resize;
+  user-select: none;
+}
+
+.text-input__suffix-value {
+  width: max-content;
+}
+
 .text-input__prefix:hover,
-.text-input__prefix.is-dragging {
+.text-input__prefix.is-dragging,
+.text-input__suffix:hover,
+.text-input__suffix.is-dragging {
   background: var(--layer-hover-01);
   color: var(--text-primary);
 }
@@ -2303,7 +2326,13 @@ textarea:focus-visible {
   height: 4px;
   flex: 0 0 4px;
   border-radius: 2px;
-  background: var(--background-brand);
+  background: var(--link-primary);
+}
+
+.frame-alignment-option:hover .alignment-lines > span,
+.frame-alignment-option.is-selected .alignment-lines > span,
+.frame-alignment-option.is-selected:hover .alignment-lines > span {
+  background: var(--link-primary-hover);
 }
 
 .alignment-lines > span:last-child {
@@ -2643,7 +2672,7 @@ textarea:focus-visible {
 .size-mode-combobox .dropdown__input {
   width: 0;
   min-width: 0;
-  padding: 4px 4px;
+  padding: 4px 0;
   flex: 1 1 0;
 }
 
@@ -2728,7 +2757,7 @@ textarea:focus-visible {
   min-width: 0;
   height: 24px;
   margin: 0;
-  padding: 4px 4px 4px 8px;
+  padding: 4px 0 4px 8px;
   border: 0;
   outline: 0;
   background: transparent;
@@ -2916,7 +2945,7 @@ textarea:focus-visible {
   align-items: center;
   min-width: 0;
   height: 24px;
-  padding: 4px 8px;
+  padding: 4px;
   flex: 1 1 auto;
   gap: 4px;
 }
@@ -2936,9 +2965,9 @@ textarea:focus-visible {
 
 .custom-color-swatch-fill {
   display: block;
-  width: 12px;
-  height: 12px;
-  flex: 0 0 12px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
   border-radius: 2px;
   background: transparent;
 }
@@ -2947,7 +2976,7 @@ textarea:focus-visible {
   display: none;
 }
 
-.color-picker-popup {
+.color-picker {
   position: fixed;
   z-index: 1001;
   display: flex;
@@ -2961,7 +2990,7 @@ textarea:focus-visible {
   touch-action: none;
 }
 
-.color-picker-popup[hidden] {
+.color-picker[hidden] {
   display: none;
 }
 
@@ -3065,7 +3094,7 @@ textarea:focus-visible {
 }
 
 .color-picker-fields .custom-color-value {
-  padding-left: 8px;
+  padding: 4px;
 }
 
 .color-picker-fields .custom-color-divider {
@@ -3101,12 +3130,13 @@ textarea:focus-visible {
 }
 
 .custom-color-opacity {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 64px;
   height: 24px;
-  padding: 4px 8px;
+  padding: 0;
   flex: 0 0 64px;
   gap: 0;
   color: var(--text-secondary);
@@ -3116,7 +3146,9 @@ textarea:focus-visible {
 }
 
 .custom-color-opacity input {
-  width: 24px;
+  width: 44px;
+  padding-left: 8px;
+  flex: 1 1 auto;
   text-align: left;
 }
 
@@ -3145,10 +3177,25 @@ textarea:focus-visible {
   outline: 0;
 }
 
-.custom-color-opacity:focus-within,
-.custom-color-control:has(.custom-color-value:focus-within) {
+.custom-color-control:has(.custom-color-value:focus-within),
+.custom-color-control.is-scrubbing {
   outline: 1px solid var(--focus);
   outline-offset: -1px;
+}
+
+.custom-color-opacity:focus-within {
+  outline: 0;
+}
+
+.custom-color-opacity:focus-within::after,
+.custom-color-opacity.is-scrubbing::after {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 1px solid var(--focus);
+  border-radius: 4px;
+  pointer-events: none;
+  content: "";
 }
 
 .custom-color-remove-action {
