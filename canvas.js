@@ -1338,12 +1338,8 @@ function createCanvasTextRecord(parentRecord, x, y, options = {}) {
   });
   text.addEventListener("input", () => {
     if (!record.isNew) recordHistoryForGesture(text);
-    const hasContent = (text.textContent ?? "").length > 0;
-    componentProps.forEach((prop) => {
-      if (prop.type === "string" && prop.targetTextId === record.id) {
-        prop.defaultValue = text.textContent ?? "";
-      }
-    });
+    const currentText = syncTextRecordContent(record, text.textContent ?? "", { writeElement: false });
+    const hasContent = currentText.length > 0;
     text.classList.toggle("is-new-empty", record.isNew && !hasContent);
     const textKey = getLayerKey("text", record.id);
     if (record.isNew && hasContent && !selectedLayerKeys.has(textKey)) {
@@ -1355,6 +1351,7 @@ function createCanvasTextRecord(parentRecord, x, y, options = {}) {
     if (variantInstances.length > 0) scheduleVariantInstanceRender();
     redoHistory.length = 0;
     renderTree();
+    renderComponentProps();
   });
   text.addEventListener("blur", () => {
     if (isRestoringHistory) return;

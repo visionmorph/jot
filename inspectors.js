@@ -1067,13 +1067,17 @@ function renderComponentProps() {
           instance.propValues[prop.variantPropId],
         )
         : Boolean(prop.defaultValue);
+      const valueToggle = document.createElement("div");
+      valueToggle.className = "text-toggle prop-boolean-value-toggle";
+      valueToggle.setAttribute("role", "group");
+      valueToggle.setAttribute("aria-label", `${prop.name} value`);
       [false, true].forEach((optionValue) => {
         const valueButton = document.createElement("button");
-        valueButton.className = "tag";
-        valueButton.dataset.tagValue = "";
+        valueButton.className = "text-toggle__item";
         valueButton.type = "button";
         valueButton.textContent = String(optionValue);
-        valueButton.classList.toggle("is-active", optionValue === currentValue);
+        valueButton.classList.toggle("is-selected", optionValue === currentValue);
+        valueButton.setAttribute("aria-pressed", String(optionValue === currentValue));
         valueButton.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
         valueButton.addEventListener("click", () => {
           if (!instance || currentValue === optionValue) return;
@@ -1082,8 +1086,9 @@ function renderComponentProps() {
           renderVariantInstances();
           renderComponentProps();
         });
-        defaultCell.append(valueButton);
+        valueToggle.append(valueButton);
       });
+      defaultCell.append(valueToggle);
       const booleanDefaultLabel = document.createElement("label");
       const booleanDefaultSelect = document.createElement("select");
       booleanDefaultLabel.className = "prop-boolean-default";
@@ -1114,23 +1119,29 @@ function renderComponentProps() {
       valueInput.type = "text";
       valueInput.value = String(prop.defaultValue ?? "");
       valueInput.setAttribute("aria-label", `Default ${prop.name} value`);
-      const commitStringValue = () => {
-        if (valueInput.value === String(prop.defaultValue ?? "")) return;
-        recordHistoryForGesture(valueInput);
-        prop.defaultValue = valueInput.value;
+      const commitStringValue = (renderPanel = false) => {
+        const didChange = valueInput.value !== String(prop.defaultValue ?? "");
+        if (didChange) recordHistoryForGesture(valueInput);
         const target = getTextRecord(prop.targetTextId);
         if (target) {
-          target.element.textContent = valueInput.value;
+          syncTextRecordContent(target, valueInput.value);
           applyLayerSizing("text", target);
           requestAnimationFrame(syncResizeOverlay);
+          renderTree();
         }
-        if (variantInstances.length > 0) scheduleVariantInstanceRender();
-        redoHistory.length = 0;
+        if (didChange) {
+          if (variantInstances.length > 0) scheduleVariantInstanceRender();
+          redoHistory.length = 0;
+        }
+        if (renderPanel) renderComponentProps();
       };
-      valueInput.addEventListener("input", commitStringValue);
-      valueInput.addEventListener("blur", commitStringValue);
+      valueInput.addEventListener("input", () => commitStringValue());
+      valueInput.addEventListener("blur", () => commitStringValue(true));
       bindHistoryGesture(valueInput);
       defaultCell.append(valueInput);
+    } else if (prop.type === "action" && prop.property === "onClick") {
+      defaultCell.textContent = "—";
+      defaultCell.setAttribute("aria-label", "Value supplied by component consumer");
     } else {
       const valueTag = document.createElement("span");
       valueTag.className = "tag";

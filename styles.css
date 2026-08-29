@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --text-primary: #ffffff;
   --icon-primary: #f4f4f4;
   --icon-secondary: #c1c7cd;
@@ -35,10 +36,6 @@
 
 * {
   box-sizing: border-box;
-}
-
-select {
-  color-scheme: dark;
 }
 
 html,
@@ -535,7 +532,6 @@ textarea:focus-visible {
 
 .prop-select {
   padding: 8px 16px;
-  color-scheme: dark;
   appearance: none;
 }
 
@@ -622,6 +618,7 @@ textarea:focus-visible {
   align-items: flex-start;
   justify-content: flex-start;
   padding: 4px 16px;
+  color: var(--text-primary);
   row-gap: 4px;
   column-gap: 4px;
   flex-wrap: wrap;
@@ -646,7 +643,7 @@ textarea:focus-visible {
   align-items: center;
   width: fit-content;
   height: 24px;
-  padding: 0 8px;
+  padding: 0 0 0 8px;
   gap: 4px;
   border-radius: 12px;
   background: var(--layer-01);
@@ -2870,7 +2867,6 @@ textarea:focus-visible {
   border-radius: 4px;
   background: var(--layer-01);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-  color-scheme: dark;
 }
 
 .dropdown__option {
@@ -3205,11 +3201,11 @@ textarea:focus-visible {
 }
 
 .custom-color-opacity input {
-  width: auto;
-  padding-left: 8px;
+  width: 40px;
+  height: 100%;
+  padding-left: 0;
   flex: 0 0 auto;
-  field-sizing: content;
-  text-align: left;
+  text-align: center;
 }
 
 .custom-color-divider {

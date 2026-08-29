@@ -482,6 +482,18 @@ function getTextRecord(textId) {
   return textRecords.find((record) => record.id === textId);
 }
 
+function syncTextRecordContent(record, value, { writeElement = true } = {}) {
+  if (!record?.element) return "";
+  const text = String(value ?? "");
+  record.name = text;
+  if (writeElement && record.element.textContent !== text) record.element.textContent = text;
+  record.element.setAttribute("aria-label", text || `Text ${record.id}`);
+  componentProps.forEach((prop) => {
+    if (prop.type === "string" && prop.targetTextId === record.id) prop.defaultValue = text;
+  });
+  return text;
+}
+
 function getVectorRecord(vectorId) {
   return vectorRecords.find((record) => record.id === vectorId);
 }

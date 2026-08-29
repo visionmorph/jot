@@ -256,6 +256,14 @@ function applyTreeNodeName(type, record, name) {
     record.frameRecord.element.setAttribute("aria-label", name);
     return;
   }
+  if (type === "text") {
+    syncTextRecordContent(record, name);
+    applyLayerSizing("text", record);
+    if (variantInstances.length > 0) scheduleVariantInstanceRender();
+    requestAnimationFrame(syncResizeOverlay);
+    renderComponentProps();
+    return;
+  }
   record.name = name;
   record.element.setAttribute("aria-label", name);
 }
