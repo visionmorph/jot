@@ -391,7 +391,7 @@ textarea:focus-visible {
 
 .props-table-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(240px, 1fr) 32px;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) 32px;
   width: 100%;
 }
 
