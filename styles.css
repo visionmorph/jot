@@ -2647,11 +2647,12 @@ textarea:focus-visible {
   flex: 1 1 0;
 }
 
-.size-mode-combobox__toggle {
+.size-mode-combobox .size-mode-combobox__toggle {
   display: flex;
-  width: auto;
+  width: max-content;
   min-width: 24px;
-  padding: 0 4px;
+  height: 24px;
+  padding: 4px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
@@ -2704,6 +2705,22 @@ textarea:focus-visible {
 .dropdown.is-open {
   outline: 1px solid var(--focus);
   outline-offset: -1px;
+}
+
+.size-mode-combobox:has(.dropdown__input:focus),
+.size-mode-combobox.is-open {
+  outline: 0;
+}
+
+.size-mode-combobox:has(.dropdown__input:focus)::after,
+.size-mode-combobox.is-open::after {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border: 1px solid var(--focus);
+  border-radius: 4px;
+  pointer-events: none;
+  content: "";
 }
 
 .dropdown__input {
