@@ -1087,7 +1087,12 @@ function renderComponentProps() {
       valueToggleTrack.append(valueToggleHandle);
       valueToggle.append(valueToggleTrack, valueToggleLabel);
       valueToggle.addEventListener("click", () => {
+        if (valueToggle.dataset.transitioning === "true") return;
         const nextValue = !currentValue;
+        const transitionDuration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 120;
+        valueToggle.dataset.transitioning = "true";
+        valueToggle.setAttribute("aria-checked", String(nextValue));
+        valueToggleLabel.textContent = nextValue ? "True" : "False";
         recordHistory();
         if (instance) {
           instance.propValues[prop.variantPropId] = nextValue;
@@ -1096,7 +1101,18 @@ function renderComponentProps() {
           prop.defaultValue = nextValue;
           syncComponentPropVariantDefinition(prop);
         }
-        renderComponentProps();
+        if (transitionDuration === 0) {
+          renderComponentProps();
+          return;
+        }
+        let didFinishTransition = false;
+        const finishTransition = () => {
+          if (didFinishTransition) return;
+          didFinishTransition = true;
+          renderComponentProps();
+        };
+        valueToggleHandle.addEventListener("transitionend", finishTransition, { once: true });
+        window.setTimeout(finishTransition, transitionDuration + 60);
       });
       defaultCell.append(valueToggle);
       const booleanDefaultLabel = document.createElement("label");
