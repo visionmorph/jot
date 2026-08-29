@@ -97,8 +97,8 @@ document.addEventListener("focusin", (event) => {
 
 document.querySelectorAll("[data-text-input-prefix]").forEach((prefix) => {
   if (!(prefix instanceof HTMLElement)) return;
-  const shell = prefix.closest(".text-input-shell");
-  const input = shell?.querySelector("input.text-input");
+  const shell = prefix.closest(".text-input-shell, .size-mode-combobox");
+  const input = shell?.querySelector("input.text-input, input.dropdown__input");
   if (!(input instanceof HTMLInputElement)) return;
 
   let drag = null;
@@ -120,7 +120,7 @@ document.querySelectorAll("[data-text-input-prefix]").forEach((prefix) => {
     const startValues = input.value.split(",").map((part) => Number(part.trim()));
     if (startValues.length < 1 || startValues.length > 2 || startValues.some((value) => !Number.isFinite(value))) return;
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    document.querySelectorAll(".text-input-shell.is-scrubbing").forEach((activeShell) => {
+    document.querySelectorAll(".text-input-shell.is-scrubbing, .size-mode-combobox.is-scrubbing").forEach((activeShell) => {
       if (activeShell !== shell) activeShell.classList.remove("is-scrubbing");
     });
     drag = {

@@ -263,7 +263,7 @@ function syncSelectedTextSizeInputs() {
     const mode = getLayerDimensionMode(element, dimension, "hug");
     input.value = mode === "fixed"
       ? element.dataset[dimension] || String(Math.round(bounds[dimension]))
-      : mode === "fill" ? "Fill" : "Hug";
+      : String(Math.round(bounds[dimension]));
     const wrapper = input.closest("[data-size-combobox]");
     if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
   });
@@ -359,6 +359,7 @@ function syncInspectorToSelectedFrame() {
   const record = getSelectedFrameRecord();
   if (!record) return;
   const { element } = record;
+  const bounds = element.getBoundingClientRect();
   const isVariantSelected = selectedVariantInstanceId !== null;
   const getValue = (property, fallback) => isVariantSelected
     ? getSelectedVariantTargetStyleOverride(property, fallback)
@@ -395,10 +396,13 @@ function syncInspectorToSelectedFrame() {
     const dimension = input.dataset.frameSize;
     if (dimension !== "width" && dimension !== "height") return;
     const override = getValue(dimension, "");
-    const mode = getLayerDimensionMode(element, dimension);
-    input.value = override || (mode === "fixed"
-      ? element.dataset[dimension] || "100"
-      : mode === "fill" ? "Fill" : "Hug");
+    const mode = isVariantSelected && override
+      ? override === "100%" ? "fill" : override === "auto" ? "hug" : "fixed"
+      : getLayerDimensionMode(element, dimension);
+    const overriddenNumber = Number.parseFloat(override);
+    input.value = mode === "fixed"
+      ? String(Number.isFinite(overriddenNumber) ? overriddenNumber : element.dataset[dimension] || Math.round(bounds[dimension]))
+      : String(Math.round(bounds[dimension]));
     const wrapper = input.closest("[data-size-combobox]");
     if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
   });
@@ -2187,18 +2191,34 @@ function setSizeComboboxOpen(wrapper, isOpen) {
     const otherInput = combobox.querySelector("input");
     const otherToggle = combobox.querySelector("[data-size-toggle]");
     if (otherMenu instanceof HTMLElement) otherMenu.hidden = true;
+    combobox.classList.remove("is-open");
     otherInput?.setAttribute("aria-expanded", "false");
     otherToggle?.setAttribute("aria-expanded", "false");
   });
   menu.hidden = !isOpen;
+  wrapper.classList.toggle("is-open", isOpen);
   input.setAttribute("aria-expanded", String(isOpen));
   toggle?.setAttribute("aria-expanded", String(isOpen));
+  if (isOpen) {
+    input.focus();
+    input.select();
+  }
 }
 
 function updateSizeOptionSelection(wrapper, mode) {
   wrapper.querySelectorAll("[data-size-option]").forEach((option) => {
     option.setAttribute("aria-selected", String(option.getAttribute("data-size-option") === mode));
   });
+  const toggleLabel = wrapper.querySelector("[data-size-toggle-label]");
+  if (toggleLabel instanceof HTMLElement) {
+    toggleLabel.textContent = mode === "hug" ? "Hug" : mode === "fill" ? "Fill" : "";
+  }
+  wrapper.dataset.sizeMode = mode;
+}
+
+function getRenderedSizeValue(element, dimension, fallback = 100) {
+  const renderedValue = Math.round(element.getBoundingClientRect()[dimension]);
+  return String(Number.isFinite(renderedValue) && renderedValue > 0 ? renderedValue : fallback);
 }
 
 function applySizeInputValue(input, rawValue = input.value, normalize = true) {
@@ -2221,24 +2241,38 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
     : null;
 
   if (selectedVariantInstanceId !== null && type === "frame" && record.isVariantInstance) {
+    const preservedFixedValue = fixedNumber ?? (
+      Number(element.dataset[dimension])
+      || Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(element.getBoundingClientRect()[dimension]))
+    );
     const value = numberMatch
       ? `${fixedNumber}px`
-      : requestedMode === "fill" ? "100%" : "auto";
+      : requestedMode === "fill" ? "100%" : requestedMode === "fixed" ? `${preservedFixedValue}px` : "auto";
     recordHistoryForGesture(input);
     setSelectedVariantFrameStyleOverride(dimension, value, { record: false });
-    if (normalize) input.value = numberMatch ? String(fixedNumber) : requestedMode === "fill" ? "Fill" : "Hug";
+    if (normalize) input.value = numberMatch || requestedMode === "fixed"
+      ? String(preservedFixedValue)
+      : getRenderedSizeValue(element, dimension);
+    const wrapper = input.closest("[data-size-combobox]");
+    if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, numberMatch ? "fixed" : requestedMode);
     return true;
   }
   if (selectedVariantInstanceId !== null && type === "text" && record.isVariantInstance) {
+    const preservedFixedValue = fixedNumber ?? (
+      Number(element.dataset[dimension])
+      || Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(element.getBoundingClientRect()[dimension]))
+    );
     const value = numberMatch
       ? `${fixedNumber}px`
-      : requestedMode === "fill" ? "100%" : "auto";
+      : requestedMode === "fill" ? "100%" : requestedMode === "fixed" ? `${preservedFixedValue}px` : "auto";
     recordHistoryForGesture(input);
     element.style[dimension] = value;
     element.dataset[`${dimension}Mode`] = numberMatch ? "fixed" : requestedMode;
-    if (numberMatch) element.dataset[dimension] = String(fixedNumber);
+    if (numberMatch || requestedMode === "fixed") element.dataset[dimension] = String(preservedFixedValue);
     setSelectedVariantLayerOverride(dimension, value);
-    if (normalize) input.value = numberMatch ? String(fixedNumber) : requestedMode === "fill" ? "Fill" : "Hug";
+    if (normalize) input.value = numberMatch || requestedMode === "fixed"
+      ? String(preservedFixedValue)
+      : getRenderedSizeValue(element, dimension);
     const wrapper = input.closest("[data-size-combobox]");
     if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, numberMatch ? "fixed" : requestedMode);
     requestAnimationFrame(syncResizeOverlay);
@@ -2259,7 +2293,9 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
   element.dataset[`${dimension}Mode`] = mode;
   if (mode === "fixed") element.dataset[dimension] = String(fixedValue);
   applyLayerSizing(type, record);
-  if (normalize) input.value = mode === "fixed" ? String(fixedValue) : mode === "fill" ? "Fill" : "Hug";
+  if (normalize) input.value = mode === "fixed"
+    ? String(fixedValue)
+    : getRenderedSizeValue(element, dimension);
   const wrapper = input.closest("[data-size-combobox]");
   if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
   requestAnimationFrame(syncResizeOverlay);
@@ -2273,10 +2309,18 @@ sizeModeComboboxes.forEach((wrapper) => {
   if (!(input instanceof HTMLInputElement) || !(menu instanceof HTMLElement)) return;
 
   input.addEventListener("focus", () => input.select());
-  input.addEventListener("input", () => applySizeInputValue(input, input.value, false));
+  input.addEventListener("input", () => {
+    input.dataset.sizeInputDirty = "true";
+    applySizeInputValue(input, input.value, false);
+  });
   input.addEventListener("blur", (event) => {
     if (event.relatedTarget instanceof Node && wrapper.contains(event.relatedTarget)) return;
-    if (!applySizeInputValue(input)) {
+    const wasEdited = input.dataset.sizeInputDirty === "true";
+    delete input.dataset.sizeInputDirty;
+    if (wasEdited && !applySizeInputValue(input)) {
+      if (input.dataset.frameSize) syncInspectorToSelectedFrame();
+      else syncInspectorToSelectedText();
+    } else if (!wasEdited) {
       if (input.dataset.frameSize) syncInspectorToSelectedFrame();
       else syncInspectorToSelectedText();
     }
@@ -2298,7 +2342,12 @@ sizeModeComboboxes.forEach((wrapper) => {
     }
     if (event.key !== "Enter") return;
     event.preventDefault();
-    if (!applySizeInputValue(input)) {
+    const wasEdited = input.dataset.sizeInputDirty === "true";
+    delete input.dataset.sizeInputDirty;
+    if (wasEdited && !applySizeInputValue(input)) {
+      if (input.dataset.frameSize) syncInspectorToSelectedFrame();
+      else syncInspectorToSelectedText();
+    } else if (!wasEdited) {
       if (input.dataset.frameSize) syncInspectorToSelectedFrame();
       else syncInspectorToSelectedText();
     }

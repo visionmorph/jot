@@ -140,24 +140,24 @@
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="frame-size-label">Size</span>
             <div class="layer-size-row" role="group" aria-labelledby="frame-size-label">
-              <div class="prefixed-number-control size-mode-combobox" data-size-combobox="frame-width">
-                <span class="number-control-prefix" aria-hidden="true">w</span>
-                <input aria-label="Frame width" data-frame-size="width" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-width-size-menu" />
-                <button class="inspector-combobox-toggle icon-margin" type="button" aria-label="Open frame width sizing options" aria-expanded="false" data-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
-                <div class="inspector-combobox-menu" id="frame-width-size-menu" role="listbox" data-size-menu hidden>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fixed">Fixed</button>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="hug">Hug</button>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fill">Fill</button>
+              <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="frame-width">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
+                <input class="dropdown__input" aria-label="Frame width" data-frame-size="width" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-width-size-menu" />
+                <button class="dropdown__toggle size-mode-combobox__toggle" type="button" aria-label="Open frame width sizing options" aria-expanded="false" data-size-toggle><span class="size-mode-combobox__toggle-label" data-size-toggle-label></span><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="frame-width-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fixed">Fixed width</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="hug">Hug content</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fill">Fill container</button>
                 </div>
               </div>
-              <div class="prefixed-number-control size-mode-combobox" data-size-combobox="frame-height">
-                <span class="number-control-prefix" aria-hidden="true">h</span>
-                <input aria-label="Frame height" data-frame-size="height" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-height-size-menu" />
-                <button class="inspector-combobox-toggle icon-margin" type="button" aria-label="Open frame height sizing options" aria-expanded="false" data-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
-                <div class="inspector-combobox-menu" id="frame-height-size-menu" role="listbox" data-size-menu hidden>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fixed">Fixed</button>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="hug">Hug</button>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fill">Fill</button>
+              <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="frame-height">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">h</span></span>
+                <input class="dropdown__input" aria-label="Frame height" data-frame-size="height" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-height-size-menu" />
+                <button class="dropdown__toggle size-mode-combobox__toggle" type="button" aria-label="Open frame height sizing options" aria-expanded="false" data-size-toggle><span class="size-mode-combobox__toggle-label" data-size-toggle-label></span><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="frame-height-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fixed">Fixed height</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="hug">Hug content</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fill">Fill container</button>
                 </div>
               </div>
             </div>
@@ -356,24 +356,24 @@
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="text-layer-size-label">Size</span>
             <div class="layer-size-row" role="group" aria-labelledby="text-layer-size-label">
-              <div class="prefixed-number-control size-mode-combobox" data-size-combobox="text-width">
-                <span class="number-control-prefix" aria-hidden="true">w</span>
-                <input aria-label="Text width" data-text-layer-size="width" type="text" inputmode="decimal" value="Hug" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-width-size-menu" />
-                <button class="inspector-combobox-toggle icon-margin" type="button" aria-label="Open text width sizing options" aria-expanded="false" data-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
-                <div class="inspector-combobox-menu" id="text-width-size-menu" role="listbox" data-size-menu hidden>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fixed">Fixed</button>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="hug">Hug</button>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fill">Fill</button>
+              <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="text-width">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
+                <input class="dropdown__input" aria-label="Text width" data-text-layer-size="width" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-width-size-menu" />
+                <button class="dropdown__toggle size-mode-combobox__toggle" type="button" aria-label="Open text width sizing options" aria-expanded="false" data-size-toggle><span class="size-mode-combobox__toggle-label" data-size-toggle-label>Hug</span><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="text-width-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fixed">Fixed width</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="hug">Hug content</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fill">Fill container</button>
                 </div>
               </div>
-              <div class="prefixed-number-control size-mode-combobox" data-size-combobox="text-height">
-                <span class="number-control-prefix" aria-hidden="true">h</span>
-                <input aria-label="Text height" data-text-layer-size="height" type="text" inputmode="decimal" value="Hug" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-height-size-menu" />
-                <button class="inspector-combobox-toggle icon-margin" type="button" aria-label="Open text height sizing options" aria-expanded="false" data-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
-                <div class="inspector-combobox-menu" id="text-height-size-menu" role="listbox" data-size-menu hidden>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fixed">Fixed</button>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="hug">Hug</button>
-                  <button class="inspector-combobox-option" type="button" role="option" data-size-option="fill">Fill</button>
+              <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="text-height">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">h</span></span>
+                <input class="dropdown__input" aria-label="Text height" data-text-layer-size="height" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-height-size-menu" />
+                <button class="dropdown__toggle size-mode-combobox__toggle" type="button" aria-label="Open text height sizing options" aria-expanded="false" data-size-toggle><span class="size-mode-combobox__toggle-label" data-size-toggle-label>Hug</span><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="text-height-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fixed">Fixed height</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="hug">Hug content</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fill">Fill container</button>
                 </div>
               </div>
             </div>
