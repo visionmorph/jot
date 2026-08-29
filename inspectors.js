@@ -890,8 +890,8 @@ function renderComponentProps() {
           recordHistory();
           instance.propValues[prop.variantPropId] = value;
         } else return;
-        defaultCell.querySelectorAll(".prop-value-tag--editable").forEach((tag) => {
-          tag.closest(".prop-value-tag")?.classList.toggle("is-active", tag.value === value);
+        defaultCell.querySelectorAll("[data-tag-value]").forEach((tagValue) => {
+          tagValue.closest(".tag")?.classList.toggle("is-active", tagValue.value === value);
         });
         renderVariantInstances();
       };
@@ -901,10 +901,11 @@ function renderComponentProps() {
         const dismissTooltip = document.createElement("span");
         const dismissButton = document.createElement("button");
         const dismissTooltipContent = document.createElement("span");
-        valueTag.className = "prop-value-tag";
+        valueTag.className = "tag";
         valueTag.tabIndex = 0;
         valueInput.type = "text";
-        valueInput.className = "prop-value-tag-text prop-value-tag--editable";
+        valueInput.className = "tag__text";
+        valueInput.dataset.tagValue = "";
         valueInput.value = optionValue;
         valueInput.readOnly = true;
         valueInput.tabIndex = -1;
@@ -1015,7 +1016,7 @@ function renderComponentProps() {
       const focusAddValueInput = () => {
         requestAnimationFrame(() => {
           propRowsContainer
-            ?.querySelector(`[data-prop-value-cell="${prop.id}"] .prop-value-tag-add-input`)
+            ?.querySelector(`[data-prop-value-cell="${prop.id}"] .tag__add-input`)
             ?.focus();
         });
       };
@@ -1035,7 +1036,7 @@ function renderComponentProps() {
         if (retainFocus) focusAddValueInput();
         return true;
       };
-      addValueInput.className = "prop-value-tag-add-input";
+      addValueInput.className = "tag__add-input";
       addValueInput.type = "text";
       const propName = prop.name.trim().toLowerCase();
       const placeholderName = propName === "size" || propName === "type" ? propName : "variant";
@@ -1052,7 +1053,7 @@ function renderComponentProps() {
       });
       addValueInput.addEventListener("blur", () => addValue());
       defaultCell.addEventListener("pointerdown", (event) => {
-        if (event.target instanceof Element && event.target.closest(".prop-value-tag, .prop-value-tag-add-input")) return;
+        if (event.target instanceof Element && event.target.closest(".tag, .tag__add-input")) return;
         event.preventDefault();
         addValueInput.focus();
         addValueInput.setSelectionRange(0, 0);
@@ -1068,7 +1069,8 @@ function renderComponentProps() {
         : Boolean(prop.defaultValue);
       [false, true].forEach((optionValue) => {
         const valueButton = document.createElement("button");
-        valueButton.className = "prop-value-tag prop-value-tag--editable";
+        valueButton.className = "tag";
+        valueButton.dataset.tagValue = "";
         valueButton.type = "button";
         valueButton.textContent = String(optionValue);
         valueButton.classList.toggle("is-active", optionValue === currentValue);
@@ -1131,7 +1133,7 @@ function renderComponentProps() {
       defaultCell.append(valueInput);
     } else {
       const valueTag = document.createElement("span");
-      valueTag.className = "prop-value-tag";
+      valueTag.className = "tag";
       if (prop.type === "boolean") {
         valueTag.textContent = Boolean(prop.defaultValue) ? "True" : "False";
         valueTag.setAttribute("aria-label", `Default Boolean value: ${valueTag.textContent}`);

@@ -311,7 +311,7 @@ textarea:focus-visible {
   min-width: 0;
   flex: 1 1 auto;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 0 0 8px;
 }
 
 .text-input-shell--prefix .text-input__text-wrapper {
@@ -631,7 +631,7 @@ textarea:focus-visible {
   padding: 0;
 }
 
-.props-property-row .props-table-value-cell:has(.prop-value-tag-add-input:focus) {
+.props-property-row .props-table-value-cell:has(.tag__add-input:focus) {
   outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
@@ -641,12 +641,12 @@ textarea:focus-visible {
   outline-offset: -1px;
 }
 
-.prop-value-tag {
+.tag {
   display: inline-flex;
   align-items: center;
   width: fit-content;
   height: 24px;
-  padding: 0 0 0 8px;
+  padding: 0 8px;
   gap: 4px;
   border-radius: 12px;
   background: var(--layer-01);
@@ -659,7 +659,7 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
 }
 
-.prop-value-tag-text {
+.tag__text {
   min-width: 1ch;
   height: 24px;
   flex: 0 0 auto;
@@ -675,36 +675,36 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
-.prop-value-tag-text.prop-value-tag--editable {
+.tag__text[data-tag-value] {
   cursor: default;
 }
 
-.prop-value-tag-text.prop-value-tag--editable.is-editing:focus {
+.tag__text[data-tag-value].is-editing:focus {
   outline: 0;
 }
 
-.prop-value-tag:hover:not(:has([data-icon-button="prop-value-dismiss"]:hover)) {
+.tag:hover:not(:has([data-icon-button="prop-value-dismiss"]:hover)) {
   background: var(--layer-hover-01);
   color: var(--text-primary);
 }
 
-.prop-value-tag.is-active {
+.tag.is-active {
   background: var(--layer-selected-01);
   color: var(--text-primary);
 }
 
-.prop-value-tag:has(.prop-value-tag--editable.is-editing) {
+.tag:has(.tag__text.is-editing) {
   padding-right: 8px;
   background: transparent;
   color: var(--text-primary);
   outline: 1px solid var(--focus);
 }
 
-.prop-value-tag:focus:not(:has(.prop-value-tag--editable.is-editing)) {
+.tag:focus:not(:has(.tag__text.is-editing)) {
   outline: 1px solid var(--focus);
 }
 
-.prop-value-tag:has(.prop-value-tag--editable.is-editing) [data-prop-value-dismiss-tooltip] {
+.tag:has(.tag__text.is-editing) [data-prop-value-dismiss-tooltip] {
   display: none;
 }
 
@@ -730,7 +730,7 @@ textarea:focus-visible {
   font: inherit;
 }
 
-.prop-value-tag-add-input {
+.tag__add-input {
   min-width: 0;
   height: 24px;
   flex: 0 0 auto;
@@ -747,12 +747,12 @@ textarea:focus-visible {
   line-height: 16px;
 }
 
-.prop-value-tag-add-input::placeholder {
+.tag__add-input::placeholder {
   color: var(--text-placeholder);
   opacity: 1;
 }
 
-.prop-value-tag-add-input:focus {
+.tag__add-input:focus {
   outline: 0;
   color: var(--text-primary);
 }
