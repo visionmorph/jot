@@ -677,7 +677,7 @@ function createPropSelectIcon(iconType, record = null) {
 }
 
 function bindPropsActionTooltip(wrapper, button) {
-  const tooltipContent = wrapper.querySelector(".tooltip-content");
+  const tooltipContent = wrapper.querySelector(".tooltip__content");
   if (!(tooltipContent instanceof HTMLElement) || !(button instanceof HTMLButtonElement)) return;
   const positionTooltip = () => {
     const bounds = button.getBoundingClientRect();
@@ -986,14 +986,15 @@ function renderComponentProps() {
             focusValueCell();
           }
         });
-        dismissTooltip.className = "tooltip props-action-tooltip prop-value-tag-dismiss-tooltip";
+        dismissTooltip.className = "tooltip tooltip--top tooltip--align-center tooltip--fixed";
+        dismissTooltip.dataset.propValueDismissTooltip = "";
         dismissButton.className = "icon-button icon-button--size-24 icon-button--circle";
         dismissButton.dataset.iconButton = "prop-value-dismiss";
         dismissButton.type = "button";
         dismissButton.disabled = options.length <= 1;
         dismissButton.setAttribute("aria-label", `Dismiss ${optionValue}`);
         dismissButton.append(createSvgAssetIcon("close"));
-        dismissTooltipContent.className = "tooltip-content";
+        dismissTooltipContent.className = "tooltip__content";
         dismissTooltipContent.setAttribute("role", "tooltip");
         dismissTooltipContent.textContent = "Dismiss";
         dismissButton.addEventListener("click", (event) => {
@@ -1295,13 +1296,13 @@ function renderComponentProps() {
     const removeButton = document.createElement("button");
     const removeIcon = document.createElement("span");
     const removeTooltipContent = document.createElement("span");
-    removeTooltip.className = "tooltip props-action-tooltip";
+    removeTooltip.className = "tooltip tooltip--top tooltip--align-center tooltip--fixed";
     removeButton.className = "icon-button icon-button--size-32 icon-button--square";
     removeButton.type = "button";
     removeButton.setAttribute("aria-label", `Remove ${prop.name} prop`);
     removeIcon.className = "subtract-icon";
     removeIcon.setAttribute("aria-hidden", "true");
-    removeTooltipContent.className = "tooltip-content";
+    removeTooltipContent.className = "tooltip__content";
     removeTooltipContent.setAttribute("role", "tooltip");
     removeTooltipContent.textContent = "Remove";
     removeButton.append(removeIcon);
@@ -1953,7 +1954,7 @@ colorControls.forEach((control) => {
   bindNumberSuffixScrubber(
     opacitySuffix,
     opacityInput,
-    opacityInput?.closest(".custom-color-opacity"),
+    control,
     () => control,
   );
 
@@ -2779,7 +2780,7 @@ frameHtmlTagInput?.addEventListener("change", () => {
 
 addPropButton?.addEventListener("click", addComponentProp);
 
-const addPropTooltip = addPropButton?.closest(".props-action-tooltip");
+const addPropTooltip = addPropButton?.closest(".tooltip");
 if (addPropTooltip instanceof HTMLElement && addPropButton instanceof HTMLButtonElement) {
   bindPropsActionTooltip(addPropTooltip, addPropButton);
 }

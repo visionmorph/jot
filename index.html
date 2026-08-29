@@ -45,11 +45,11 @@
         <section class="sidebar-panel components-tree-panel" aria-labelledby="components-heading">
           <div class="components-heading-row">
             <h1 class="panel-heading" id="components-heading">Components</h1>
-            <span class="tooltip">
+            <span class="tooltip tooltip--bottom tooltip--align-end">
               <button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add component" data-add-component>
                 <span class="plus-icon" aria-hidden="true"></span>
               </button>
-              <span class="tooltip-content" role="tooltip">Add</span>
+              <span class="tooltip__content" role="tooltip">Add</span>
             </span>
           </div>
 
@@ -68,23 +68,23 @@
           </div>
         </div>
         <div class="toolbar" role="toolbar" aria-label="Canvas tools">
-          <span class="tooltip">
+          <span class="tooltip tooltip--top tooltip--align-center">
             <button class="icon-button icon-button--size-32 icon-button--rounded icon-button--icon-20 icon-button--toggle" type="button" aria-label="Select" aria-pressed="true" data-tool="select">
               <span class="tool-icon svg-icon svg-icon--cursor-2" aria-hidden="true"></span>
             </button>
-            <span class="tooltip-content" role="tooltip"><span>Cursor</span><span class="tooltip-kbd-group"><kbd>V</kbd></span></span>
+            <span class="tooltip__content" role="tooltip"><span>Cursor</span><kbd>V</kbd></span>
           </span>
-          <span class="tooltip">
+          <span class="tooltip tooltip--top tooltip--align-center">
             <button class="icon-button icon-button--size-32 icon-button--rounded icon-button--icon-20 icon-button--toggle" type="button" aria-label="Frame" aria-pressed="false" data-tool="frame">
               <svg class="tool-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M24 26V28H8V26H24ZM26 24V8C26 6.89543 25.1046 6 24 6H8C6.89543 6 6 6.89543 6 8V24C6 25.1046 6.89543 26 8 26V28C5.79086 28 4 26.2091 4 24V8C4 5.79086 5.79086 4 8 4H24C26.2091 4 28 5.79086 28 8V24C28 26.2091 26.2091 28 24 28V26C25.1046 26 26 25.1046 26 24Z" fill="currentColor" /></svg>
             </button>
-            <span class="tooltip-content" role="tooltip"><span>Frame</span><span class="tooltip-kbd-group"><kbd>A</kbd><kbd>F</kbd></span></span>
+            <span class="tooltip__content" role="tooltip"><span>Frame</span><kbd>F</kbd></span>
           </span>
-          <span class="tooltip">
+          <span class="tooltip tooltip--top tooltip--align-center">
             <button class="icon-button icon-button--size-32 icon-button--rounded icon-button--icon-20 icon-button--toggle" type="button" aria-label="Text" aria-pressed="false" data-tool="text">
               <span class="tool-icon svg-icon svg-icon--letter-t" aria-hidden="true"></span>
             </button>
-            <span class="tooltip-content" role="tooltip"><span>Text</span><span class="tooltip-kbd-group"><kbd>T</kbd></span></span>
+            <span class="tooltip__content" role="tooltip"><span>Text</span><kbd>T</kbd></span>
           </span>
           <input type="file" accept=".svg,image/svg+xml" data-vector-file-input hidden />
         </div>
@@ -117,11 +117,11 @@
         <section class="sidebar-panel frame-panel" aria-labelledby="frame-heading" data-frame-inspector hidden>
           <div class="panel-heading-wrap section-title-row component-inspector-title-row">
             <h2 class="panel-heading" id="frame-heading">Frame</h2>
-            <span class="tooltip" data-add-variant-action>
+            <span class="tooltip tooltip--bottom tooltip--align-end" data-add-variant-action>
               <button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add variant preview" data-add-variant>
                 <span class="svg-icon svg-icon--add-diamond" aria-hidden="true"></span>
               </button>
-              <span class="tooltip-content" role="tooltip">Add variant</span>
+              <span class="tooltip__content" role="tooltip">Add variant</span>
             </span>
           </div>
 
@@ -129,11 +129,11 @@
             <div class="inspector-section-divider" aria-hidden="true"></div>
             <h3 class="inspector-section-title">Layout</h3>
 
-          <div class="frame-direction-field">
+          <div class="text-toggle-field">
             <span class="inspector-label" id="frame-direction-label">Direction</span>
-            <div class="frame-direction-toggle" role="group" aria-labelledby="frame-direction-label">
-              <button class="frame-direction-option is-selected" type="button" aria-pressed="true" data-frame-direction="horizontal">Horizontal</button>
-              <button class="frame-direction-option" type="button" aria-pressed="false" data-frame-direction="vertical">Vertical</button>
+            <div class="text-toggle" role="group" aria-labelledby="frame-direction-label">
+              <button class="text-toggle__item is-selected" type="button" aria-pressed="true" data-frame-direction="horizontal">Horizontal</button>
+              <button class="text-toggle__item" type="button" aria-pressed="false" data-frame-direction="vertical">Vertical</button>
             </div>
           </div>
 
@@ -216,11 +216,11 @@
           <div class="inspector-field frame-padding-field">
             <div class="frame-padding-heading">
               <span class="inspector-label" id="frame-padding-label">Padding</span>
-              <span class="tooltip">
+              <span class="tooltip tooltip--top tooltip--align-center">
                 <button class="icon-button icon-button--size-24 icon-button--rounded icon-button--toggle" type="button" aria-label="Individual padding sides" aria-pressed="false" data-padding-mode-toggle>
                   <span class="svg-icon svg-icon--padding" aria-hidden="true"></span>
                 </button>
-                <span class="tooltip-content" role="tooltip">Padding</span>
+                <span class="tooltip__content" role="tooltip">Padding</span>
               </span>
             </div>
             <div class="frame-padding-grid" role="group" aria-labelledby="frame-padding-label" data-padding-sides hidden>
@@ -260,7 +260,7 @@
               <div class="inspector-section-divider" aria-hidden="true"></div>
               <div class="paint-section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
-                <span class="tooltip"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip" data-tooltip-content>Add</span></span>
+                <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
             </div>
             <div class="custom-color-control is-empty" data-color-control="frame-background" hidden>
@@ -277,7 +277,7 @@
               <span class="text-input__suffix" role="button" aria-label="Adjust frame background opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
             </div>
             <div class="custom-color-divider" aria-hidden="true"></div>
-            <span class="tooltip custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip">Remove</span></span>
+            <span class="tooltip tooltip--top tooltip--align-center custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
             </div>
           </div>
 
@@ -286,7 +286,7 @@
               <div class="inspector-section-divider" aria-hidden="true"></div>
               <div class="paint-section-title-row">
                 <h3 class="inspector-section-title">Border</h3>
-                <span class="tooltip"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame border" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip" data-tooltip-content>Add</span></span>
+                <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame border" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
             </div>
             <div class="custom-color-control is-empty" data-color-control="frame-outline" hidden>
@@ -303,7 +303,7 @@
               <span class="text-input__suffix" role="button" aria-label="Adjust frame outline opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
             </div>
             <div class="custom-color-divider" aria-hidden="true"></div>
-            <span class="tooltip custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame border" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip">Remove</span></span>
+            <span class="tooltip tooltip--top tooltip--align-center custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame border" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
             </div>
           </div>
 
@@ -467,7 +467,7 @@
               <div class="inspector-section-divider" aria-hidden="true"></div>
               <div class="paint-section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
-                <span class="tooltip" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add text fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip" data-tooltip-content>Add</span></span>
+                <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add text fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
             </div>
             <div class="custom-color-control" data-color-control="text">
@@ -484,7 +484,7 @@
               <span class="text-input__suffix" role="button" aria-label="Adjust text color opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
             </div>
             <div class="custom-color-divider" aria-hidden="true"></div>
-            <span class="tooltip custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove text fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip">Remove</span></span>
+            <span class="tooltip tooltip--top tooltip--align-center custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove text fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
             </div>
           </div>
         </section>
@@ -519,7 +519,7 @@
               <div class="inspector-section-divider" aria-hidden="true"></div>
               <div class="paint-section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
-                <span class="tooltip" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add vector fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip" data-tooltip-content>Add</span></span>
+                <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add vector fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
             </div>
             <div class="custom-color-control" data-color-control="vector">
@@ -536,7 +536,7 @@
               <span class="text-input__suffix" role="button" aria-label="Adjust vector color opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
             </div>
             <div class="custom-color-divider" aria-hidden="true"></div>
-            <span class="tooltip custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove vector fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip-content" role="tooltip">Remove</span></span>
+            <span class="tooltip tooltip--top tooltip--align-center custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove vector fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
             </div>
           </div>
         </section>
@@ -553,11 +553,11 @@
             <div class="props-table-cell props-table-value-cell" role="columnheader">Value</div>
             <div class="props-table-cell props-table-action-cell" role="columnheader">
               <span class="sr-only">Actions</span>
-              <span class="tooltip props-action-tooltip">
+              <span class="tooltip tooltip--top tooltip--align-center tooltip--fixed">
                 <button class="icon-button icon-button--size-32 icon-button--square" type="button" aria-label="Add prop" data-add-prop>
                   <span class="plus-icon" aria-hidden="true"></span>
                 </button>
-                <span class="tooltip-content" role="tooltip">Add</span>
+                <span class="tooltip__content" role="tooltip">Add</span>
               </span>
             </div>
           </div>

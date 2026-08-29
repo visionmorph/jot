@@ -642,7 +642,7 @@ textarea:focus-visible {
   outline: 1px solid var(--focus);
 }
 
-.prop-value-tag:has(.prop-value-tag--editable.is-editing) .prop-value-tag-dismiss-tooltip {
+.prop-value-tag:has(.prop-value-tag--editable.is-editing) [data-prop-value-dismiss-tooltip] {
   display: none;
 }
 
@@ -742,7 +742,7 @@ textarea:focus-visible {
   justify-content: space-between;
   width: 100%;
   height: 24px;
-  padding-left: 8px;
+  padding-left: 4px;
 }
 
 .panel-heading-wrap {
@@ -1388,7 +1388,7 @@ textarea:focus-visible {
   display: none;
 }
 
-.component-variant-size-tooltip {
+.component-variant-size-label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1422,43 +1422,11 @@ textarea:focus-visible {
   pointer-events: auto;
 }
 
-.canvas-add-variant-button[hidden],
-.canvas-add-variant-tooltip[hidden] {
-  display: none;
-}
-
 .canvas-add-variant-button .plus-icon {
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
   color: currentColor;
-}
-
-.canvas-add-variant-tooltip {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 50%;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: max-content;
-  min-height: 24px;
-  padding: 2px 8px;
-  border-radius: 2px;
-  box-sizing: border-box;
-  background: var(--background-inverse);
-  color: var(--text-inverse);
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 16px;
-  pointer-events: none;
-  transform: translateX(-50%);
-}
-
-.canvas-add-variant-button:hover + .canvas-add-variant-tooltip,
-.canvas-add-variant-button:focus-visible + .canvas-add-variant-tooltip {
-  display: flex;
 }
 
 .variant-instance-panel {
@@ -1929,6 +1897,10 @@ textarea:focus-visible {
   justify-content: center;
 }
 
+.tooltip[hidden] {
+  display: none;
+}
+
 .toolbar > .tooltip {
   width: 32px;
   height: 32px;
@@ -1941,7 +1913,7 @@ textarea:focus-visible {
   flex: 0 0 24px;
 }
 
-.tooltip-content {
+.tooltip__content {
   position: absolute;
   bottom: calc(100% + 4px);
   left: 50%;
@@ -1965,42 +1937,71 @@ textarea:focus-visible {
   transform: translateX(-50%);
 }
 
-.tooltip-kbd-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.tooltip-content kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 20px;
-  padding: 2px 4px;
-  border: 1px solid #C1C7CD;
-  border-radius: 2px;
-  color: var(--text-inverse);
+.tooltip__content kbd {
+  padding: 0;
+  border: 0;
+  color: var(--text-secondary);
   font-family: Inter, "Segoe UI", Arial, sans-serif;
   font-size: 14px;
   font-weight: 400;
   line-height: 16px;
-  text-align: center;
-  white-space: nowrap;
 }
 
-.components-heading-row .tooltip-content {
+.tooltip--top > .tooltip__content {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.tooltip--bottom > .tooltip__content {
   top: calc(100% + 4px);
-  right: 0;
   bottom: auto;
+}
+
+.tooltip--top.tooltip--align-start > .tooltip__content,
+.tooltip--bottom.tooltip--align-start > .tooltip__content {
+  right: auto;
+  left: 0;
+  transform: none;
+}
+
+.tooltip--top.tooltip--align-center > .tooltip__content,
+.tooltip--bottom.tooltip--align-center > .tooltip__content {
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tooltip--top.tooltip--align-end > .tooltip__content,
+.tooltip--bottom.tooltip--align-end > .tooltip__content {
+  right: 0;
   left: auto;
   transform: none;
 }
 
-.tooltip:hover > .tooltip-content {
+.tooltip--left > .tooltip__content,
+.tooltip--right > .tooltip__content {
+  top: 50%;
+  bottom: auto;
+}
+
+.tooltip--left > .tooltip__content {
+  right: calc(100% + 4px);
+  left: auto;
+  transform: translateY(-50%);
+}
+
+.tooltip--right > .tooltip__content {
+  right: auto;
+  left: calc(100% + 4px);
+  transform: translateY(-50%);
+}
+
+.tooltip:hover > .tooltip__content,
+.tooltip:focus-within > .tooltip__content {
   display: flex;
 }
 
-.props-action-tooltip .tooltip-content {
+.tooltip.tooltip--fixed > .tooltip__content {
   position: fixed;
   top: auto;
   right: auto;
@@ -2070,7 +2071,7 @@ textarea:focus-visible {
   gap: 12px;
 }
 
-.frame-direction-field {
+.text-toggle-field {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -2095,7 +2096,7 @@ textarea:focus-visible {
   gap: 12px;
 }
 
-.frame-direction-toggle {
+.text-toggle {
   display: flex;
   width: 100%;
   height: 24px;
@@ -2104,7 +2105,7 @@ textarea:focus-visible {
   background: var(--layer-01);
 }
 
-.frame-direction-option {
+.text-toggle__item {
   width: 100%;
   margin: 0;
   padding: 4px 8px;
@@ -2121,21 +2122,21 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
-.frame-direction-option.is-selected {
+.text-toggle__item.is-selected {
   background: var(--layer-selected-01);
   color: var(--text-primary);
 }
 
-.frame-direction-option:hover {
+.text-toggle__item:hover {
   background: var(--layer-hover-01);
   color: var(--text-primary);
 }
 
-.frame-direction-option.is-selected:hover {
+.text-toggle__item.is-selected:hover {
   background: var(--layer-selected-hover-01);
 }
 
-.frame-direction-option:focus {
+.text-toggle__item:focus {
   outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
@@ -2330,7 +2331,6 @@ textarea:focus-visible {
 }
 
 .frame-alignment-option:hover .alignment-lines > span,
-.frame-alignment-option.is-selected .alignment-lines > span,
 .frame-alignment-option.is-selected:hover .alignment-lines > span {
   background: var(--link-primary-hover);
 }
@@ -2555,14 +2555,6 @@ textarea:focus-visible {
 
 .component-inspector-title-row [data-add-variant-action][hidden] {
   display: none;
-}
-
-.component-inspector-title-row [data-add-variant-action] .tooltip-content {
-  top: calc(100% + 4px);
-  right: 0;
-  bottom: auto;
-  left: auto;
-  transform: none;
 }
 
 .paint-section-title-row .inspector-section-title {
@@ -2811,6 +2803,7 @@ textarea:focus-visible {
   border: 1px solid var(--border-subtle-00);
   border-radius: 4px;
   background: var(--layer-01);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
 }
 
@@ -3134,10 +3127,10 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 64px;
+  width: fit-content;
   height: 24px;
   padding: 0;
-  flex: 0 0 64px;
+  flex: 0 0 auto;
   gap: 0;
   color: var(--text-secondary);
   font-size: 14px;
@@ -3146,9 +3139,10 @@ textarea:focus-visible {
 }
 
 .custom-color-opacity input {
-  width: 44px;
+  width: auto;
   padding-left: 8px;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  field-sizing: content;
   text-align: left;
 }
 
@@ -3178,24 +3172,10 @@ textarea:focus-visible {
 }
 
 .custom-color-control:has(.custom-color-value:focus-within),
+.custom-color-control:has(.custom-color-opacity:focus-within),
 .custom-color-control.is-scrubbing {
   outline: 1px solid var(--focus);
   outline-offset: -1px;
-}
-
-.custom-color-opacity:focus-within {
-  outline: 0;
-}
-
-.custom-color-opacity:focus-within::after,
-.custom-color-opacity.is-scrubbing::after {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  border: 1px solid var(--focus);
-  border-radius: 4px;
-  pointer-events: none;
-  content: "";
 }
 
 .custom-color-remove-action {

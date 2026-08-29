@@ -11,21 +11,24 @@ selectionRectangle.className = "selection-rectangle";
 selectionRectangle.setAttribute("aria-hidden", "true");
 
 const variantActionOverlay = document.createElement("div");
-const variantSizeTooltip = document.createElement("span");
+const variantSizeLabel = document.createElement("span");
+const variantAddTooltip = document.createElement("span");
 const variantAddButton = document.createElement("button");
 const variantAddButtonTooltip = document.createElement("span");
 variantActionOverlay.className = "variant-action-overlay";
 variantActionOverlay.hidden = true;
-variantSizeTooltip.className = "component-variant-size-tooltip";
-variantSizeTooltip.setAttribute("aria-hidden", "true");
+variantSizeLabel.className = "component-variant-size-label";
+variantSizeLabel.setAttribute("aria-hidden", "true");
+variantAddTooltip.className = "tooltip tooltip--bottom tooltip--align-center";
 variantAddButton.className = "canvas-add-variant-button";
 variantAddButton.type = "button";
 variantAddButton.setAttribute("aria-label", "Add variant");
 variantAddButton.innerHTML = '<span class="plus-icon" aria-hidden="true"></span>';
-variantAddButtonTooltip.className = "canvas-add-variant-tooltip";
+variantAddButtonTooltip.className = "tooltip__content";
 variantAddButtonTooltip.setAttribute("role", "tooltip");
 variantAddButtonTooltip.textContent = "Add variant";
-variantActionOverlay.append(variantSizeTooltip, variantAddButton, variantAddButtonTooltip);
+variantAddTooltip.append(variantAddButton, variantAddButtonTooltip);
+variantActionOverlay.append(variantSizeLabel, variantAddTooltip);
 
 let selectionDrag = null;
 
@@ -198,8 +201,7 @@ function syncVariantActionOverlay() {
   const isComponentRootSelected = selectedComponentId === currentComponent?.id;
   const isVariantRootSelected = selectedVariantInstanceId !== null && selectedVariantLayerTarget === null;
   const canAddVariant = isComponentRootSelected || isVariantRootSelected;
-  variantAddButton.hidden = !canAddVariant;
-  variantAddButtonTooltip.hidden = !canAddVariant;
+  variantAddTooltip.hidden = !canAddVariant;
   const canvasBounds = canvas.getBoundingClientRect();
   const bounds = anchorElement.getBoundingClientRect();
   const selectedBounds = selectedElement.getBoundingClientRect();
@@ -224,7 +226,7 @@ function syncVariantActionOverlay() {
     const suffix = mode === "hug" ? " Hug" : mode === "fill" ? " Fill" : "";
     return `${value}${suffix}`;
   };
-  variantSizeTooltip.textContent = `${getDimensionLabel("width")} x ${getDimensionLabel("height")}`;
+  variantSizeLabel.textContent = `${getDimensionLabel("width")} x ${getDimensionLabel("height")}`;
   variantActionOverlay.hidden = false;
   variantActionOverlay.style.left = `${bounds.left - canvasBounds.left + bounds.width / 2}px`;
   variantActionOverlay.style.top = `${bounds.bottom - canvasBounds.top + 8}px`;
