@@ -10,7 +10,7 @@
   --background-hover: rgba(141, 141, 141, 0.16);
   --background-selected: rgba(141, 141, 141, 0.24);
   --background-selected-hover: rgba(141, 141, 141, 0.32);
-  --background-active: rgba(141, 141, 141, 0.4);
+  --background-active: rgba(141, 141, 141, 0.5);
   --layer-selected-01: #343a3f;
   --layer-selected-hover-01: #4d5358;
   --layer-02: #343a3f;
@@ -19,6 +19,9 @@
   --border-subtle-02: #4d5358;
   --icon-brand: #4589ff;
   --background-brand: var(--icon-brand);
+  --focus: #0f62fe;
+  --link-primary: #78a9ff;
+  --link-primary-hover: #a6c8ff;
   --layer-hover-01: #343a3f;
   --text-secondary: #c1c7cd;
   --text-placeholder: #8d8d8d;
@@ -61,7 +64,7 @@ input {
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -176,25 +179,33 @@ textarea:focus-visible {
   color: inherit;
 }
 
-.icon-button:hover,
-.icon-button:active {
+.icon-button:hover {
   background: var(--layer-hover-01);
   color: var(--icon-primary);
 }
 
+.icon-button:active {
+  background: var(--background-active);
+}
+
 .icon-button:focus,
 .icon-button:focus-visible {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
 .icon-button--toggle[aria-pressed="true"] {
   background: var(--background-selected);
-  color: var(--icon-brand);
+  color: var(--link-primary);
 }
 
 .icon-button--toggle[aria-pressed="true"]:hover {
   background: var(--background-selected-hover);
+  color: var(--link-primary-hover);
+}
+
+.icon-button--toggle[aria-pressed="true"]:active {
+  background: var(--background-active);
 }
 
 .text-input {
@@ -217,7 +228,7 @@ textarea:focus-visible {
 }
 
 .text-input:focus-visible {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -296,7 +307,7 @@ textarea:focus-visible {
 }
 
 .text-input-shell:focus-within {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -496,7 +507,7 @@ textarea:focus-visible {
 }
 
 .prop-control:focus-visible {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -504,7 +515,7 @@ textarea:focus-visible {
 .size-mode-combobox.is-selection-focused,
 .text-input-shell.is-selection-focused,
 .text-input-shell.is-scrubbing {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -535,12 +546,12 @@ textarea:focus-visible {
 }
 
 .props-property-row .props-table-value-cell:has(.prop-value-tag-add-input:focus) {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
 .props-property-row .props-table-value-cell:focus {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -600,11 +611,11 @@ textarea:focus-visible {
   padding-right: 8px;
   background: transparent;
   color: var(--text-primary);
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
 }
 
 .prop-value-tag:focus:not(:has(.prop-value-tag--editable.is-editing)) {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
 }
 
 .prop-value-tag:has(.prop-value-tag--editable.is-editing) .prop-value-tag-dismiss-tooltip {
@@ -855,7 +866,7 @@ textarea:focus-visible {
 }
 
 .export-button:focus-visible {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -1091,7 +1102,7 @@ textarea:focus-visible {
 }
 
 .branch-toggle:focus-visible {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -1975,7 +1986,7 @@ textarea:focus-visible {
 }
 
 .canvas-color-picker:focus-visible {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -2101,14 +2112,14 @@ textarea:focus-visible {
 }
 
 .frame-direction-option:focus {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
 .frame-alignment-option:focus {
   position: relative;
   z-index: 2;
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
 }
 
 .frame-alignment-field {
@@ -2139,7 +2150,7 @@ textarea:focus-visible {
   z-index: 3;
   display: none;
   box-sizing: border-box;
-  border: 1px solid var(--background-brand);
+  border: 1px solid var(--focus);
   border-radius: 3px;
   pointer-events: none;
   content: "";
@@ -2671,7 +2682,7 @@ textarea:focus-visible {
 }
 
 .prefixed-number-control:focus-within {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -2700,7 +2711,7 @@ textarea:focus-visible {
 
 .dropdown:has(.dropdown__input:focus),
 .dropdown.is-open {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -2773,16 +2784,21 @@ textarea:focus-visible {
   width: 100%;
   height: 24px;
   margin: 0;
-  padding: 4px 16px;
+  padding: 4px 4px 4px 8px;
   gap: 8px;
   border: 0;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 400;
   line-height: 16px;
   text-align: left;
   cursor: pointer;
+}
+
+.dropdown__option:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
 }
 
 .dropdown__option::after {
@@ -2836,7 +2852,7 @@ textarea:focus-visible {
 }
 
 .inspector-combobox-toggle:focus {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
@@ -3173,7 +3189,7 @@ textarea:focus-visible {
 
 .custom-color-opacity:focus-within,
 .custom-color-control:has(.custom-color-value:focus-within) {
-  outline: 1px solid var(--background-brand);
+  outline: 1px solid var(--focus);
   outline-offset: -1px;
 }
 
