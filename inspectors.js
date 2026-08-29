@@ -381,10 +381,13 @@ function syncInspectorToSelectedFrame() {
   });
   syncFrameAlignmentDistribution(element);
   if (frameGapInput instanceof HTMLInputElement) {
+    const fixedGap = element.dataset.gap || "10";
+    syncFrameGapOptions(fixedGap);
     const gap = getValue("gap", element.dataset.gapMode === "auto" ? "0px" : `${element.dataset.gap || "10"}px`);
-    frameGapInput.value = element.dataset.gapMode === "auto" && !isVariantSelected
-      ? "Auto"
+    const displayedGap = element.dataset.gapMode === "auto" && !isVariantSelected
+      ? "auto"
       : String(gap).replace(/px$/i, "");
+    setDropdownValue(frameGapInput, displayedGap);
   }
 
   frameSizeInputs.forEach((input) => {
@@ -2536,6 +2539,15 @@ function setFrameGapMenuOpen(isOpen) {
   setDropdownOpen(frameGapCombobox, isOpen);
 }
 
+function syncFrameGapOptions(fixedValue = "10") {
+  if (!(frameGapCombobox instanceof HTMLElement)) return;
+  const fixedOption = frameGapCombobox.querySelector("[data-gap-option='fixed']");
+  if (!(fixedOption instanceof HTMLButtonElement)) return;
+  const normalizedValue = String(Math.max(0, Number(fixedValue) || 0));
+  fixedOption.dataset.dropdownValue = normalizedValue;
+  fixedOption.textContent = normalizedValue;
+}
+
 function applyFrameGapValue(normalize = true) {
   const record = getSelectedFrameRecord();
   if (!record || !(frameGapInput instanceof HTMLInputElement)) return false;
@@ -2551,7 +2563,9 @@ function applyFrameGapValue(normalize = true) {
     const gap = `${Math.max(0, Number(variantMatch[1]))}px`;
     recordHistoryForGesture(frameGapInput);
     setSelectedVariantFrameStyleOverride("gap", gap, { record: false });
-    if (normalize) frameGapInput.value = String(Math.max(0, Number(variantMatch[1])));
+    const normalizedGap = String(Math.max(0, Number(variantMatch[1])));
+    syncFrameGapOptions(normalizedGap);
+    if (normalize) setDropdownValue(frameGapInput, normalizedGap);
     return true;
   }
 
@@ -2574,9 +2588,10 @@ function applyFrameGapValue(normalize = true) {
   record.element.dataset.gapMode = "fixed";
   record.element.dataset.gap = String(gap);
   record.element.style.gap = `${gap}px`;
+  syncFrameGapOptions(gap);
   applyFrameAlignment(record.element);
   syncFrameAlignmentDistribution(record.element);
-  if (normalize) frameGapInput.value = String(gap);
+  if (normalize) setDropdownValue(frameGapInput, gap);
   return true;
 }
 

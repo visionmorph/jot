@@ -182,6 +182,7 @@ textarea:focus-visible {
   color: var(--icon-primary);
 }
 
+.icon-button:focus,
 .icon-button:focus-visible {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
@@ -2697,9 +2698,8 @@ textarea:focus-visible {
   box-shadow: inset 0 0 0 1px var(--border-subtle-01);
 }
 
-.dropdown:focus-within,
-.dropdown.is-open,
-.dropdown.is-selection-focused {
+.dropdown:has(.dropdown__input:focus),
+.dropdown.is-open {
   outline: 1px solid var(--background-brand);
   outline-offset: -1px;
 }
@@ -2720,6 +2720,10 @@ textarea:focus-visible {
   letter-spacing: 0;
 }
 
+.dropdown__input:focus-visible {
+  outline: 0;
+}
+
 .dropdown--default .dropdown__input {
   cursor: pointer;
 }
@@ -2737,7 +2741,8 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
-.dropdown__toggle:focus {
+.dropdown__toggle:focus,
+.dropdown__toggle:focus-visible {
   outline: 0;
 }
 
@@ -2758,13 +2763,18 @@ textarea:focus-visible {
   border: 1px solid var(--border-subtle-00);
   border-radius: 4px;
   background: var(--layer-01);
+  color-scheme: dark;
 }
 
 .dropdown__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
   height: 24px;
   margin: 0;
   padding: 4px 16px;
+  gap: 8px;
   border: 0;
   background: transparent;
   color: var(--text-primary);
@@ -2775,10 +2785,34 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
+.dropdown__option::after {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  background: var(--icon-primary);
+  opacity: 0;
+  -webkit-mask: url("src/icons/checkmark.svg") center / contain no-repeat;
+  mask: url("src/icons/checkmark.svg") center / contain no-repeat;
+}
+
+.dropdown__option[aria-selected="true"] {
+  background: var(--layer-selected-01);
+}
+
+.dropdown__option[aria-selected="true"]::after {
+  opacity: 1;
+}
+
 .dropdown__option:hover,
 .dropdown__option:focus-visible {
   background: var(--layer-hover-01);
   outline: 0;
+}
+
+.dropdown__option[aria-selected="true"]:hover,
+.dropdown__option[aria-selected="true"]:focus-visible {
+  background: var(--layer-selected-hover-01);
 }
 
 .inspector-combobox-toggle {
