@@ -413,6 +413,9 @@ textarea:focus-visible {
 }
 
 .props-table-action-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 32px;
   min-width: 32px;
   height: 32px;
@@ -420,6 +423,51 @@ textarea:focus-visible {
 
 .props-table-header .props-table-action-cell {
   padding: 0;
+}
+
+.overflow-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+
+.overflow-menu__icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  background:
+    radial-gradient(circle at 50% 3px, currentColor 1.5px, transparent 1.75px),
+    radial-gradient(circle at 50% 8px, currentColor 1.5px, transparent 1.75px),
+    radial-gradient(circle at 50% 13px, currentColor 1.5px, transparent 1.75px);
+}
+
+.overflow-menu.is-open .tooltip > .tooltip__content {
+  display: none;
+}
+
+.dropdown__menu.overflow-menu__menu {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: auto;
+  width: 144px;
+  max-height: none;
+  z-index: 30;
+}
+
+.dropdown__option.overflow-menu__option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dropdown__option.overflow-menu__option .prop-type-icon {
+  color: currentColor;
 }
 
 .props-table-body {
@@ -2403,8 +2451,12 @@ textarea:focus-visible {
 .frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected .alignment-dot::before {
   display: block;
   border-radius: 2px;
-  background: var(--background-brand);
+  background: var(--link-primary);
   content: "";
+}
+
+.frame-alignment-grid[data-space-between="true"] .frame-alignment-option.is-selected:hover .alignment-dot::before {
+  background: var(--link-primary-hover);
 }
 
 .frame-alignment-grid[data-space-between="true"][data-direction="horizontal"] .frame-alignment-option.is-selected .alignment-dot::before {

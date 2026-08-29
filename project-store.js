@@ -254,6 +254,12 @@ const addComponentButton = document.querySelector("[data-add-component]");
 
 const addPropButton = document.querySelector("[data-add-prop]");
 
+const addPropOverflowMenu = document.querySelector("[data-prop-overflow-menu]");
+
+const addPropMenu = document.querySelector("[data-prop-menu]");
+
+const addPropTypeOptions = Array.from(document.querySelectorAll("[data-prop-type]"));
+
 const propRowsContainer = document.querySelector("[data-prop-rows]");
 
 const addVariantButton = document.querySelector("[data-add-variant]");

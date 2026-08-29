@@ -1322,24 +1322,82 @@ function renderComponentProps() {
   propRowsContainer.replaceChildren(...rows);
 }
 
-function addComponentProp() {
+function addComponentProp(type = "enum") {
   recordHistory();
-  const name = getAvailableEnumPropName();
-  const options = [DEFAULT_ENUM_OPTION];
-  componentProps.push({
+  const prop = {
     id: nextComponentPropId,
-    name,
-    type: "enum",
-    options,
-    defaultValue: options[0],
+    name: "visible",
+    type,
+    defaultValue: true,
     targetFrameId: null,
     targetTextId: null,
     targetVectorId: null,
-    property: "variant",
-  });
-  syncComponentPropVariantDefinition(componentProps[componentProps.length - 1]);
+    property: "visibility",
+  };
+
+  if (type === "enum") {
+    const options = [DEFAULT_ENUM_OPTION];
+    Object.assign(prop, {
+      name: getAvailableEnumPropName(),
+      options,
+      defaultValue: options[0],
+      property: "variant",
+    });
+  } else if (type === "string") {
+    const target = textRecords[0];
+    Object.assign(prop, {
+      name: "label",
+      defaultValue: target?.element.textContent ?? "",
+      targetTextId: target?.id ?? null,
+      property: "textContent",
+    });
+  } else if (type === "action") {
+    const target = getCompatibleDisabledTargets()[0];
+    Object.assign(prop, {
+      name: "onClick",
+      defaultValue: "",
+      targetFrameId: target?.id ?? null,
+      property: "onClick",
+    });
+  } else {
+    const target = getAllTargetableLayers()[0];
+    prop.type = "boolean";
+    prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
+    prop.targetTextId = target?.type === "text" ? target.record.id : null;
+    prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
+  }
+
+  componentProps.push(prop);
+  if (type === "enum" || type === "boolean") syncComponentPropVariantDefinition(prop);
   nextComponentPropId += 1;
   renderComponentProps();
+}
+
+function setAddPropMenuOpen(isOpen, focusPosition = "selected") {
+  if (!(addPropOverflowMenu instanceof HTMLElement)
+    || !(addPropMenu instanceof HTMLElement)
+    || !(addPropButton instanceof HTMLButtonElement)) return;
+  addPropOverflowMenu.classList.toggle("is-open", isOpen);
+  addPropMenu.hidden = !isOpen;
+  addPropButton.setAttribute("aria-expanded", String(isOpen));
+  if (!isOpen) return;
+  const selectedIndex = addPropTypeOptions.findIndex((option) => option.getAttribute("aria-selected") === "true");
+  const index = focusPosition === "last"
+    ? addPropTypeOptions.length - 1
+    : selectedIndex >= 0 ? selectedIndex : 0;
+  requestAnimationFrame(() => addPropTypeOptions[index]?.focus());
+}
+
+function selectAddPropType(option) {
+  if (!(option instanceof HTMLButtonElement)) return;
+  const type = option.dataset.propType;
+  if (!type) return;
+  addPropTypeOptions.forEach((candidate) => {
+    candidate.setAttribute("aria-selected", String(candidate === option));
+  });
+  addComponentProp(type);
+  setAddPropMenuOpen(false);
+  addPropButton?.focus();
 }
 
 function getCustomColorState(control) {
@@ -2778,7 +2836,48 @@ frameHtmlTagInput?.addEventListener("change", () => {
   renderComponentProps();
 });
 
-addPropButton?.addEventListener("click", addComponentProp);
+addPropButton?.addEventListener("click", () => {
+  if (!(addPropMenu instanceof HTMLElement)) return;
+  setAddPropMenuOpen(addPropMenu.hidden);
+});
+
+addPropButton?.addEventListener("keydown", (event) => {
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  event.preventDefault();
+  setAddPropMenuOpen(true, event.key === "ArrowUp" ? "last" : "selected");
+});
+
+addPropMenu?.addEventListener("click", (event) => {
+  const option = event.target instanceof Element ? event.target.closest("[data-prop-type]") : null;
+  selectAddPropType(option);
+});
+
+addPropMenu?.addEventListener("keydown", (event) => {
+  const currentIndex = addPropTypeOptions.indexOf(document.activeElement);
+  let nextIndex = currentIndex;
+  if (event.key === "ArrowDown") nextIndex = (currentIndex + 1) % addPropTypeOptions.length;
+  else if (event.key === "ArrowUp") nextIndex = (currentIndex - 1 + addPropTypeOptions.length) % addPropTypeOptions.length;
+  else if (event.key === "Home") nextIndex = 0;
+  else if (event.key === "End") nextIndex = addPropTypeOptions.length - 1;
+  else if (event.key === "Escape") {
+    event.preventDefault();
+    setAddPropMenuOpen(false);
+    addPropButton?.focus();
+    return;
+  } else return;
+  event.preventDefault();
+  addPropTypeOptions[nextIndex]?.focus();
+});
+
+addPropOverflowMenu?.addEventListener("focusout", (event) => {
+  if (event.relatedTarget instanceof Node && addPropOverflowMenu.contains(event.relatedTarget)) return;
+  setAddPropMenuOpen(false);
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!(event.target instanceof Node) || addPropOverflowMenu?.contains(event.target)) return;
+  setAddPropMenuOpen(false);
+});
 
 const addPropTooltip = addPropButton?.closest(".tooltip");
 if (addPropTooltip instanceof HTMLElement && addPropButton instanceof HTMLButtonElement) {
