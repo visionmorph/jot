@@ -32,12 +32,12 @@
     <link rel="preload" href="src/icons/checkmark.svg" as="image" type="image/svg+xml" />
     <link rel="preload" href="src/icons/checkmark--toggle.svg" as="image" type="image/svg+xml" />
     <link rel="preload" href="src/icons/subtract.svg" as="image" type="image/svg+xml" />
-    <script src="project-store.js" defer></script>
+    <script src="project-store.js?v=4" defer></script>
     <script src="canvas.js" defer></script>
     <script src="layers.js" defer></script>
-    <script src="inspectors.js" defer></script>
-    <script src="variants.js" defer></script>
-    <script src="export.js" defer></script>
+    <script src="inspectors.js?v=4" defer></script>
+    <script src="variants.js?v=4" defer></script>
+    <script src="export.js?v=4" defer></script>
     <script src="script.js" defer></script>
   </head>
   <body>
@@ -563,6 +563,7 @@
                 </span>
                 <div class="dropdown__menu overflow-menu__menu" id="add-prop-menu" role="listbox" aria-label="Prop type" data-prop-menu hidden>
                   <button class="dropdown__option overflow-menu__option" type="button" role="option" aria-selected="false" data-prop-type="enum"><span class="layer-type-icon prop-type-icon svg-icon svg-icon--diamond-outline" aria-hidden="true"></span><span>Variant</span></button>
+                  <button class="dropdown__option overflow-menu__option" type="button" role="option" aria-selected="false" data-prop-type="state"><span class="layer-type-icon prop-type-icon svg-icon svg-icon--diamond-filled" aria-hidden="true"></span><span>State</span></button>
                   <button class="dropdown__option overflow-menu__option" type="button" role="option" aria-selected="false" data-prop-type="boolean"><span class="layer-type-icon prop-type-icon svg-icon svg-icon--toggle-on" aria-hidden="true"></span><span>Boolean</span></button>
                   <button class="dropdown__option overflow-menu__option" type="button" role="option" aria-selected="false" data-prop-type="string"><span class="layer-type-icon prop-type-icon svg-icon svg-icon--text" aria-hidden="true"></span><span>String</span></button>
                   <button class="dropdown__option overflow-menu__option" type="button" role="option" aria-selected="false" data-prop-type="action"><span class="layer-type-icon prop-type-icon svg-icon svg-icon--cursor-1" aria-hidden="true"></span><span>Action</span></button>

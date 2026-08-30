@@ -95,6 +95,7 @@ function syncComponentPropVariantDefinition(componentProp) {
       name: componentProp.name,
       type: isBoolean ? "boolean" : "enum",
       ...(isBoolean ? {} : { options }),
+      ...(componentProp.variantSubtype ? { variantSubtype: componentProp.variantSubtype } : {}),
       defaultValue,
       sourceComponentPropId: componentProp.id,
     };
@@ -103,6 +104,8 @@ function syncComponentPropVariantDefinition(componentProp) {
   } else {
     variantProp.name = componentProp.name;
     variantProp.type = isBoolean ? "boolean" : "enum";
+    if (componentProp.variantSubtype) variantProp.variantSubtype = componentProp.variantSubtype;
+    else delete variantProp.variantSubtype;
     if (isBoolean) {
       delete variantProp.options;
       variantProp.defaultValue = booleanDefault;
@@ -422,15 +425,19 @@ function getComponentPropVariantTarget(componentProp) {
   return "component:0";
 }
 
-function getBooleanVisibilityOperations(instance) {
+function getBooleanComponentPropOperations(instance) {
   return componentProps
-    .filter((prop) => prop.type === "boolean" && prop.property === "visibility" && prop.variantPropId != null)
+    .filter((prop) => (
+      prop.type === "boolean"
+      && ["visibility", "disabled"].includes(prop.property)
+      && prop.variantPropId != null
+    ))
     .map((prop) => {
       const variantProp = variantProps.find((entry) => entry.id === prop.variantPropId);
       return variantProp
         ? {
             target: getComponentPropVariantTarget(prop),
-            property: "visibility",
+            property: prop.property,
             value: normalizeVariantPropValue(variantProp, instance.propValues?.[variantProp.id]),
           }
         : null;
@@ -449,7 +456,7 @@ function resolveVariantOperations(instance) {
   return [
     ...individuals.map(({ rule }) => rule),
     ...compounds.map(({ rule }) => rule),
-    ...getBooleanVisibilityOperations(instance),
+    ...getBooleanComponentPropOperations(instance),
     ...getCascadedVariantOverrides(instance),
   ];
 }

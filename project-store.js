@@ -913,7 +913,10 @@ function restoreWorkspaceState(snapshot, options = {}) {
         : legacyEnumType === "shape" ? "type" : "variant";
     }
     if (normalizedProp.type === "enum") {
-      const options = Array.isArray(normalizedProp.options) && normalizedProp.options.length > 0
+      const isState = normalizedProp.variantSubtype === "state";
+      const options = isState
+        ? ["default", "hover", "active", "focus-visible"]
+        : Array.isArray(normalizedProp.options) && normalizedProp.options.length > 0
         ? normalizedProp.options
         : ["default"];
       normalizedProp.options = options;

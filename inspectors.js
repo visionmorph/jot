@@ -727,9 +727,11 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
 }
 
 const DEFAULT_ENUM_OPTION = "Default";
+const INTERACTION_STATE_OPTIONS = ["default", "hover", "active", "focus-visible"];
 
 const OPTION_COMPONENT_PROP_CONFIG = {
   enum: { label: "Enum", options: [DEFAULT_ENUM_OPTION] },
+  state: { label: "State", options: INTERACTION_STATE_OPTIONS },
 };
 
 const ENUM_COMPONENT_PROPERTY_OPTIONS = [
@@ -750,7 +752,16 @@ function isOptionComponentProp(propOrType) {
   return Object.prototype.hasOwnProperty.call(OPTION_COMPONENT_PROP_CONFIG, type);
 }
 
+function isStateComponentProp(prop) {
+  return prop?.type === "enum" && prop.variantSubtype === "state";
+}
+
+function getComponentPropTypeValue(prop) {
+  return isStateComponentProp(prop) ? "state" : prop.type;
+}
+
 function getComponentPropOptions(prop) {
+  if (isStateComponentProp(prop)) return [...INTERACTION_STATE_OPTIONS];
   const fallbackOptions = OPTION_COMPONENT_PROP_CONFIG[prop.type]?.options ?? [DEFAULT_ENUM_OPTION];
   return Array.isArray(prop.options) && prop.options.length > 0 ? prop.options : fallbackOptions;
 }
@@ -768,8 +779,11 @@ function getAvailableEnumPropName(currentProp = null) {
 function configureOptionComponentProp(prop, type) {
   const config = OPTION_COMPONENT_PROP_CONFIG[type];
   if (!config) return;
-  prop.name = getAvailableEnumPropName(prop);
-  prop.type = type;
+  const isState = type === "state";
+  prop.name = isState ? "Interaction" : getAvailableEnumPropName(prop);
+  prop.type = "enum";
+  if (isState) prop.variantSubtype = "state";
+  else delete prop.variantSubtype;
   prop.options = [...config.options];
   prop.defaultValue = prop.options[0];
   prop.targetFrameId = null;
@@ -800,7 +814,11 @@ function renderComponentProps() {
     nameInput.value = prop.name;
     nameInput.setAttribute("aria-label", "Prop name");
     const commitPropName = () => {
-      const fallbackName = prop.type === "string"
+      const fallbackName = isStateComponentProp(prop)
+        ? "Interaction"
+        : isOptionComponentProp(prop)
+          ? "Variant"
+          : prop.type === "string"
         ? "label"
         : prop.type === "action"
           ? "onClick"
@@ -820,17 +838,18 @@ function renderComponentProps() {
     typeCell.append(createPropSelect(
       [
         { value: "enum", label: "Variant", iconType: "prop-enum" },
+        { value: "state", label: "State", iconType: "prop-enum" },
         { value: "boolean", label: "Boolean", iconType: "prop-boolean" },
         { value: "string", label: "String", iconType: "prop-string" },
         { value: "action", label: "Action", iconType: "prop-action" },
       ],
-      prop.type,
+      getComponentPropTypeValue(prop),
       "Prop type",
       (value) => {
-        if (value === prop.type) return;
+        if (value === getComponentPropTypeValue(prop)) return;
         recordHistory();
         const wasVariantBoundProp = isVariantBoundComponentProp(prop);
-        if (wasVariantBoundProp && value !== "enum" && value !== "boolean") unlinkComponentPropVariantDefinition(prop);
+        if (wasVariantBoundProp && value !== "enum" && value !== "state" && value !== "boolean") unlinkComponentPropVariantDefinition(prop);
         if (isOptionComponentProp(value)) {
           configureOptionComponentProp(prop, value);
         } else if (value === "string") {
@@ -861,8 +880,11 @@ function renderComponentProps() {
           prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
           prop.property = "visibility";
         }
-        if (!isOptionComponentProp(value)) delete prop.options;
-        if (value === "enum" || value === "boolean") syncComponentPropVariantDefinition(prop);
+        if (!isOptionComponentProp(value)) {
+          delete prop.options;
+          delete prop.variantSubtype;
+        }
+        if (value === "enum" || value === "state" || value === "boolean") syncComponentPropVariantDefinition(prop);
         renderComponentProps();
       },
     ));
@@ -873,6 +895,7 @@ function renderComponentProps() {
     defaultCell.tabIndex = -1;
     if (isOptionComponentProp(prop)) {
       const options = getComponentPropOptions(prop);
+      const isStateProp = isStateComponentProp(prop);
       const instance = getVariantInstance();
       let retainValueCellFocusAfterEdit = false;
       const focusValueCell = () => {
@@ -926,6 +949,7 @@ function renderComponentProps() {
           valueTag.focus();
         });
         valueTag.addEventListener("dblclick", (event) => {
+          if (isStateProp) return;
           if (event.target instanceof Element && event.target.closest('[data-icon-button="prop-value-dismiss"]')) return;
           event.preventDefault();
           valueInput.readOnly = false;
@@ -992,7 +1016,8 @@ function renderComponentProps() {
         dismissButton.className = "icon-button icon-button--size-24 icon-button--circle";
         dismissButton.dataset.iconButton = "prop-value-dismiss";
         dismissButton.type = "button";
-        dismissButton.disabled = options.length <= 1;
+        dismissButton.disabled = isStateProp || options.length <= 1;
+        dismissTooltip.hidden = isStateProp;
         dismissButton.setAttribute("aria-label", `Dismiss ${optionValue}`);
         dismissButton.append(createSvgAssetIcon("close"));
         dismissTooltipContent.className = "tooltip__content";
@@ -1058,7 +1083,7 @@ function renderComponentProps() {
         addValueInput.focus();
         addValueInput.setSelectionRange(0, 0);
       });
-      defaultCell.append(addValueInput);
+      if (!isStateProp) defaultCell.append(addValueInput);
     } else if (prop.type === "boolean" && prop.variantPropId != null) {
       const instance = getVariantInstance();
       const currentValue = instance
@@ -1295,18 +1320,28 @@ function renderComponentProps() {
 
     const propertyCell = createCell();
     if (isOptionProp) {
-      const enumProperty = getEnumComponentProperty(prop);
-      propertyCell.append(createPropSelect(
-        ENUM_COMPONENT_PROPERTY_OPTIONS,
-        enumProperty,
-        "Variant property",
-        (value) => {
-          if (value === enumProperty) return;
-          recordHistory();
-          prop.property = value;
-          renderComponentProps();
-        },
-      ));
+      if (isStateComponentProp(prop)) {
+        propertyCell.append(createPropSelect(
+          [{ value: "interaction-state", label: "Interaction state" }],
+          "interaction-state",
+          "Variant property",
+          () => {},
+          true,
+        ));
+      } else {
+        const enumProperty = getEnumComponentProperty(prop);
+        propertyCell.append(createPropSelect(
+          ENUM_COMPONENT_PROPERTY_OPTIONS,
+          enumProperty,
+          "Variant property",
+          (value) => {
+            if (value === enumProperty) return;
+            recordHistory();
+            prop.property = value;
+            renderComponentProps();
+          },
+        ));
+      }
     } else if (prop.type === "boolean") {
       propertyCell.append(createPropSelect(
         [
@@ -1374,10 +1409,13 @@ function addComponentProp(type = "enum") {
     property: "visibility",
   };
 
-  if (type === "enum") {
-    const options = [DEFAULT_ENUM_OPTION];
+  if (type === "enum" || type === "state") {
+    const isState = type === "state";
+    const options = isState ? [...INTERACTION_STATE_OPTIONS] : [DEFAULT_ENUM_OPTION];
     Object.assign(prop, {
-      name: getAvailableEnumPropName(),
+      name: isState ? "Interaction" : getAvailableEnumPropName(),
+      type: "enum",
+      ...(isState ? { variantSubtype: "state" } : {}),
       options,
       defaultValue: options[0],
       property: "variant",
@@ -1407,7 +1445,7 @@ function addComponentProp(type = "enum") {
   }
 
   componentProps.push(prop);
-  if (type === "enum" || type === "boolean") syncComponentPropVariantDefinition(prop);
+  if (type === "enum" || type === "state" || type === "boolean") syncComponentPropVariantDefinition(prop);
   nextComponentPropId += 1;
   renderComponentProps();
 }
