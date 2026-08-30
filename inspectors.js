@@ -731,16 +731,17 @@ const INTERACTION_STATE_OPTIONS = ["default", "hover", "active", "focus-visible"
 
 const OPTION_COMPONENT_PROP_CONFIG = {
   enum: { label: "Enum", options: [DEFAULT_ENUM_OPTION] },
-  state: { label: "State", options: INTERACTION_STATE_OPTIONS },
 };
 
 const ENUM_COMPONENT_PROPERTY_OPTIONS = [
   { value: "size", label: "Size" },
   { value: "type", label: "Type" },
   { value: "variant", label: "Variant" },
+  { value: "state", label: "State" },
 ];
 
 function getEnumComponentProperty(prop) {
+  if (isStateComponentProp(prop)) return "state";
   const property = String(prop?.property ?? "").toLowerCase();
   if (ENUM_COMPONENT_PROPERTY_OPTIONS.some((option) => option.value === property)) return property;
   const name = String(prop?.name ?? "").trim().toLowerCase();
@@ -754,10 +755,6 @@ function isOptionComponentProp(propOrType) {
 
 function isStateComponentProp(prop) {
   return prop?.type === "enum" && prop.variantSubtype === "state";
-}
-
-function getComponentPropTypeValue(prop) {
-  return isStateComponentProp(prop) ? "state" : prop.type;
 }
 
 function getComponentPropOptions(prop) {
@@ -779,11 +776,9 @@ function getAvailableEnumPropName(currentProp = null) {
 function configureOptionComponentProp(prop, type) {
   const config = OPTION_COMPONENT_PROP_CONFIG[type];
   if (!config) return;
-  const isState = type === "state";
-  prop.name = isState ? "Interaction" : getAvailableEnumPropName(prop);
-  prop.type = "enum";
-  if (isState) prop.variantSubtype = "state";
-  else delete prop.variantSubtype;
+  prop.name = getAvailableEnumPropName(prop);
+  prop.type = type;
+  delete prop.variantSubtype;
   prop.options = [...config.options];
   prop.defaultValue = prop.options[0];
   prop.targetFrameId = null;
@@ -838,18 +833,17 @@ function renderComponentProps() {
     typeCell.append(createPropSelect(
       [
         { value: "enum", label: "Variant", iconType: "prop-enum" },
-        { value: "state", label: "State", iconType: "prop-enum" },
         { value: "boolean", label: "Boolean", iconType: "prop-boolean" },
         { value: "string", label: "String", iconType: "prop-string" },
         { value: "action", label: "Action", iconType: "prop-action" },
       ],
-      getComponentPropTypeValue(prop),
+      prop.type,
       "Prop type",
       (value) => {
-        if (value === getComponentPropTypeValue(prop)) return;
+        if (value === prop.type) return;
         recordHistory();
         const wasVariantBoundProp = isVariantBoundComponentProp(prop);
-        if (wasVariantBoundProp && value !== "enum" && value !== "state" && value !== "boolean") unlinkComponentPropVariantDefinition(prop);
+        if (wasVariantBoundProp && value !== "enum" && value !== "boolean") unlinkComponentPropVariantDefinition(prop);
         if (isOptionComponentProp(value)) {
           configureOptionComponentProp(prop, value);
         } else if (value === "string") {
@@ -884,7 +878,7 @@ function renderComponentProps() {
           delete prop.options;
           delete prop.variantSubtype;
         }
-        if (value === "enum" || value === "state" || value === "boolean") syncComponentPropVariantDefinition(prop);
+        if (value === "enum" || value === "boolean") syncComponentPropVariantDefinition(prop);
         renderComponentProps();
       },
     ));
@@ -1320,28 +1314,36 @@ function renderComponentProps() {
 
     const propertyCell = createCell();
     if (isOptionProp) {
-      if (isStateComponentProp(prop)) {
-        propertyCell.append(createPropSelect(
-          [{ value: "interaction-state", label: "Interaction state" }],
-          "interaction-state",
-          "Variant property",
-          () => {},
-          true,
-        ));
-      } else {
-        const enumProperty = getEnumComponentProperty(prop);
-        propertyCell.append(createPropSelect(
-          ENUM_COMPONENT_PROPERTY_OPTIONS,
-          enumProperty,
-          "Variant property",
-          (value) => {
-            if (value === enumProperty) return;
-            recordHistory();
+      const enumProperty = getEnumComponentProperty(prop);
+      propertyCell.append(createPropSelect(
+        ENUM_COMPONENT_PROPERTY_OPTIONS,
+        enumProperty,
+        "Variant property",
+        (value) => {
+          if (value === enumProperty) return;
+          recordHistory();
+          const wasStateProp = isStateComponentProp(prop);
+          if (value === "state") {
+            prop.variantSubtype = "state";
+            prop.name = "Interaction";
+            prop.property = "variant";
+            prop.options = [...INTERACTION_STATE_OPTIONS];
+            prop.defaultValue = prop.options[0];
+          } else {
+            delete prop.variantSubtype;
             prop.property = value;
-            renderComponentProps();
-          },
-        ));
-      }
+            if (wasStateProp) {
+              prop.name = value === "variant"
+                ? getAvailableEnumPropName(prop)
+                : `${value[0].toUpperCase()}${value.slice(1)}`;
+              prop.options = [DEFAULT_ENUM_OPTION];
+              prop.defaultValue = prop.options[0];
+            }
+          }
+          syncComponentPropVariantDefinition(prop);
+          renderComponentProps();
+        },
+      ));
     } else if (prop.type === "boolean") {
       propertyCell.append(createPropSelect(
         [
@@ -1409,13 +1411,10 @@ function addComponentProp(type = "enum") {
     property: "visibility",
   };
 
-  if (type === "enum" || type === "state") {
-    const isState = type === "state";
-    const options = isState ? [...INTERACTION_STATE_OPTIONS] : [DEFAULT_ENUM_OPTION];
+  if (type === "enum") {
+    const options = [DEFAULT_ENUM_OPTION];
     Object.assign(prop, {
-      name: isState ? "Interaction" : getAvailableEnumPropName(),
-      type: "enum",
-      ...(isState ? { variantSubtype: "state" } : {}),
+      name: getAvailableEnumPropName(),
       options,
       defaultValue: options[0],
       property: "variant",
@@ -1445,7 +1444,7 @@ function addComponentProp(type = "enum") {
   }
 
   componentProps.push(prop);
-  if (type === "enum" || type === "state" || type === "boolean") syncComponentPropVariantDefinition(prop);
+  if (type === "enum" || type === "boolean") syncComponentPropVariantDefinition(prop);
   nextComponentPropId += 1;
   renderComponentProps();
 }
