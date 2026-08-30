@@ -717,6 +717,7 @@ textarea:focus-visible {
 }
 
 .tag:has(.tag__text.is-editing) {
+  padding-right: 8px;
   background: transparent;
   color: var(--text-primary);
   outline: 1px solid var(--focus);
@@ -724,6 +725,10 @@ textarea:focus-visible {
 
 .tag:has([data-icon-button="prop-value-dismiss"]) {
   padding-right: 0;
+}
+
+.tag:has([data-icon-button="prop-value-dismiss"]):has(.tag__text.is-editing) {
+  padding-right: 8px;
 }
 
 .tag:focus:not(:has(.tag__text.is-editing)) {
