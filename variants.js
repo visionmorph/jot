@@ -590,8 +590,7 @@ canvas?.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || activeTool !== "select") return;
   const target = resolveVariantCanvasSelectionTarget(event.target);
   if (!target || target.element?.isContentEditable) return;
-  if (target.kind === "variant-root"
-    && isVariantInstanceSelected(target.instanceId)
+  if (isVariantInstanceSelected(target.instanceId)
     && getSelectedVariantInstanceIds().length > 1) {
     clearMasterSelectionForVariant();
     return;
@@ -738,9 +737,10 @@ function finishVariantPointerDrag(event, shouldCommit) {
   if (drop) reorderVariantInstances(pointerDrag.instanceIds, drop.destinationIndex, pointerDrag.instanceId);
 }
 
-function bindVariantReorderPointer(label, instance) {
-  label.addEventListener("pointerdown", (event) => {
+function bindVariantReorderPointer(preview, instance) {
+  preview.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || activeTool !== "select") return;
+    if (event.target instanceof HTMLElement && event.target.isContentEditable) return;
     const selectedIds = getSelectedVariantInstanceIds();
     const instanceIds = selectedIds.includes(instance.id) ? selectedIds : [instance.id];
     if (!selectedIds.includes(instance.id)) selectVariantInstance(instance.id, { render: false });
@@ -867,7 +867,7 @@ function renderVariantInstances() {
     });
     content.append(clone);
     preview.append(label, content);
-    bindVariantReorderPointer(label, instance);
+    bindVariantReorderPointer(preview, instance);
     preview.addEventListener("keydown", (event) => {
       if (event.target !== preview) return;
       const move = event.key === "ArrowLeft" || event.key === "ArrowUp"

@@ -1361,6 +1361,15 @@ textarea:focus-visible {
   cursor: default;
 }
 
+.variant-preview.is-selected {
+  cursor: grab;
+  touch-action: none;
+}
+
+.variant-preview.is-selected:active {
+  cursor: grabbing;
+}
+
 .variant-preview:focus {
   outline: 0;
 }

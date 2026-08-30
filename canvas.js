@@ -2269,7 +2269,19 @@ function finishMarqueeSelection(event) {
   selectionRectangle.classList.remove("is-visible");
   selectionRectangle.removeAttribute("style");
   if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-  if (wasDragged && event.type === "pointerup") suppressCanvasClickForGesture(event);
+  if (wasDragged && event.type === "pointerup") {
+    suppressCanvasClickForGesture(event);
+    const selectedVariantIds = getSelectedVariantInstanceIds();
+    if (selectedVariantIds.length > 0) {
+      const focusInstanceId = selectedVariantInstanceId ?? selectedVariantIds[selectedVariantIds.length - 1];
+      requestAnimationFrame(() => {
+        const preview = componentSet?.querySelector(
+          `.variant-preview[data-variant-instance-id="${CSS.escape(String(focusInstanceId))}"]`,
+        );
+        if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
+      });
+    }
+  }
 }
 
 canvas?.addEventListener("pointerup", finishMarqueeSelection);
