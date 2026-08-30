@@ -584,21 +584,26 @@ textarea:focus-visible {
   z-index: 30;
 }
 
-.prop-select-option {
+.dropdown__option.prop-select-option {
+  display: flex;
+  align-items: center;
   height: 32px;
-  padding-top: 8px;
-  padding-bottom: 8px;
+  padding: 8px;
+  gap: 4px;
   cursor: pointer;
 }
 
-.prop-select-option::after {
+.dropdown__option.prop-select-option[aria-selected="true"] {
+  padding-right: 28px;
+}
+
+.dropdown__option.prop-select-option::after {
   top: 8px;
 }
 
 .prop-select-option .layer-type-icon,
 .prop-select-option .prop-type-icon {
-  margin-right: 4px;
-  vertical-align: middle;
+  flex: 0 0 16px;
 }
 
 .prop-select-wrap.is-disabled .prop-select-selected-value,
