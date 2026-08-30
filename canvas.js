@@ -107,6 +107,7 @@ canvas?.addEventListener("pointercancel", (event) => {
 }, true);
 
 function getSelectedResizeElement() {
+  if (getSelectedVariantInstanceIds().length > 1) return null;
   if (selectedVariantInstanceId !== null) {
     const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
     const root = preview?.querySelector(".canvas-root-stack");
@@ -2147,13 +2148,14 @@ function doRectsIntersect(elementBounds, selectionBounds) {
 function applyMarqueeSelection(selectionBounds) {
   if (!selectionDrag || !currentComponent) return;
   if (variantInstances.length > 0) {
-    const matches = [];
+    const variantMatches = [];
+    const layerMatches = [];
     variantInstances.forEach((instance) => {
       const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`);
       const root = preview?.querySelector(".canvas-root-stack");
       if (!(root instanceof HTMLElement)) return;
       if (isRectEnclosed(root.getBoundingClientRect(), selectionBounds)) {
-        matches.push({ instanceId: instance.id, target: null });
+        variantMatches.push(instance.id);
         return;
       }
       root.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((element) => {
@@ -2165,16 +2167,24 @@ function applyMarqueeSelection(selectionBounds) {
         const isMatch = type === "frame"
           ? isRectEnclosed(element.getBoundingClientRect(), selectionBounds)
           : doRectsIntersect(element.getBoundingClientRect(), selectionBounds);
-        if (isMatch) matches.push({ instanceId: instance.id, target: `${type}:${id}` });
+        if (isMatch) layerMatches.push({ instanceId: instance.id, target: `${type}:${id}` });
       });
     });
-    const match = matches[matches.length - 1];
-    if (match) {
-      selectVariantState(match.instanceId, match.target);
+    if (variantMatches.length > 0) {
+      const nextIds = selectionDrag.additive
+        ? [...new Set([...selectionDrag.initialVariantIds, ...variantMatches])]
+        : variantMatches;
+      selectVariantInstancesState(nextIds, variantMatches[variantMatches.length - 1]);
       clearMasterSelectionForVariant();
-    } else if (!selectionDrag.additive) {
-      selectCanvasState();
-      clearElementSelection();
+    } else {
+      const match = layerMatches[layerMatches.length - 1];
+      if (match) {
+        selectVariantState(match.instanceId, match.target);
+        clearMasterSelectionForVariant();
+      } else if (!selectionDrag.additive) {
+        selectCanvasState();
+        clearElementSelection();
+      }
     }
     renderTree();
     return;
@@ -2230,6 +2240,7 @@ canvas?.addEventListener("pointerdown", (event) => {
     startY,
     additive: event.shiftKey || event.ctrlKey || event.metaKey,
     initialKeys: [...selectedLayerKeys],
+    initialVariantIds: getSelectedVariantInstanceIds(),
     dragged: false,
   };
   canvas.setPointerCapture(event.pointerId);

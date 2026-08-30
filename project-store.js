@@ -599,6 +599,37 @@ function selectVariantState(instanceId, target = null, componentId = currentComp
   return true;
 }
 
+function getSelectedVariantInstanceIds() {
+  if (selectionState.kind === "variants") return [...selectionState.instanceIds];
+  if (selectionState.kind === "variant") return [selectionState.instanceId];
+  return [];
+}
+
+function isVariantInstanceSelected(instanceId) {
+  return getSelectedVariantInstanceIds().includes(instanceId);
+}
+
+function selectVariantInstancesState(instanceIds, primaryInstanceId = null, componentId = currentComponent?.id) {
+  if (componentId == null) return false;
+  const validIds = new Set(variantInstances.map((instance) => instance.id));
+  const normalizedIds = [...new Set(instanceIds)].filter((instanceId) => validIds.has(instanceId));
+  if (normalizedIds.length === 0) {
+    selectCanvasState();
+    return false;
+  }
+  const resolvedPrimary = normalizedIds.includes(primaryInstanceId)
+    ? primaryInstanceId
+    : normalizedIds[normalizedIds.length - 1];
+  if (normalizedIds.length === 1) return selectVariantState(normalizedIds[0], null, componentId);
+  selectionState = {
+    kind: "variants",
+    componentId,
+    instanceIds: normalizedIds,
+    primaryInstanceId: resolvedPrimary,
+  };
+  return true;
+}
+
 function selectLayerKeys(keys, primaryKey = null, componentId = currentComponent?.id) {
   if (componentId == null) return false;
   const normalized = normalizeLayerSelection(keys, primaryKey);
@@ -645,6 +676,9 @@ function captureSelectionState() {
   if (selectionState.kind === "layers") {
     return { ...selectionState, keys: [...selectionState.keys] };
   }
+  if (selectionState.kind === "variants") {
+    return { ...selectionState, instanceIds: [...selectionState.instanceIds] };
+  }
   return { ...selectionState };
 }
 
@@ -659,6 +693,13 @@ function restoreSelectionState(snapshot) {
     && getVariantInstance(savedSelection.instanceId)) {
     selectVariantState(savedSelection.instanceId, savedSelection.target ?? null, savedSelection.componentId);
     return;
+  }
+  if (savedSelection?.kind === "variants" && savedSelection.componentId === currentComponent?.id) {
+    if (selectVariantInstancesState(
+      savedSelection.instanceIds ?? [],
+      savedSelection.primaryInstanceId ?? null,
+      savedSelection.componentId,
+    )) return;
   }
   if (savedSelection?.kind === "layers" && savedSelection.componentId === currentComponent?.id) {
     if (selectLayerKeys(savedSelection.keys ?? [], savedSelection.primaryKey ?? null, savedSelection.componentId)) return;
@@ -711,11 +752,17 @@ Object.defineProperties(globalThis, {
   },
   selectedVariantInstanceId: {
     configurable: true,
-    get: () => selectionState.kind === "variant" ? selectionState.instanceId : null,
+    get: () => selectionState.kind === "variant"
+      ? selectionState.instanceId
+      : selectionState.kind === "variants" ? selectionState.primaryInstanceId : null,
   },
   selectedVariantLayerTarget: {
     configurable: true,
     get: () => selectionState.kind === "variant" ? selectionState.target : null,
+  },
+  selectedVariantInstanceIds: {
+    configurable: true,
+    get: () => getSelectedVariantInstanceIds(),
   },
   selectedCanvasFrame: {
     configurable: true,

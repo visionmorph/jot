@@ -37,7 +37,7 @@ const VARIANT_PROPERTY_DEFAULTS = {
 
 let variantRenderFrame = null;
 
-let draggedVariantInstanceId = null;
+let variantPointerDrag = null;
 
 function getVariantPropValues(prop) {
   if (prop.type === "boolean") return [false, true];
@@ -590,6 +590,12 @@ canvas?.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || activeTool !== "select") return;
   const target = resolveVariantCanvasSelectionTarget(event.target);
   if (!target || target.element?.isContentEditable) return;
+  if (target.kind === "variant-root"
+    && isVariantInstanceSelected(target.instanceId)
+    && getSelectedVariantInstanceIds().length > 1) {
+    clearMasterSelectionForVariant();
+    return;
+  }
   selectVariantInstance(target.instanceId, {
     render: false,
     layerTarget: target.target,
@@ -652,6 +658,114 @@ function renderBaseComponentLabel() {
   };
 }
 
+function clearVariantReorderIndicators() {
+  componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
+    preview.classList.remove("is-variant-dragging", "is-variant-drop-before", "is-variant-drop-after");
+    delete preview.dataset.variantDropPosition;
+  });
+}
+
+function getVariantPointerDrop(previewIds, clientX, clientY) {
+  const target = document.elementFromPoint(clientX, clientY)?.closest(".variant-preview");
+  if (!(target instanceof HTMLElement) || !componentSet?.contains(target)) return null;
+  const targetId = Number(target.dataset.variantInstanceId);
+  if (!Number.isFinite(targetId) || previewIds.includes(targetId)) return null;
+  const targetInstance = getVariantInstance(targetId);
+  if (!targetInstance) return null;
+  const bounds = target.getBoundingClientRect();
+  const after = clientX >= bounds.left + bounds.width / 2;
+  const targetIndex = variantInstances.indexOf(targetInstance);
+  const boundaryIndex = targetIndex + (after ? 1 : 0);
+  const selectedBeforeBoundary = variantInstances
+    .slice(0, boundaryIndex)
+    .filter((candidate) => previewIds.includes(candidate.id))
+    .length;
+  return {
+    preview: target,
+    position: after ? "after" : "before",
+    destinationIndex: boundaryIndex - selectedBeforeBoundary,
+  };
+}
+
+function updateVariantPointerDrag(event) {
+  if (!variantPointerDrag || event.pointerId !== variantPointerDrag.pointerId) return false;
+  const distance = Math.hypot(
+    event.clientX - variantPointerDrag.startX,
+    event.clientY - variantPointerDrag.startY,
+  );
+  if (!variantPointerDrag.hasStarted && distance < CANVAS_DRAG_THRESHOLD) return false;
+  if (!variantPointerDrag.hasStarted) {
+    variantPointerDrag.hasStarted = true;
+    componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
+      preview.classList.toggle(
+        "is-variant-dragging",
+        variantPointerDrag.instanceIds.includes(Number(preview.dataset.variantInstanceId)),
+      );
+    });
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
+    preview.classList.remove("is-variant-drop-before", "is-variant-drop-after");
+    delete preview.dataset.variantDropPosition;
+  });
+  variantPointerDrag.drop = getVariantPointerDrop(
+    variantPointerDrag.instanceIds,
+    event.clientX,
+    event.clientY,
+  );
+  if (variantPointerDrag.drop) {
+    variantPointerDrag.drop.preview.dataset.variantDropPosition = variantPointerDrag.drop.position;
+    variantPointerDrag.drop.preview.classList.add(`is-variant-drop-${variantPointerDrag.drop.position}`);
+  }
+  return true;
+}
+
+function finishVariantPointerDrag(event, shouldCommit) {
+  if (!variantPointerDrag || event.pointerId !== variantPointerDrag.pointerId) return;
+  const pointerDrag = variantPointerDrag;
+  if (pointerDrag.hasStarted) updateVariantPointerDrag(event);
+  const drop = shouldCommit ? pointerDrag.drop : null;
+  variantPointerDrag = null;
+  if (canvas?.hasPointerCapture(event.pointerId)) {
+    canvas.releasePointerCapture(event.pointerId);
+  }
+  clearVariantReorderIndicators();
+  if (!pointerDrag.hasStarted) return;
+  event.preventDefault();
+  event.stopPropagation();
+  suppressCanvasClickForGesture(event);
+  if (drop) reorderVariantInstances(pointerDrag.instanceIds, drop.destinationIndex, pointerDrag.instanceId);
+}
+
+function bindVariantReorderPointer(label, instance) {
+  label.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || activeTool !== "select") return;
+    const selectedIds = getSelectedVariantInstanceIds();
+    const instanceIds = selectedIds.includes(instance.id) ? selectedIds : [instance.id];
+    if (!selectedIds.includes(instance.id)) selectVariantInstance(instance.id, { render: false });
+    variantPointerDrag = {
+      pointerId: event.pointerId,
+      instanceId: instance.id,
+      instanceIds: variantInstances
+        .filter((candidate) => instanceIds.includes(candidate.id))
+        .map((candidate) => candidate.id),
+      startX: event.clientX,
+      startY: event.clientY,
+      hasStarted: false,
+      drop: null,
+    };
+    canvas?.setPointerCapture(event.pointerId);
+  });
+}
+
+canvas?.addEventListener("pointermove", updateVariantPointerDrag, true);
+canvas?.addEventListener("pointerup", (event) => finishVariantPointerDrag(event, true), true);
+canvas?.addEventListener("pointercancel", (event) => finishVariantPointerDrag(event, false), true);
+canvas?.addEventListener("lostpointercapture", (event) => {
+  if (variantPointerDrag?.pointerId === event.pointerId) finishVariantPointerDrag(event, false);
+}, true);
+
 function renderVariantInstances() {
   if (!(componentSet instanceof HTMLElement) || !(canvasRootStack instanceof HTMLElement)) return;
   const hasVariants = variantInstances.length > 0;
@@ -667,13 +781,15 @@ function renderVariantInstances() {
     const clone = canvasRootStack.cloneNode(true);
     preview.className = "variant-preview";
     preview.draggable = false;
-    preview.classList.toggle("is-selected", instance.id === selectedVariantInstanceId);
+    const isSelectedInstance = isVariantInstanceSelected(instance.id);
+    preview.classList.toggle("is-selected", isSelectedInstance);
     preview.dataset.variantInstanceId = String(instance.id);
     preview.setAttribute("role", "group");
     preview.setAttribute("tabindex", "0");
     preview.setAttribute("aria-label", getVariantInstanceLabel(instance));
-    label.className = "variant-preview-label";
-    label.draggable = true;
+    preview.setAttribute("aria-selected", String(isSelectedInstance));
+    label.className = "variant-preview-label is-reorder-handle";
+    label.draggable = false;
     const schemaTitle = getVariantPropSchemaTitle(instance);
     const isAuthoredDefault = instance === getAuthoredDefaultVariantInstance();
     label.textContent = isAuthoredDefault ? `${schemaTitle} · Default` : schemaTitle;
@@ -681,7 +797,7 @@ function renderVariantInstances() {
     prepareVariantClone(clone, instance.id);
     resolveVariantOperations(instance).forEach((operation) => applyVariantOperation(clone, operation));
     syncVariantFlexbox(clone);
-    const isSelectedRoot = instance.id === selectedVariantInstanceId && selectedVariantLayerTarget === null;
+    const isSelectedRoot = isSelectedInstance && selectedVariantLayerTarget === null;
     clone.classList.toggle("is-selected", isSelectedRoot);
     clone.setAttribute("aria-selected", String(isSelectedRoot));
     clone.addEventListener("click", (event) => {
@@ -751,6 +867,7 @@ function renderVariantInstances() {
     });
     content.append(clone);
     preview.append(label, content);
+    bindVariantReorderPointer(label, instance);
     preview.addEventListener("keydown", (event) => {
       if (event.target !== preview) return;
       const move = event.key === "ArrowLeft" || event.key === "ArrowUp"
@@ -764,46 +881,6 @@ function renderVariantInstances() {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       selectVariantInstance(instance.id);
-    });
-    preview.addEventListener("dragstart", (event) => {
-      if (event.target !== label) {
-        event.preventDefault();
-        return;
-      }
-      draggedVariantInstanceId = instance.id;
-      preview.classList.add("is-variant-dragging");
-      event.dataTransfer?.setData("text/plain", String(instance.id));
-      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-    });
-    preview.addEventListener("dragover", (event) => {
-      if (draggedVariantInstanceId == null || draggedVariantInstanceId === instance.id) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-      const bounds = preview.getBoundingClientRect();
-      preview.dataset.variantDropPosition = event.clientX < bounds.left + bounds.width / 2 ? "before" : "after";
-      preview.classList.toggle("is-variant-drop-before", preview.dataset.variantDropPosition === "before");
-      preview.classList.toggle("is-variant-drop-after", preview.dataset.variantDropPosition === "after");
-    });
-    preview.addEventListener("dragleave", (event) => {
-      if (event.relatedTarget instanceof Node && preview.contains(event.relatedTarget)) return;
-      preview.classList.remove("is-variant-drop-before", "is-variant-drop-after");
-      delete preview.dataset.variantDropPosition;
-    });
-    preview.addEventListener("drop", (event) => {
-      if (draggedVariantInstanceId == null || draggedVariantInstanceId === instance.id) return;
-      event.preventDefault();
-      const sourceIndex = variantInstances.findIndex((candidate) => candidate.id === draggedVariantInstanceId);
-      const targetIndex = variantInstances.indexOf(instance);
-      const after = preview.dataset.variantDropPosition === "after";
-      const destination = targetIndex + (after ? 1 : 0) - (sourceIndex < targetIndex + (after ? 1 : 0) ? 1 : 0);
-      reorderVariantInstance(draggedVariantInstanceId, destination);
-    });
-    preview.addEventListener("dragend", () => {
-      draggedVariantInstanceId = null;
-      componentSet?.querySelectorAll(".variant-preview").forEach((item) => {
-        item.classList.remove("is-variant-dragging", "is-variant-drop-before", "is-variant-drop-after");
-        delete item.dataset.variantDropPosition;
-      });
     });
     componentSet.append(preview);
     setVariantLabelTooltip(label, label.textContent);
@@ -838,6 +915,7 @@ function selectVariantInstance(instanceId, options = {}) {
     document.querySelectorAll(".variant-preview").forEach((preview) => {
       const isSelectedInstance = Number(preview.dataset.variantInstanceId) === instanceId;
       preview.classList.toggle("is-selected", isSelectedInstance);
+      preview.setAttribute("aria-selected", String(isSelectedInstance));
       const root = preview.querySelector(".canvas-root-stack");
       if (root instanceof HTMLElement) {
         const isSelectedRoot = isSelectedInstance && selectedVariantLayerTarget === null;
@@ -865,18 +943,21 @@ function selectVariantInstance(instanceId, options = {}) {
   return true;
 }
 
-function reorderVariantInstance(instanceId, destinationIndex) {
-  const sourceIndex = variantInstances.findIndex((instance) => instance.id === instanceId);
-  if (sourceIndex < 0) return false;
-  const nextIndex = Math.max(0, Math.min(variantInstances.length - 1, destinationIndex));
-  if (sourceIndex === nextIndex) return false;
+function reorderVariantInstances(instanceIds, destinationIndex, focusInstanceId = instanceIds[0]) {
+  const selectedIdSet = new Set(instanceIds);
+  const movingInstances = variantInstances.filter((instance) => selectedIdSet.has(instance.id));
+  if (movingInstances.length === 0) return false;
+  const remainingInstances = variantInstances.filter((instance) => !selectedIdSet.has(instance.id));
+  const nextIndex = Math.max(0, Math.min(remainingInstances.length, destinationIndex));
+  const nextInstances = [...remainingInstances];
+  nextInstances.splice(nextIndex, 0, ...movingInstances);
+  if (nextInstances.every((instance, index) => instance === variantInstances[index])) return false;
   const previousPositions = captureCanvasItemPositions(
     Array.from(componentSet?.querySelectorAll(".variant-preview") ?? []),
     (preview) => preview.dataset.variantInstanceId,
   );
   recordHistory();
-  const [instance] = variantInstances.splice(sourceIndex, 1);
-  variantInstances.splice(nextIndex, 0, instance);
+  variantInstances = nextInstances;
   renderTree();
   requestAnimationFrame(() => {
     animateCanvasItemReflow(
@@ -884,10 +965,27 @@ function reorderVariantInstance(instanceId, destinationIndex) {
       Array.from(componentSet?.querySelectorAll(".variant-preview") ?? []),
       { getKey: (preview) => preview.dataset.variantInstanceId },
     );
-    const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`);
+    const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(focusInstanceId))}"]`);
     if (preview instanceof HTMLElement) preview.focus();
   });
   return true;
+}
+
+function reorderVariantInstance(instanceId, destinationIndex) {
+  const sourceIndex = variantInstances.findIndex((instance) => instance.id === instanceId);
+  if (sourceIndex < 0) return false;
+  const selectedIds = getSelectedVariantInstanceIds();
+  if (selectedIds.length > 1 && selectedIds.includes(instanceId)) {
+    const direction = Math.sign(destinationIndex - sourceIndex);
+    if (direction === 0) return false;
+    const firstSelectedIndex = variantInstances.findIndex((instance) => selectedIds.includes(instance.id));
+    const currentInsertionIndex = variantInstances
+      .slice(0, firstSelectedIndex)
+      .filter((instance) => !selectedIds.includes(instance.id))
+      .length;
+    return reorderVariantInstances(selectedIds, currentInsertionIndex + direction, instanceId);
+  }
+  return reorderVariantInstances([instanceId], destinationIndex, instanceId);
 }
 
 function addVariantInstance({ render = true } = {}) {
@@ -1496,7 +1594,7 @@ function renderVariantLayersTree() {
       isAuthoredDefault ? `${instance.name} · Default` : instance.name,
       1,
       createLayerTypeIcon("component"),
-      instance.id === selectedVariantInstanceId && selectedVariantLayerTarget === null,
+      isVariantInstanceSelected(instance.id) && selectedVariantLayerTarget === null,
       instance.id,
     ));
     appendInstanceLayerRows(nodes, null, 2, instance);

@@ -1402,11 +1402,12 @@ textarea:focus-visible {
   pointer-events: auto;
 }
 
-.variant-preview-label[draggable="true"] {
+.variant-preview-label.is-reorder-handle {
   cursor: grab;
+  touch-action: none;
 }
 
-.variant-preview-label[draggable="true"]:active {
+.variant-preview-label.is-reorder-handle:active {
   cursor: grabbing;
 }
 
