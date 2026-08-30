@@ -399,7 +399,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   height: 32px;
-  padding: 0 16px;
+  padding: 0 8px;
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
@@ -513,7 +513,7 @@ textarea:focus-visible {
 
 .prop-control {
   margin: 0;
-  padding: 8px 16px;
+  padding: 8px;
   border: 0;
   border-radius: 0;
   outline: 0;
@@ -533,23 +533,17 @@ textarea:focus-visible {
   position: relative;
 }
 
-.prop-select {
-  padding: 8px 16px;
-  appearance: none;
+.prop-select-wrap:not(.is-disabled),
+.prop-select-wrap:not(.is-disabled) .prop-select {
+  cursor: pointer;
 }
 
-.prop-select option {
-  background-color: var(--layer-01);
-  color: var(--text-primary);
-  border: 0;
+.prop-select {
+  padding: 8px;
 }
 
 .prop-select--has-layer-icon {
   color: transparent;
-}
-
-.prop-select--has-layer-icon option {
-  color: var(--text-primary);
 }
 
 .prop-select-selected-value {
@@ -557,7 +551,7 @@ textarea:focus-visible {
   top: 0;
   right: 32px;
   bottom: 0;
-  left: 16px;
+  left: 8px;
   display: flex;
   align-items: center;
   min-width: 0;
@@ -583,6 +577,21 @@ textarea:focus-visible {
 
 .prop-select-wrap .inspector-select-chevron {
   right: 8px;
+}
+
+.prop-select-menu {
+  top: 36px;
+  z-index: 30;
+}
+
+.prop-select-option {
+  cursor: pointer;
+}
+
+.prop-select-option .layer-type-icon,
+.prop-select-option .prop-type-icon {
+  margin-right: 4px;
+  vertical-align: middle;
 }
 
 .prop-select-wrap.is-disabled .prop-select-selected-value,
@@ -620,7 +629,7 @@ textarea:focus-visible {
   align-content: flex-start;
   align-items: flex-start;
   justify-content: flex-start;
-  padding: 4px 16px;
+  padding: 4px 8px;
   color: var(--text-primary);
   row-gap: 4px;
   column-gap: 4px;
@@ -646,7 +655,7 @@ textarea:focus-visible {
   align-items: center;
   width: fit-content;
   height: 24px;
-  padding: 0 0 0 8px;
+  padding: 0 8px;
   gap: 4px;
   border-radius: 12px;
   background: var(--layer-01);
@@ -694,10 +703,13 @@ textarea:focus-visible {
 }
 
 .tag:has(.tag__text.is-editing) {
-  padding-right: 8px;
   background: transparent;
   color: var(--text-primary);
   outline: 1px solid var(--focus);
+}
+
+.tag:has([data-icon-button="prop-value-dismiss"]) {
+  padding-right: 0;
 }
 
 .tag:focus:not(:has(.tag__text.is-editing)) {
@@ -3056,20 +3068,11 @@ textarea:focus-visible {
   mask-image: url("src/icons/chevron--up.svg");
 }
 
-.prop-select-wrap.is-disabled .inspector-select-chevron,
-.prop-select-wrap select:disabled ~ .inspector-select-chevron {
+.prop-select-wrap.is-disabled .inspector-select-chevron {
   color: var(--icon-disabled);
   transform: translateY(-50%);
   -webkit-mask-image: url("src/icons/chevron--down.svg");
   mask-image: url("src/icons/chevron--down.svg");
-}
-
-@supports selector(select:open) {
-  .prop-select-wrap select:open + .inspector-select-chevron {
-    transform: translateY(-50%);
-    -webkit-mask-image: url("src/icons/chevron--up.svg");
-    mask-image: url("src/icons/chevron--up.svg");
-  }
 }
 
 .custom-color-control {

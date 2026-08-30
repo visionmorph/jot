@@ -910,23 +910,31 @@ function restoreWorkspaceState(snapshot, options = {}) {
       normalizedProp.type = "enum";
       normalizedProp.property = legacyEnumType === "size"
         ? "size"
-        : legacyEnumType === "shape" ? "type" : "variant";
+        : "kind";
     }
     if (normalizedProp.type === "enum") {
       const isState = normalizedProp.variantSubtype === "state";
       const options = isState
-        ? ["default", "hover", "active", "focus-visible"]
+        ? ["enabled", "hover", "active", "focus-visible"]
         : Array.isArray(normalizedProp.options) && normalizedProp.options.length > 0
         ? normalizedProp.options
         : ["default"];
       normalizedProp.options = options;
       normalizedProp.defaultValue = options[0];
-      const enumProperties = ["size", "type", "variant"];
+      const enumProperties = ["size", "kind", "state"];
       const savedProperty = String(normalizedProp.property ?? "").toLowerCase();
       const namedProperty = String(normalizedProp.name ?? "").trim().toLowerCase();
-      normalizedProp.property = enumProperties.includes(savedProperty)
-        ? savedProperty
-        : enumProperties.includes(namedProperty) ? namedProperty : "variant";
+      const migratedProperty = savedProperty === "type" || savedProperty === "variant"
+        ? "kind"
+        : savedProperty;
+      const migratedNamedProperty = namedProperty === "type" || namedProperty === "variant"
+        ? "kind"
+        : namedProperty;
+      normalizedProp.property = isState
+        ? "state"
+        : enumProperties.includes(migratedProperty)
+          ? migratedProperty
+          : enumProperties.includes(migratedNamedProperty) ? migratedNamedProperty : "kind";
     } else if (normalizedProp.type === "boolean") {
       normalizedProp.defaultValue = normalizedProp.defaultValue === true || normalizedProp.defaultValue === "true";
     }

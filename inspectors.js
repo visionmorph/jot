@@ -638,34 +638,6 @@ function setBooleanPropProperty(prop, property) {
   renderComponentProps();
 }
 
-function bindNativeSelectChevron(select, wrap) {
-  const closeMenuState = () => wrap.classList.remove("is-open");
-  const clearSelectionFocus = () => wrap.classList.remove("is-selection-focused");
-  select.addEventListener("pointerdown", () => {
-    if (select.disabled) closeMenuState();
-    else {
-      clearSelectionFocus();
-      wrap.classList.add("is-open");
-    }
-  });
-  select.addEventListener("change", () => {
-    closeMenuState();
-    wrap.classList.add("is-selection-focused");
-  });
-  select.addEventListener("click", () => requestAnimationFrame(() => {
-    closeMenuState();
-    if (!select.disabled) wrap.classList.add("is-selection-focused");
-  }));
-  select.addEventListener("blur", () => {
-    closeMenuState();
-    clearSelectionFocus();
-  });
-  select.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" || event.key === "Enter") closeMenuState();
-    else if (event.key === "ArrowDown" && event.altKey) wrap.classList.add("is-open");
-  });
-}
-
 function createPropSelectIcon(iconType, record = null) {
   if (iconType === "prop-boolean") return createSvgAssetIcon("toggle-on", "layer-type-icon prop-type-icon");
   if (iconType === "prop-string") return createSvgAssetIcon("text", "layer-type-icon prop-type-icon");
@@ -690,27 +662,92 @@ function bindPropsActionTooltip(wrapper, button) {
 
 function createPropSelect(options, value, ariaLabel, onChange, disabled = false) {
   const wrap = document.createElement("div");
-  const select = document.createElement("select");
+  const trigger = document.createElement("button");
   const chevron = document.createElement("span");
+  const menu = document.createElement("div");
   const selectedOptionRecord = options.find((optionRecord) => String(optionRecord.value) === String(value));
+  let outsidePointerListener = null;
 
   wrap.className = "prop-select-wrap";
   wrap.classList.toggle("is-disabled", disabled);
-  select.className = "prop-control prop-select";
-  select.setAttribute("aria-label", ariaLabel);
-  select.disabled = disabled;
+  trigger.className = "prop-control prop-select";
+  trigger.type = "button";
+  trigger.setAttribute("aria-label", ariaLabel);
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.disabled = disabled;
+  menu.className = "dropdown__menu prop-select-menu";
+  menu.setAttribute("role", "listbox");
+  menu.hidden = true;
+
+  const setOpen = (isOpen) => {
+    if (disabled) return;
+    if (isOpen) {
+      document.querySelectorAll(".prop-select-wrap.is-open").forEach((otherWrap) => {
+        if (otherWrap === wrap) return;
+        otherWrap.classList.remove("is-open");
+        const otherMenu = otherWrap.querySelector(".prop-select-menu");
+        const otherTrigger = otherWrap.querySelector(".prop-select");
+        if (otherMenu instanceof HTMLElement) otherMenu.hidden = true;
+        if (otherTrigger instanceof HTMLButtonElement) otherTrigger.setAttribute("aria-expanded", "false");
+      });
+      wrap.classList.add("is-open");
+      menu.hidden = false;
+      trigger.setAttribute("aria-expanded", "true");
+      if (!outsidePointerListener) {
+        outsidePointerListener = (event) => {
+          if (event.target instanceof Node && wrap.contains(event.target)) return;
+          setOpen(false);
+        };
+        window.setTimeout(() => document.addEventListener("pointerdown", outsidePointerListener), 0);
+      }
+      return;
+    }
+    wrap.classList.remove("is-open");
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    if (outsidePointerListener) {
+      document.removeEventListener("pointerdown", outsidePointerListener);
+      outsidePointerListener = null;
+    }
+  };
+
   options.forEach((optionRecord) => {
-    const option = document.createElement("option");
-    option.value = optionRecord.value;
-    option.textContent = optionRecord.label;
+    const option = document.createElement("button");
+    option.className = "dropdown__option prop-select-option";
+    option.type = "button";
+    option.setAttribute("role", "option");
+    option.setAttribute("aria-selected", String(String(optionRecord.value) === String(value)));
+    option.dataset.propSelectValue = String(optionRecord.value);
     option.disabled = Boolean(optionRecord.disabled);
-    select.append(option);
+    if (optionRecord.iconType) option.append(createPropSelectIcon(optionRecord.iconType, optionRecord.iconRecord));
+    option.append(document.createTextNode(optionRecord.label));
+    option.addEventListener("click", () => {
+      if (option.disabled) return;
+      setOpen(false);
+      onChange(optionRecord.value);
+    });
+    menu.append(option);
   });
-  select.value = value;
-  select.addEventListener("change", () => onChange(select.value));
   chevron.className = "chevron inspector-select-chevron";
   chevron.setAttribute("aria-hidden", "true");
-  wrap.append(select);
+  trigger.textContent = selectedOptionRecord?.label ?? String(value);
+  trigger.addEventListener("click", () => setOpen(menu.hidden));
+  trigger.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setOpen(false);
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
+    event.preventDefault();
+    setOpen(true);
+    const selectedOption = menu.querySelector('[aria-selected="true"]');
+    (selectedOption instanceof HTMLButtonElement ? selectedOption : menu.querySelector("button:not(:disabled)"))?.focus();
+  });
+  wrap.addEventListener("focusout", () => window.setTimeout(() => {
+    if (!wrap.contains(document.activeElement)) setOpen(false);
+  }, 0));
+  wrap.append(trigger);
   if (selectedOptionRecord?.iconType) {
     const selectedValue = document.createElement("span");
     const selectedLabel = document.createElement("span");
@@ -718,16 +755,15 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
     selectedLabel.className = "prop-select-selected-label";
     selectedLabel.textContent = selectedOptionRecord.label;
     selectedValue.append(createPropSelectIcon(selectedOptionRecord.iconType, selectedOptionRecord.iconRecord), selectedLabel);
-    select.classList.add("prop-select--has-layer-icon");
+    trigger.classList.add("prop-select--has-layer-icon");
     wrap.append(selectedValue);
   }
-  wrap.append(chevron);
-  bindNativeSelectChevron(select, wrap);
+  wrap.append(chevron, menu);
   return wrap;
 }
 
 const DEFAULT_ENUM_OPTION = "Default";
-const INTERACTION_STATE_OPTIONS = ["default", "hover", "active", "focus-visible"];
+const INTERACTION_STATE_OPTIONS = ["enabled", "hover", "active", "focus-visible"];
 
 const OPTION_COMPONENT_PROP_CONFIG = {
   enum: { label: "Enum", options: [DEFAULT_ENUM_OPTION] },
@@ -735,17 +771,18 @@ const OPTION_COMPONENT_PROP_CONFIG = {
 
 const ENUM_COMPONENT_PROPERTY_OPTIONS = [
   { value: "size", label: "Size" },
-  { value: "type", label: "Type" },
-  { value: "variant", label: "Variant" },
+  { value: "kind", label: "Kind" },
   { value: "state", label: "State" },
 ];
 
 function getEnumComponentProperty(prop) {
   if (isStateComponentProp(prop)) return "state";
   const property = String(prop?.property ?? "").toLowerCase();
+  if (property === "type" || property === "variant") return "kind";
   if (ENUM_COMPONENT_PROPERTY_OPTIONS.some((option) => option.value === property)) return property;
   const name = String(prop?.name ?? "").trim().toLowerCase();
-  return ENUM_COMPONENT_PROPERTY_OPTIONS.some((option) => option.value === name) ? name : "variant";
+  if (name === "type" || name === "variant") return "kind";
+  return ENUM_COMPONENT_PROPERTY_OPTIONS.some((option) => option.value === name) ? name : "kind";
 }
 
 function isOptionComponentProp(propOrType) {
@@ -768,8 +805,8 @@ function getAvailableEnumPropName(currentProp = null) {
     .filter((prop) => prop !== currentProp && isOptionComponentProp(prop))
     .map((prop) => prop.name.toLowerCase()));
   let index = 1;
-  let name = "Variant";
-  while (usedNames.has(name.toLowerCase())) name = `Variant ${index += 1}`;
+  let name = "Kind";
+  while (usedNames.has(name.toLowerCase())) name = `Kind ${index += 1}`;
   return name;
 }
 
@@ -784,7 +821,7 @@ function configureOptionComponentProp(prop, type) {
   prop.targetFrameId = null;
   prop.targetTextId = null;
   prop.targetVectorId = null;
-  prop.property = "variant";
+  prop.property = "kind";
 }
 
 function renderComponentProps() {
@@ -1326,16 +1363,14 @@ function renderComponentProps() {
           if (value === "state") {
             prop.variantSubtype = "state";
             prop.name = "Interaction";
-            prop.property = "variant";
+            prop.property = "state";
             prop.options = [...INTERACTION_STATE_OPTIONS];
             prop.defaultValue = prop.options[0];
           } else {
             delete prop.variantSubtype;
             prop.property = value;
             if (wasStateProp) {
-              prop.name = value === "variant"
-                ? getAvailableEnumPropName(prop)
-                : `${value[0].toUpperCase()}${value.slice(1)}`;
+              prop.name = `${value[0].toUpperCase()}${value.slice(1)}`;
               prop.options = [DEFAULT_ENUM_OPTION];
               prop.defaultValue = prop.options[0];
             }
@@ -1417,7 +1452,7 @@ function addComponentProp(type = "enum") {
       name: getAvailableEnumPropName(),
       options,
       defaultValue: options[0],
-      property: "variant",
+      property: "kind",
     });
   } else if (type === "string") {
     const target = textRecords[0];
