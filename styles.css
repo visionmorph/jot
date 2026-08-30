@@ -540,6 +540,7 @@ textarea:focus-visible {
 
 .prop-select {
   padding: 8px;
+  text-align: left;
 }
 
 .prop-select--has-layer-icon {
@@ -580,8 +581,9 @@ textarea:focus-visible {
 }
 
 .dropdown__menu.prop-select-menu {
-  top: 36px;
+  top: 32px;
   z-index: 30;
+  border-radius: 0;
 }
 
 .dropdown__option.prop-select-option {
@@ -2993,7 +2995,7 @@ textarea:focus-visible {
   width: 100%;
   height: 24px;
   margin: 0;
-  padding: 4px 4px 4px 8px;
+  padding: 4px 8px;
   border: 0;
   background: transparent;
   color: var(--text-secondary);
@@ -3059,6 +3061,23 @@ textarea:focus-visible {
 .dropdown__option[aria-selected="true"]:hover::after,
 .dropdown__option[aria-selected="true"]:focus-visible::after {
   background: var(--icon-primary);
+}
+
+.dropdown__option:disabled,
+.dropdown__option:disabled:hover,
+.dropdown__option:disabled:focus-visible {
+  background: transparent;
+  color: var(--text-disabled);
+}
+
+.dropdown__option:disabled::after,
+.dropdown__option:disabled:hover::after,
+.dropdown__option:disabled:focus-visible::after {
+  background: var(--icon-disabled);
+}
+
+.dropdown__option:disabled :is(.layer-type-icon, .prop-type-icon) {
+  color: var(--icon-disabled);
 }
 
 .inspector-select-chevron {
