@@ -1222,7 +1222,10 @@ function renderComponentProps() {
       bindHistoryGesture(valueInput);
       defaultCell.append(valueInput);
     } else if (prop.type === "action" && prop.property === "onClick") {
-      defaultCell.textContent = "—";
+      const actionValue = document.createElement("span");
+      actionValue.className = "prop-empty-value prop-empty-value--action";
+      actionValue.textContent = "—";
+      defaultCell.append(actionValue);
       defaultCell.setAttribute("aria-label", "Value supplied by component consumer");
     } else {
       const valueTag = document.createElement("span");
@@ -1304,7 +1307,7 @@ function renderComponentProps() {
       targetOptions = targetsEmpty
         ? [{ value: "", label: "No button target", disabled: true }]
         : [
-            { value: "", label: "Select layer", disabled: true },
+            ...(prop.type === "action" ? [] : [{ value: "", label: "Select layer", disabled: true }]),
             ...compatibleTargets.map((record) => ({
               value: String(record.id),
               label: record.isComponent
