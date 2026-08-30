@@ -579,7 +579,7 @@ textarea:focus-visible {
   right: 8px;
 }
 
-.prop-select-menu {
+.dropdown__menu.prop-select-menu {
   top: 36px;
   z-index: 30;
 }
