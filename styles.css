@@ -601,6 +601,7 @@ textarea:focus-visible {
 
 .dropdown__option.prop-select-option::after {
   top: 8px;
+  right: 8px;
 }
 
 .prop-select-option .layer-type-icon,
