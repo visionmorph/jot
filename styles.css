@@ -729,7 +729,7 @@ textarea:focus-visible {
   outline: 1px solid var(--focus);
 }
 
-.tag:has([data-icon-button="prop-value-dismiss"]) {
+.tag--dismissable {
   padding-right: 0;
 }
 
@@ -739,28 +739,6 @@ textarea:focus-visible {
 
 .tag:has(.tag__text.is-editing) [data-prop-value-dismiss-tooltip] {
   display: none;
-}
-
-.prop-boolean-default {
-  display: inline-flex;
-  flex: 1 0 100%;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 16px;
-}
-
-.prop-boolean-default-select {
-  min-width: 58px;
-  height: 22px;
-  padding: 0 4px;
-  border: 1px solid var(--border-subtle-01);
-  border-radius: 2px;
-  background: var(--field-01);
-  color: var(--text-primary);
-  font: inherit;
 }
 
 .tag__add-input {
@@ -946,6 +924,15 @@ textarea:focus-visible {
   border-radius: 4px;
   background: var(--field-01);
   color: var(--text-primary);
+}
+
+.variant-inferred-default {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 
 .variant-condition-cell {

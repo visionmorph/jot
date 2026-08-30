@@ -345,6 +345,11 @@ function toggleTreeLayerVisibility(type, record, component) {
     recordHistory();
     element.dataset.layerVisibility = nextVisibility;
     syncLayerVisibility(element);
+    if (typeof syncBooleanComponentPropDefaultsForTarget === "function") {
+      const targetType = type === "component" ? "frame" : type;
+      const targetId = type === "component" ? component.frameRecord?.id : record.id;
+      if (targetId != null) syncBooleanComponentPropDefaultsForTarget(targetType, targetId);
+    }
     requestAnimationFrame(syncResizeOverlay);
   }
   renderTree();

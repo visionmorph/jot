@@ -79,7 +79,7 @@ function isVariantBoundComponentProp(componentProp) {
   return componentProp?.type === "enum" || componentProp?.type === "boolean";
 }
 
-function syncComponentPropVariantDefinition(componentProp) {
+function syncComponentPropVariantDefinition(componentProp, { render = true } = {}) {
   if (!isVariantBoundComponentProp(componentProp)) {
     unlinkComponentPropVariantDefinition(componentProp);
     return;
@@ -132,7 +132,7 @@ function syncComponentPropVariantDefinition(componentProp) {
       && !options.includes(rule.conditions[variantProp.id])) delete rule.conditions[variantProp.id];
   });
   variantRules = variantRules.filter((rule) => Object.keys(rule.conditions).length > 0);
-  renderVariantSystem();
+  if (render) renderVariantSystem();
 }
 
 function getVariantInstance(instanceId = selectedVariantInstanceId) {
@@ -150,6 +150,26 @@ function getAuthoredDefaultVariantInstance() {
 
 function getDefaultVariantInstance() {
   return getAuthoredDefaultVariantInstance() ?? variantInstances[0] ?? null;
+}
+
+function setInferredVariantBooleanDefault(prop, value) {
+  if (prop?.type !== "boolean") return;
+  const nextDefault = Boolean(value);
+  prop.defaultValue = nextDefault;
+  const sourceComponentProp = componentProps.find((componentProp) => (
+    componentProp.variantPropId === prop.id
+    || (prop.sourceComponentPropId != null && componentProp.id === prop.sourceComponentPropId)
+  ));
+  if (sourceComponentProp) sourceComponentProp.defaultValue = nextDefault;
+}
+
+function setVariantBooleanValue(instance, prop, value) {
+  if (!instance || prop?.type !== "boolean") return;
+  const wasDefaultInstance = instance === getDefaultVariantInstance();
+  const nextValue = Boolean(value);
+  instance.propValues ??= {};
+  instance.propValues[prop.id] = nextValue;
+  if (wasDefaultInstance) setInferredVariantBooleanDefault(prop, nextValue);
 }
 
 function normalizeDefaultVariantInstance() {
@@ -987,9 +1007,11 @@ function renderVariantPropAuthoring() {
     const nameInput = createVariantControl("input", prop.name, "Variant property name");
     const typeSelect = createVariantControl("select", prop.type, "Variant property type");
     const optionsInput = createVariantControl("input", prop.type === "enum" ? prop.options.join(", ") : prop.type === "boolean" ? "false, true" : "—", "Variant options");
-    const defaultControl = prop.type === "enum" || prop.type === "boolean"
-      ? createVariantControl("select", String(getVariantPropDefaultValue(prop)), "Default variant value")
-      : createVariantControl("input", prop.type === "action" ? "" : prop.defaultValue, "Default variant value");
+    const defaultControl = prop.type === "boolean"
+      ? document.createElement("span")
+      : prop.type === "enum"
+        ? createVariantControl("select", String(getVariantPropDefaultValue(prop)), "Default variant value")
+        : createVariantControl("input", prop.type === "action" ? "" : prop.defaultValue, "Default variant value");
     const removeButton = document.createElement("button");
     row.className = "variant-grid variant-props-grid variant-grid-row";
     [
@@ -1003,16 +1025,22 @@ function renderVariantPropAuthoring() {
       option.textContent = label;
       typeSelect.append(option);
     });
-    getVariantPropValues(prop).forEach((value) => {
-      const option = document.createElement("option");
-      option.value = String(value);
-      option.textContent = String(value);
-      defaultControl.append(option);
-    });
+    if (prop.type === "boolean") {
+      defaultControl.className = "variant-inferred-default";
+      defaultControl.textContent = `Inferred: ${String(getVariantPropDefaultValue(prop))}`;
+      defaultControl.setAttribute("aria-label", `Inferred default ${prop.name} value`);
+    } else {
+      getVariantPropValues(prop).forEach((value) => {
+        const option = document.createElement("option");
+        option.value = String(value);
+        option.textContent = String(value);
+        defaultControl.append(option);
+      });
+    }
     typeSelect.value = prop.type;
-    defaultControl.value = String(getVariantPropDefaultValue(prop) ?? "");
+    if ("value" in defaultControl) defaultControl.value = String(getVariantPropDefaultValue(prop) ?? "");
     optionsInput.disabled = prop.type !== "enum";
-    defaultControl.disabled = prop.type === "enum" || prop.type === "action";
+    if ("disabled" in defaultControl) defaultControl.disabled = prop.type === "enum" || prop.type === "action";
     if (prop.type === "enum") defaultControl.title = "The first value is the default.";
     removeButton.className = "variant-row-remove";
     removeButton.type = "button";
@@ -1055,13 +1083,15 @@ function renderVariantPropAuthoring() {
       });
       renderVariantSystem();
     });
-    defaultControl.addEventListener("change", () => {
-      const value = normalizeVariantPropValue(prop, defaultControl.value);
-      if (value === getVariantPropDefaultValue(prop)) return;
-      recordHistory();
-      prop.defaultValue = value;
-      renderVariantSystem();
-    });
+    if (prop.type !== "boolean") {
+      defaultControl.addEventListener("change", () => {
+        const value = normalizeVariantPropValue(prop, defaultControl.value);
+        if (value === getVariantPropDefaultValue(prop)) return;
+        recordHistory();
+        prop.defaultValue = value;
+        renderVariantSystem();
+      });
+    }
     removeButton.addEventListener("click", () => {
       recordHistory();
       variantProps = variantProps.filter((entry) => entry.id !== prop.id);
@@ -1338,8 +1368,9 @@ function renderVariantInspector() {
       control.setAttribute("aria-pressed", String(Boolean(value)));
       control.addEventListener("click", () => {
         recordHistory();
-        instance.propValues[prop.id] = !Boolean(value);
+        setVariantBooleanValue(instance, prop, !Boolean(value));
         renderVariantSystem();
+        renderComponentProps();
       });
     } else if (prop.type === "enum") {
       control = createVariantControl("select", value, prop.name);

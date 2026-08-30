@@ -614,14 +614,55 @@ function getTargetLayerIconType(type, record) {
   return type === "frame" && record?.isComponent ? "component" : type;
 }
 
+function getBooleanPropTargetElement(prop) {
+  if (prop.targetFrameId != null) return getFrameRecord(prop.targetFrameId)?.element ?? null;
+  if (prop.targetTextId != null) return getTextRecord(prop.targetTextId)?.element ?? null;
+  if (prop.targetVectorId != null) return getVectorRecord(prop.targetVectorId)?.element ?? null;
+  return null;
+}
+
+function inferBooleanComponentPropDefault(prop) {
+  const target = getBooleanPropTargetElement(prop);
+  if (!(target instanceof HTMLElement)) return prop.property === "visibility";
+  if (prop.property === "visibility") return isLayerVisible(target);
+  if (prop.property === "disabled") return Boolean(target.disabled || target.hasAttribute("disabled"));
+  return false;
+}
+
+function syncInferredBooleanComponentPropDefault(prop, defaultInstance = getDefaultVariantInstance()) {
+  if (prop?.type !== "boolean") return;
+  const nextDefault = inferBooleanComponentPropDefault(prop);
+  prop.defaultValue = nextDefault;
+  syncComponentPropVariantDefinition(prop, { render: false });
+  const variantProp = variantProps.find((entry) => entry.id === prop.variantPropId);
+  if (variantProp) {
+    setInferredVariantBooleanDefault(variantProp, nextDefault);
+    if (defaultInstance) {
+      defaultInstance.propValues ??= {};
+      defaultInstance.propValues[variantProp.id] = nextDefault;
+    }
+  }
+  renderVariantSystem();
+}
+
+function syncBooleanComponentPropDefaultsForTarget(type, recordId) {
+  const targetKey = type === "text" ? "targetTextId" : type === "vector" ? "targetVectorId" : "targetFrameId";
+  const defaultInstance = getDefaultVariantInstance();
+  const matchingProps = componentProps
+    .filter((prop) => prop.type === "boolean" && prop.property === "visibility" && prop[targetKey] === recordId);
+  if (matchingProps.length === 0) return;
+  matchingProps.forEach((prop) => syncInferredBooleanComponentPropDefault(prop, defaultInstance));
+  renderComponentProps();
+}
+
 function setBooleanPropProperty(prop, property) {
   if (property === prop.property) return;
   recordHistory();
+  const defaultInstance = getDefaultVariantInstance();
   if (property === "visibility") {
     const target = getAllTargetableLayers()[0];
     prop.name = "visible";
     prop.property = "visibility";
-    prop.defaultValue = true;
     prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
     prop.targetTextId = target?.type === "text" ? target.record.id : null;
     prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
@@ -629,12 +670,11 @@ function setBooleanPropProperty(prop, property) {
     const target = getCompatibleDisabledTargets()[0];
     prop.name = "disabled";
     prop.property = "disabled";
-    prop.defaultValue = false;
     prop.targetFrameId = target?.id ?? null;
     prop.targetTextId = null;
     prop.targetVectorId = null;
   }
-  syncComponentPropVariantDefinition(prop);
+  syncInferredBooleanComponentPropDefault(prop, defaultInstance);
   renderComponentProps();
 }
 
@@ -905,7 +945,6 @@ function renderComponentProps() {
           const target = getAllTargetableLayers()[0];
           prop.name = "visible";
           prop.type = "boolean";
-          prop.defaultValue = true;
           prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
           prop.targetTextId = target?.type === "text" ? target.record.id : null;
           prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
@@ -915,7 +954,8 @@ function renderComponentProps() {
           delete prop.options;
           delete prop.variantSubtype;
         }
-        if (value === "enum" || value === "boolean") syncComponentPropVariantDefinition(prop);
+        if (value === "boolean") syncInferredBooleanComponentPropDefault(prop);
+        else if (value === "enum") syncComponentPropVariantDefinition(prop);
         renderComponentProps();
       },
     ));
@@ -955,7 +995,7 @@ function renderComponentProps() {
         const dismissTooltip = document.createElement("span");
         const dismissButton = document.createElement("button");
         const dismissTooltipContent = document.createElement("span");
-        valueTag.className = "tag";
+        valueTag.className = isStateProp ? "tag" : "tag tag--dismissable";
         valueTag.tabIndex = 0;
         valueInput.type = "text";
         valueInput.className = "tag__text";
@@ -1116,7 +1156,7 @@ function renderComponentProps() {
       });
       if (!isStateProp) defaultCell.append(addValueInput);
     } else if (prop.type === "boolean" && prop.variantPropId != null) {
-      const instance = getVariantInstance();
+      const instance = getVariantInstance() ?? getDefaultVariantInstance();
       const currentValue = instance
         ? normalizeVariantPropValue(
           variantProps.find((variantProp) => variantProp.id === prop.variantPropId),
@@ -1151,11 +1191,12 @@ function renderComponentProps() {
         valueToggleLabel.textContent = nextValue ? "True" : "False";
         recordHistory();
         if (instance) {
-          instance.propValues[prop.variantPropId] = nextValue;
+          const variantProp = variantProps.find((entry) => entry.id === prop.variantPropId);
+          setVariantBooleanValue(instance, variantProp, nextValue);
           renderVariantInstances();
         } else {
           prop.defaultValue = nextValue;
-          syncComponentPropVariantDefinition(prop);
+          syncComponentPropVariantDefinition(prop, { render: false });
         }
         if (transitionDuration === 0) {
           renderComponentProps();
@@ -1171,29 +1212,6 @@ function renderComponentProps() {
         window.setTimeout(finishTransition, transitionDuration + 60);
       });
       defaultCell.append(valueToggle);
-      const booleanDefaultLabel = document.createElement("label");
-      const booleanDefaultSelect = document.createElement("select");
-      booleanDefaultLabel.className = "prop-boolean-default";
-      booleanDefaultLabel.textContent = "Default";
-      booleanDefaultSelect.className = "prop-boolean-default-select";
-      booleanDefaultSelect.setAttribute("aria-label", `Default ${prop.name} value`);
-      [false, true].forEach((optionValue) => {
-        const option = document.createElement("option");
-        option.value = String(optionValue);
-        option.textContent = String(optionValue);
-        booleanDefaultSelect.append(option);
-      });
-      booleanDefaultSelect.value = String(Boolean(prop.defaultValue));
-      booleanDefaultSelect.addEventListener("change", () => {
-        const nextDefault = booleanDefaultSelect.value === "true";
-        if (Boolean(prop.defaultValue) === nextDefault) return;
-        recordHistory();
-        prop.defaultValue = nextDefault;
-        syncComponentPropVariantDefinition(prop);
-        renderComponentProps();
-      });
-      booleanDefaultLabel.append(booleanDefaultSelect);
-      defaultCell.append(booleanDefaultLabel);
     } else if (prop.type === "string" && prop.property === "textContent") {
       defaultCell.classList.add("props-table-value-cell--control");
       const valueInput = document.createElement("input");
@@ -1326,6 +1344,7 @@ function renderComponentProps() {
       (value) => {
         if (!value || value === currentValue) return;
         recordHistory();
+        const defaultInstance = getDefaultVariantInstance();
         if (isOptionProp) {
           return;
         } else if (isStringProp) {
@@ -1347,6 +1366,7 @@ function renderComponentProps() {
           prop.targetTextId = null;
           prop.targetVectorId = null;
         }
+        if (prop.type === "boolean") syncInferredBooleanComponentPropDefault(prop, defaultInstance);
         renderComponentProps();
       },
       targetsEmpty,
@@ -1479,6 +1499,7 @@ function addComponentProp(type = "enum") {
     prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
     prop.targetTextId = target?.type === "text" ? target.record.id : null;
     prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
+    prop.defaultValue = inferBooleanComponentPropDefault(prop);
   }
 
   componentProps.push(prop);
