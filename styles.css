@@ -585,7 +585,14 @@ textarea:focus-visible {
 }
 
 .prop-select-option {
+  height: 32px;
+  padding-top: 8px;
+  padding-bottom: 8px;
   cursor: pointer;
+}
+
+.prop-select-option::after {
+  top: 8px;
 }
 
 .prop-select-option .layer-type-icon,
