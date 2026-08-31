@@ -695,6 +695,9 @@ function updateVariantPointerDrag(event) {
   if (!variantPointerDrag.hasStarted && distance < CANVAS_DRAG_THRESHOLD) return false;
   if (!variantPointerDrag.hasStarted) {
     variantPointerDrag.hasStarted = true;
+    if (canvas instanceof HTMLElement && !canvas.hasPointerCapture(event.pointerId)) {
+      canvas.setPointerCapture(event.pointerId);
+    }
     componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
       preview.classList.toggle(
         "is-variant-dragging",
@@ -730,7 +733,15 @@ function finishVariantPointerDrag(event, shouldCommit) {
     canvas.releasePointerCapture(event.pointerId);
   }
   clearVariantReorderIndicators();
-  if (!pointerDrag.hasStarted) return;
+  if (!pointerDrag.hasStarted) {
+    if (shouldCommit && pointerDrag.selectOnClick) {
+      selectVariantInstance(pointerDrag.instanceId, {
+        render: false,
+        layerTarget: pointerDrag.clickLayerTarget,
+      });
+    }
+    return;
+  }
   event.preventDefault();
   event.stopPropagation();
   suppressCanvasClickForGesture(event);
@@ -743,6 +754,7 @@ function bindVariantReorderPointer(preview, instance) {
     if (event.target instanceof HTMLElement && event.target.isContentEditable) return;
     const selectedIds = getSelectedVariantInstanceIds();
     const instanceIds = selectedIds.includes(instance.id) ? selectedIds : [instance.id];
+    const clickTarget = resolveVariantCanvasSelectionTarget(event.target);
     if (!selectedIds.includes(instance.id)) selectVariantInstance(instance.id, { render: false });
     variantPointerDrag = {
       pointerId: event.pointerId,
@@ -752,10 +764,11 @@ function bindVariantReorderPointer(preview, instance) {
         .map((candidate) => candidate.id),
       startX: event.clientX,
       startY: event.clientY,
+      selectOnClick: selectedIds.length > 1 && selectedIds.includes(instance.id),
+      clickLayerTarget: clickTarget?.instanceId === instance.id ? clickTarget.target : null,
       hasStarted: false,
       drop: null,
     };
-    canvas?.setPointerCapture(event.pointerId);
   });
 }
 
