@@ -1790,6 +1790,13 @@ textarea:focus-visible {
   pointer-events: none !important;
 }
 
+.canvas-drag-preview-group > .canvas-drag-preview-item {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+}
+
 .canvas-root-stack:hover:not(.is-selected),
 .canvas-frame:hover:not(.is-selected),
 .canvas-text:hover:not(.is-selected):not(.is-new-empty),

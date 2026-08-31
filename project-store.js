@@ -1281,6 +1281,79 @@ function moveLayer(layer, parentFrameId, targetIndex, rootPosition) {
   return true;
 }
 
+function moveLayers(layers, parentFrameId, targetIndex) {
+  const uniqueLayers = [...new Map(
+    layers.map((layer) => [`${layer.type}:${layer.id}`, layer]),
+  ).values()];
+  if (uniqueLayers.length === 0) return false;
+  if (uniqueLayers.length === 1) return moveLayer(uniqueLayers[0], parentFrameId, targetIndex);
+  if (uniqueLayers.some((layer) => !getLayerRecord(layer))) return false;
+
+  const previousParentIds = new Set(uniqueLayers.map(getLayerParentId));
+  if (previousParentIds.size !== 1) return false;
+  if (uniqueLayers.some(
+    (layer) => layer.type === "frame" && parentFrameId !== null && !canNestFrame(layer.id, parentFrameId),
+  )) return false;
+
+  const previousParentId = uniqueLayers.length > 0 ? getLayerParentId(uniqueLayers[0]) : null;
+  const movingKeys = new Set(uniqueLayers.map((layer) => `${layer.type}:${layer.id}`));
+  const previousSiblings = getLayerChildren(previousParentId);
+  const movingSiblings = previousSiblings.filter(
+    (sibling) => movingKeys.has(`${sibling.type}:${sibling.record.id}`),
+  );
+  if (movingSiblings.length !== uniqueLayers.length) return false;
+
+  const targetSiblings = getLayerChildren(parentFrameId).filter(
+    (sibling) => !movingKeys.has(`${sibling.type}:${sibling.record.id}`),
+  );
+  const insertionIndex = Math.max(0, Math.min(targetIndex ?? targetSiblings.length, targetSiblings.length));
+  const nextTargetSiblings = [...targetSiblings];
+  nextTargetSiblings.splice(insertionIndex, 0, ...movingSiblings);
+
+  if (previousParentId === parentFrameId) {
+    const previousOrder = previousSiblings.map((sibling) => `${sibling.type}:${sibling.record.id}`);
+    const nextOrder = nextTargetSiblings.map((sibling) => `${sibling.type}:${sibling.record.id}`);
+    if (previousOrder.every((key, index) => key === nextOrder[index])) return false;
+  }
+
+  recordHistory();
+  const canvasBounds = canvas instanceof HTMLElement ? canvas.getBoundingClientRect() : null;
+  const rootPositions = new Map(movingSiblings.map((sibling) => {
+    const bounds = sibling.record.element.getBoundingClientRect();
+    return [`${sibling.type}:${sibling.record.id}`, {
+      x: canvasBounds ? bounds.left - canvasBounds.left : 0,
+      y: canvasBounds ? bounds.top - canvasBounds.top : 0,
+    }];
+  }));
+
+  movingSiblings.forEach((sibling) => {
+    if (sibling.type === "frame") sibling.record.parentId = parentFrameId;
+    else sibling.record.parentFrameId = parentFrameId;
+    if (parentFrameId === null) {
+      const position = rootPositions.get(`${sibling.type}:${sibling.record.id}`);
+      sibling.record.element.style.left = `${Math.max(0, position?.x ?? 0)}px`;
+      sibling.record.element.style.top = `${Math.max(0, position?.y ?? 0)}px`;
+    } else {
+      sibling.record.element.style.left = "";
+      sibling.record.element.style.top = "";
+      expandedFrameIds.add(parentFrameId);
+    }
+  });
+
+  if (previousParentId !== parentFrameId) {
+    previousSiblings
+      .filter((sibling) => !movingKeys.has(`${sibling.type}:${sibling.record.id}`))
+      .forEach((sibling, index) => { sibling.record.order = index + 1; });
+  }
+  nextTargetSiblings.forEach((sibling, index) => { sibling.record.order = index + 1; });
+  normalizeSiblingOrder(previousParentId);
+  normalizeSiblingOrder(parentFrameId);
+  syncLayerDomOrder(previousParentId);
+  if (parentFrameId !== previousParentId) syncLayerDomOrder(parentFrameId);
+  queueCanvasMutationEffects({ sizing: true, tree: true });
+  return true;
+}
+
 function nestLayer(layer, parentFrameId) {
   return moveLayer(layer, parentFrameId, getLayerChildren(parentFrameId).length);
 }
