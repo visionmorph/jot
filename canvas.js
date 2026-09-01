@@ -1068,14 +1068,6 @@ function syncCanvasDragGroupLayout(group, parentElement) {
   group.style.flexDirection = isVertical ? "column" : "row";
   group.style.gap = isVertical ? style.rowGap : style.columnGap;
   group.style.alignItems = style.alignItems;
-  if (group.classList.contains("is-variant-drag-placeholder")) {
-    const parentGap = Number.parseFloat(isVertical ? style.rowGap : style.columnGap) || 0;
-    group.style.width = isVertical ? "" : "0px";
-    group.style.height = isVertical ? "0px" : "";
-    group.style.marginRight = isVertical ? "" : `${-parentGap}px`;
-    group.style.marginBottom = isVertical ? `${-parentGap}px` : "";
-    group.style.overflow = "hidden";
-  }
 }
 
 function createCanvasDragPlaceholder(elements, parentElement) {
@@ -1306,20 +1298,7 @@ function startCanvasDragSession(
   const parentElement = getCanvasParentElement(originalParentId, variantInstanceId);
   if (!(parentElement instanceof HTMLElement)) return null;
   const { placeholder, placeholderItems } = createCanvasDragPlaceholder(elements, parentElement);
-  if (variantInstanceId !== null) {
-    placeholder.classList.add("is-variant-drag-placeholder");
-    syncCanvasDragGroupLayout(placeholder, parentElement);
-  }
   elements[0].insertAdjacentElement("beforebegin", placeholder);
-  const draggingInlineStyles = variantInstanceId === null
-    ? []
-    : elements.map((element) => ({
-        element,
-        position: [element.style.getPropertyValue("position"), element.style.getPropertyPriority("position")],
-        zIndex: [element.style.getPropertyValue("z-index"), element.style.getPropertyPriority("z-index")],
-        opacity: [element.style.getPropertyValue("opacity"), element.style.getPropertyPriority("opacity")],
-        pointerEvents: [element.style.getPropertyValue("pointer-events"), element.style.getPropertyPriority("pointer-events")],
-      }));
   canvasDragSession = {
     draggedLayer,
     draggedLayers,
@@ -1334,27 +1313,15 @@ function startCanvasDragSession(
     intent: null,
     targetElement: null,
     insideLock: null,
-    draggingInlineStyles,
   };
   const applyDraggingStyle = () => {
     if (canvasDragSession?.element !== elements[0]) return;
-    applyCanvasDraggingPresentation();
+    canvasDragSession.elements.forEach((element) => element.classList.add("is-canvas-dragging"));
   };
   if (deferDraggingStyle) requestAnimationFrame(applyDraggingStyle);
   else applyDraggingStyle();
   resizeOverlay.hidden = true;
   return canvasDragSession;
-}
-
-function applyCanvasDraggingPresentation() {
-  if (!canvasDragSession) return;
-  canvasDragSession.elements.forEach((element) => element.classList.add("is-canvas-dragging"));
-  canvasDragSession.draggingInlineStyles.forEach(({ element }) => {
-    element.style.setProperty("position", "fixed", "important");
-    element.style.setProperty("z-index", "-1", "important");
-    element.style.setProperty("opacity", "0", "important");
-    element.style.setProperty("pointer-events", "none", "important");
-  });
 }
 
 function restoreCanvasDragPreview() {
@@ -1403,17 +1370,6 @@ function clearCanvasDragSession() {
   clearCanvasDropTarget();
   canvasDragSession.preview?.remove();
   canvasDragSession.placeholder.remove();
-  canvasDragSession.draggingInlineStyles.forEach((entry) => {
-    [
-      ["position", entry.position],
-      ["z-index", entry.zIndex],
-      ["opacity", entry.opacity],
-      ["pointer-events", entry.pointerEvents],
-    ].forEach(([property, [value, priority]]) => {
-      if (value) entry.element.style.setProperty(property, value, priority);
-      else entry.element.style.removeProperty(property);
-    });
-  });
   canvasDragSession.elements.forEach((element) => element.classList.remove("is-canvas-dragging"));
   canvasDragSession = null;
   requestAnimationFrame(syncResizeOverlay);
@@ -2316,6 +2272,18 @@ function positionCanvasPointerDragPreview(pointerDrag, event) {
   preview.style.top = `${event.clientY - pointerDrag.grabOffsetY}px`;
 }
 
+function syncCanvasPointerDragSourceElements(pointerDrag = canvasPointerDrag) {
+  if (!pointerDrag?.hasStarted) return;
+  const sourceElements = pointerDrag.draggedLayers
+    .map((layer) => getCanvasLayerElement(layer, pointerDrag.variantInstanceId))
+    .filter((element) => element instanceof HTMLElement);
+  if (sourceElements.length === 0) return;
+  pointerDrag.sourceElements = sourceElements;
+  sourceElements.forEach((element) => {
+    element.classList.add("is-canvas-pointer-drag-source");
+  });
+}
+
 function updateCanvasPointerDrag(event) {
   if (!canvasPointerDrag || event.pointerId !== canvasPointerDrag.pointerId) return false;
   const distance = Math.hypot(
@@ -2339,6 +2307,11 @@ function updateCanvasPointerDrag(event) {
       canvasPointerDrag.draggedLayers,
       canvasPointerDrag.variantInstanceId,
     );
+    syncCanvasPointerDragSourceElements();
+    canvasPointerDrag.sourceObserver = new MutationObserver(() => {
+      syncCanvasPointerDragSourceElements(canvasPointerDrag);
+    });
+    canvasPointerDrag.sourceObserver.observe(canvas, { childList: true, subtree: true });
     createCanvasPointerDragPreview(canvasPointerDrag, event);
   }
 
@@ -2348,7 +2321,7 @@ function updateCanvasPointerDrag(event) {
   const intent = getPointerCanvasDropIntent(event, canvasPointerDrag.draggedLayers);
   if (intent) previewCanvasDropIntent(intent);
   else restoreCanvasDragPreview();
-  applyCanvasDraggingPresentation();
+  syncCanvasPointerDragSourceElements();
   return true;
 }
 
@@ -2358,6 +2331,7 @@ function finishCanvasPointerDrag(event, shouldCommit) {
   if (pointerDrag.hasStarted) updateCanvasPointerDrag(event);
   const intent = shouldCommit ? canvasDragSession?.intent ?? null : null;
   canvasPointerDrag = null;
+  pointerDrag.sourceObserver?.disconnect();
 
   pointerDrag.items.forEach(({ element, wasDraggable }) => { element.draggable = wasDraggable; });
   if (pointerDrag.element.hasPointerCapture(event.pointerId)) {
@@ -2378,6 +2352,9 @@ function finishCanvasPointerDrag(event, shouldCommit) {
   event.stopPropagation();
   if (intent) commitCanvasLayerDrop(pointerDrag.draggedLayer, intent);
   else clearCanvasDragSession();
+  (pointerDrag.sourceElements ?? pointerDrag.items.map(({ element }) => element)).forEach((element) => {
+    element.classList.remove("is-canvas-pointer-drag-source");
+  });
   suppressCanvasClickForGesture(event);
 }
 

@@ -1547,7 +1547,9 @@ textarea:focus-visible {
 }
 
 .canvas-root-stack > .is-canvas-dragging,
-.canvas-frame > .is-canvas-dragging {
+.canvas-frame > .is-canvas-dragging,
+.canvas-root-stack > .is-canvas-pointer-drag-source,
+.canvas-frame > .is-canvas-pointer-drag-source {
   position: fixed !important;
   z-index: -1 !important;
   opacity: 0 !important;
