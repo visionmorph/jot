@@ -99,3 +99,44 @@ test("creates a frame nested inside another frame", async ({ page }) => {
   await expect(childFrame).toBeVisible();
   await expect(childTreeItem).toHaveAttribute("aria-selected", "true");
 });
+
+test("imports, selects, undoes, and redoes an SVG vector", async ({ page }) => {
+  await openApp(page);
+
+  const canvas = page.getByRole("region", { name: "Canvas" });
+  const vector = page.locator('[data-canvas-root-stack] > [data-vector-id="1"]');
+  const vectorTreeItem = page.locator('[data-selection-layer-key="vector:1"]');
+  const svgSource = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="20" viewBox="0 0 32 20"><path d="M2 2h28v16H2z" fill="#336699"/></svg>';
+
+  await canvas.evaluate((element, source) => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([source], "status-icon.svg", { type: "image/svg+xml" }));
+    const bounds = element.getBoundingClientRect();
+    element.dispatchEvent(new DragEvent("drop", {
+      bubbles: true,
+      cancelable: true,
+      clientX: bounds.left + bounds.width / 2,
+      clientY: bounds.top + bounds.height / 2,
+      dataTransfer: transfer,
+    }));
+  }, svgSource);
+
+  await expect(vector).toBeVisible();
+  await expect(vector).toHaveAttribute("aria-label", "status-icon");
+  await expect(vector).toHaveAttribute("aria-selected", "true");
+  await expect(vector).toHaveCSS("width", "32px");
+  await expect(vector).toHaveCSS("height", "20px");
+  await expect(vector.locator("svg path")).toHaveAttribute("fill", "#336699");
+  await expect(vectorTreeItem).toContainText("status-icon");
+  await expect(vectorTreeItem).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("region", { name: "Vector", exact: true })).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(vector).toHaveCount(0);
+  await expect(vectorTreeItem).toHaveCount(0);
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(vector).toBeVisible();
+  await expect(vector.locator("svg path")).toHaveAttribute("fill", "#336699");
+  await expect(vectorTreeItem).toHaveAttribute("aria-selected", "true");
+});
