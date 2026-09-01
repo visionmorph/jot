@@ -2100,10 +2100,6 @@ toolButtons.forEach((button) => {
   });
 });
 
-vectorImportButton?.addEventListener("click", () => {
-  if (vectorFileInput instanceof HTMLInputElement) vectorFileInput.click();
-});
-
 function getDroppedSvgFile(dataTransfer) {
   return Array.from(dataTransfer?.files ?? []).find((file) => (
     file.type === "image/svg+xml" || /\.svg$/i.test(file.name)
@@ -2135,13 +2131,6 @@ async function importSvgFile(file, clientX = null, clientY = null) {
     return false;
   }
 }
-
-vectorFileInput?.addEventListener("change", async () => {
-  if (!(vectorFileInput instanceof HTMLInputElement)) return;
-  const file = vectorFileInput.files?.[0];
-  vectorFileInput.value = "";
-  if (file) await importSvgFile(file);
-});
 
 canvas?.addEventListener("dragover", (event) => {
   if (!hasFileTransfer(event.dataTransfer)) return;

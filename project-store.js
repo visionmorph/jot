@@ -10,8 +10,6 @@ const canvasRootStack = document.querySelector("[data-canvas-root-stack]");
 
 const treeView = document.querySelector("[data-tree-view]");
 
-const instanceTreeView = document.querySelector("[data-instance-tree-view]");
-
 const pageInspector = document.querySelector("[data-page-inspector]");
 
 const frameInspector = document.querySelector("[data-frame-inspector]");
@@ -263,22 +261,6 @@ const addPropTypeOptions = Array.from(document.querySelectorAll("[data-prop-type
 const propRowsContainer = document.querySelector("[data-prop-rows]");
 
 const addVariantButton = document.querySelector("[data-add-variant]");
-
-const variantInspector = document.querySelector("[data-variant-inspector]");
-
-const variantInspectorContent = document.querySelector("[data-variant-inspector-content]");
-
-const variantPropRowsContainer = document.querySelector("[data-variant-prop-rows]");
-
-const variantRuleRowsContainer = document.querySelector("[data-variant-rule-rows]");
-
-const addVariantPropButton = document.querySelector("[data-add-variant-prop]");
-
-const addVariantRuleButton = document.querySelector("[data-add-variant-rule]");
-
-const vectorImportButton = document.querySelector("[data-vector-import]");
-
-const vectorFileInput = document.querySelector("[data-vector-file-input]");
 
 const RESIZE_HANDLE_DIRECTIONS = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 
