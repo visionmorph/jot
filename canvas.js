@@ -2232,10 +2232,28 @@ function createCanvasPointerDragPreview(pointerDrag, event) {
     canvasDragSession.variantInstanceId,
   );
   if (parentElement instanceof HTMLElement) syncCanvasDragGroupLayout(preview, parentElement);
-  pointerDrag.items.forEach(({ element, width, height }) => {
+  pointerDrag.items.forEach(({ layer, element, width, height }) => {
     const item = element.cloneNode(true);
     item.classList.remove("is-canvas-dragging");
     item.classList.add("canvas-drag-preview-item");
+    if (layer.type === "text") {
+      const textStyle = getComputedStyle(element);
+      item.classList.remove("canvas-text", "is-selected", "is-selection-hovered", "is-new-empty");
+      item.classList.add("canvas-drag-preview-text");
+      item.removeAttribute("data-text-id");
+      item.removeAttribute("aria-label");
+      item.removeAttribute("aria-selected");
+      item.removeAttribute("contenteditable");
+      item.style.color = textStyle.color;
+      item.style.fontFamily = textStyle.fontFamily;
+      item.style.fontSize = textStyle.fontSize;
+      item.style.fontWeight = textStyle.fontWeight;
+      item.style.letterSpacing = textStyle.letterSpacing;
+      item.style.lineHeight = textStyle.lineHeight;
+      item.style.textAlign = textStyle.textAlign;
+      item.style.whiteSpace = textStyle.whiteSpace;
+      item.style.overflowWrap = textStyle.overflowWrap;
+    }
     item.removeAttribute("draggable");
     item.style.width = `${width}px`;
     item.style.height = `${height}px`;
