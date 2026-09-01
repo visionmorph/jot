@@ -1570,9 +1570,7 @@ textarea:focus-visible {
 }
 
 .variant-inspector-field input,
-.variant-inspector-field select,
-.variant-override-row input,
-.variant-override-row select {
+.variant-inspector-field select {
   width: 100%;
   min-width: 0;
   height: 30px;
@@ -1612,20 +1610,6 @@ textarea:focus-visible {
 
 .variant-boolean-toggle[aria-pressed="true"]::after {
   transform: translateX(16px);
-}
-
-.variant-override-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 28px;
-  padding: 4px 0;
-  gap: 4px;
-}
-
-.variant-override-badge {
-  display: inline-flex;
-  align-items: center;
-  color: #be95ff;
-  font-size: 11px;
 }
 
 .variant-danger-button {

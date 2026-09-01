@@ -341,17 +341,66 @@ let componentProps = [];
 
 let nextComponentPropId = 1;
 
-let variantProps = [];
+/* Owns variant collection structure and ID allocation; contained records remain live editable objects. */
+function createVariantModel() {
+  let props = Object.freeze([]);
+  let rules = Object.freeze([]);
+  let instances = Object.freeze([]);
+  let nextPropId = 1;
+  let nextRuleId = 1;
+  let nextInstanceId = 1;
 
-let variantRules = [];
+  return Object.freeze({
+    getProps: () => props,
+    getRules: () => rules,
+    getInstances: () => instances,
+    peekNextPropId: () => nextPropId,
+    addProp(input) {
+      const prop = { ...input, id: nextPropId++ };
+      props = Object.freeze([...props, prop]);
+      return prop;
+    },
+    addRule(input) {
+      const rule = { ...input, id: nextRuleId++ };
+      rules = Object.freeze([...rules, rule]);
+      return rule;
+    },
+    addInstance(input, { prepend = false } = {}) {
+      const instance = { ...input, id: nextInstanceId++ };
+      instances = Object.freeze(prepend ? [instance, ...instances] : [...instances, instance]);
+      return instance;
+    },
+    replaceProps(nextProps) {
+      props = Object.freeze([...nextProps]);
+    },
+    replaceRules(nextRules) {
+      rules = Object.freeze([...nextRules]);
+    },
+    replaceInstances(nextInstances) {
+      instances = Object.freeze([...nextInstances]);
+    },
+    capture() {
+      return {
+        variantProps: structuredClone(props),
+        variantRules: structuredClone(rules),
+        variantInstances: structuredClone(instances),
+        nextVariantPropId: nextPropId,
+        nextVariantRuleId: nextRuleId,
+        nextVariantInstanceId: nextInstanceId,
+      };
+    },
+    restore(snapshot) {
+      props = Object.freeze(structuredClone(snapshot.variantProps));
+      rules = Object.freeze(structuredClone(snapshot.variantRules));
+      instances = Object.freeze(structuredClone(snapshot.variantInstances));
+      nextPropId = snapshot.nextVariantPropId;
+      nextRuleId = snapshot.nextVariantRuleId;
+      nextInstanceId = snapshot.nextVariantInstanceId;
+    },
+  });
+}
 
-let variantInstances = [];
-
-let nextVariantPropId = 1;
-
-let nextVariantRuleId = 1;
-
-let nextVariantInstanceId = 1;
+const variantModel = createVariantModel();
 
 const MIN_INTERACTIVE_LAYER_SIZE = 1;
 
@@ -674,7 +723,7 @@ function isVariantInstanceSelected(instanceId) {
 
 function selectVariantInstancesState(instanceIds, primaryInstanceId = null, componentId = currentComponent?.id) {
   if (componentId == null) return false;
-  const validIds = new Set(variantInstances.map((instance) => instance.id));
+  const validIds = new Set(variantModel.getInstances().map((instance) => instance.id));
   const normalizedIds = [...new Set(instanceIds)].filter((instanceId) => validIds.has(instanceId));
   if (normalizedIds.length === 0) {
     selectCanvasState();
@@ -930,13 +979,8 @@ function captureWorkspaceState() {
       ...(Array.isArray(prop.options) ? { options: [...prop.options] } : {}),
     })),
     nextComponentPropId,
-    variantProps: structuredClone(variantProps),
-    variantRules: structuredClone(variantRules),
-    variantInstances: structuredClone(variantInstances),
+    ...variantModel.capture(),
     variantModelVersion: 3,
-    nextVariantPropId,
-    nextVariantRuleId,
-    nextVariantInstanceId,
     canvasColor: canvasColorValue,
     canvasColorOpacity,
     activeTool,
@@ -950,6 +994,127 @@ function restoreElementState(element, dataset, style) {
   });
   if (style === null) element.removeAttribute("style");
   else element.setAttribute("style", style);
+}
+
+function getSnapshotArray(snapshot, key) {
+  const value = snapshot[key];
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new TypeError(`Workspace snapshot "${key}" must be an array.`);
+  return value;
+}
+
+function normalizeSnapshotCounter(value, fallback) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 1 ? Math.max(number, fallback) : fallback;
+}
+
+function normalizeWorkspaceLayerEntries(snapshot, key) {
+  return getSnapshotArray(snapshot, key).map((entry, index) => {
+    if (!entry || typeof entry !== "object" || !entry.record || typeof entry.record !== "object") {
+      throw new TypeError(`Workspace snapshot "${key}[${index}]" is missing its layer record.`);
+    }
+    if (!(entry.record.element instanceof HTMLElement)) {
+      throw new TypeError(`Workspace snapshot "${key}[${index}]" is missing its layer element.`);
+    }
+    return {
+      ...entry,
+      dataset: entry.dataset && typeof entry.dataset === "object" && !Array.isArray(entry.dataset)
+        ? { ...entry.dataset }
+        : {},
+      style: typeof entry.style === "string" ? entry.style : null,
+    };
+  });
+}
+
+function getNextSnapshotRecordId(entries) {
+  return entries.reduce((nextId, entry) => {
+    const id = Number(entry.record.id);
+    return Number.isInteger(id) && id >= nextId ? id + 1 : nextId;
+  }, 1);
+}
+
+function getNextSnapshotEntityId(entries) {
+  return entries.reduce((nextId, entry) => {
+    const id = Number(entry?.id);
+    return Number.isInteger(id) && id >= nextId ? id + 1 : nextId;
+  }, 1);
+}
+
+function normalizeWorkspaceSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    throw new TypeError("Workspace snapshot must be an object.");
+  }
+
+  const frames = normalizeWorkspaceLayerEntries(snapshot, "frames");
+  const texts = normalizeWorkspaceLayerEntries(snapshot, "texts");
+  const vectors = normalizeWorkspaceLayerEntries(snapshot, "vectors").map((entry) => ({
+    ...entry,
+    svgSource: String(entry.svgSource ?? entry.record.svgSource ?? ""),
+  }));
+  const normalizedComponentProps = getSnapshotArray(snapshot, "componentProps");
+  const normalizedVariantProps = getSnapshotArray(snapshot, "variantProps");
+  const normalizedVariantRules = getSnapshotArray(snapshot, "variantRules");
+  const normalizedVariantInstances = getSnapshotArray(snapshot, "variantInstances");
+  const defaultComponentFrame = getDefaultComponentFrameState();
+  const componentFrame = snapshot.componentFrame && typeof snapshot.componentFrame === "object"
+    ? snapshot.componentFrame
+    : defaultComponentFrame;
+  const componentFrameDataset = componentFrame.dataset
+    && typeof componentFrame.dataset === "object"
+    && !Array.isArray(componentFrame.dataset)
+    ? componentFrame.dataset
+    : {};
+  const layerEntries = [...frames, ...texts, ...vectors];
+  const nextLayerOrderFallback = layerEntries.reduce((nextOrder, entry) => {
+    const order = Number(entry.order);
+    return Number.isFinite(order) && order >= nextOrder ? order + 1 : nextOrder;
+  }, 1);
+  const canvasOpacity = Number(snapshot.canvasColorOpacity ?? 100);
+
+  return {
+    ...snapshot,
+    componentId: snapshot.componentId ?? currentComponent?.id ?? null,
+    componentName: typeof snapshot.componentName === "string"
+      ? snapshot.componentName
+      : currentComponent?.name ?? "Component",
+    componentFrame: {
+      dataset: { ...defaultComponentFrame.dataset, ...componentFrameDataset },
+      style: typeof componentFrame.style === "string" || componentFrame.style === null
+        ? componentFrame.style
+        : defaultComponentFrame.style,
+    },
+    frames,
+    texts,
+    vectors,
+    expandedFrameIds: getSnapshotArray(snapshot, "expandedFrameIds"),
+    nextFrameId: normalizeSnapshotCounter(snapshot.nextFrameId, getNextSnapshotRecordId(frames)),
+    nextTextId: normalizeSnapshotCounter(snapshot.nextTextId, getNextSnapshotRecordId(texts)),
+    nextVectorId: normalizeSnapshotCounter(snapshot.nextVectorId, getNextSnapshotRecordId(vectors)),
+    nextLayerOrder: normalizeSnapshotCounter(snapshot.nextLayerOrder, nextLayerOrderFallback),
+    componentProps: normalizedComponentProps,
+    variantProps: normalizedVariantProps,
+    variantRules: normalizedVariantRules,
+    variantInstances: normalizedVariantInstances,
+    nextComponentPropId: normalizeSnapshotCounter(
+      snapshot.nextComponentPropId,
+      getNextSnapshotEntityId(normalizedComponentProps),
+    ),
+    nextVariantPropId: normalizeSnapshotCounter(
+      snapshot.nextVariantPropId,
+      getNextSnapshotEntityId(normalizedVariantProps),
+    ),
+    nextVariantRuleId: normalizeSnapshotCounter(
+      snapshot.nextVariantRuleId,
+      getNextSnapshotEntityId(normalizedVariantRules),
+    ),
+    nextVariantInstanceId: normalizeSnapshotCounter(
+      snapshot.nextVariantInstanceId,
+      getNextSnapshotEntityId(normalizedVariantInstances),
+    ),
+    canvasColor: typeof snapshot.canvasColor === "string" ? snapshot.canvasColor : "#121619",
+    canvasColorOpacity: Number.isFinite(canvasOpacity) ? Math.max(0, Math.min(100, canvasOpacity)) : 100,
+    activeTool: typeof snapshot.activeTool === "string" ? snapshot.activeTool : "select",
+  };
 }
 
 function isLayerVisible(element) {
@@ -973,10 +1138,7 @@ function attachRestoredLayers(parentFrameId, parentElement) {
   });
 }
 
-function restoreWorkspaceState(snapshot, options = {}) {
-  if (!(canvas instanceof HTMLElement)) return;
-  isRestoringHistory = true;
-
+function applyWorkspaceSnapshot(snapshot, preparedVectorSvgs) {
   const allElements = new Set([
     ...frameRecords.map((record) => record.element),
     ...textRecords.map((record) => record.element),
@@ -1019,7 +1181,7 @@ function restoreWorkspaceState(snapshot, options = {}) {
     entry.record.element.contentEditable = entry.contentEditable;
     return entry.record;
   });
-  vectorRecords = (snapshot.vectors ?? []).map((entry) => {
+  vectorRecords = snapshot.vectors.map((entry, index) => {
     entry.record.parentFrameId = entry.parentFrameId;
     entry.record.order = entry.order;
     entry.record.name = entry.name;
@@ -1027,7 +1189,7 @@ function restoreWorkspaceState(snapshot, options = {}) {
     entry.record.originalSvgSource = entry.originalSvgSource ?? entry.record.originalSvgSource ?? entry.svgSource;
     restoreElementState(entry.record.element, entry.dataset, entry.style);
     syncLayerVisibility(entry.record.element);
-    entry.record.element.replaceChildren(createCanvasSvg(entry.record.svgSource));
+    entry.record.element.replaceChildren(preparedVectorSvgs[index]);
     return entry.record;
   });
 
@@ -1077,23 +1239,17 @@ function restoreWorkspaceState(snapshot, options = {}) {
     return normalizedProp;
   });
   nextComponentPropId = snapshot.nextComponentPropId ?? 1;
-  variantProps = structuredClone(snapshot.variantProps ?? []);
-  variantRules = structuredClone(snapshot.variantRules ?? []);
-  variantInstances = structuredClone(snapshot.variantInstances ?? []);
-  nextVariantPropId = snapshot.nextVariantPropId ?? 1;
-  nextVariantRuleId = snapshot.nextVariantRuleId ?? 1;
-  nextVariantInstanceId = snapshot.nextVariantInstanceId ?? 1;
-  if (variantInstances.length > 0 && (snapshot.variantModelVersion ?? 0) < 2) {
-    variantInstances.unshift({
-      id: nextVariantInstanceId++,
+  variantModel.restore(snapshot);
+  if (variantModel.getInstances().length > 0 && (snapshot.variantModelVersion ?? 0) < 2) {
+    variantModel.addInstance({
       name: "Variant 1",
       componentId: currentComponent?.id ?? snapshot.componentId,
       parentVariantId: null,
-      propValues: Object.fromEntries(variantProps
+      propValues: Object.fromEntries(variantModel.getProps()
         .filter((prop) => prop.type !== "action")
         .map((prop) => [prop.id, getVariantPropDefaultValue(prop)])),
       overrides: [],
-    });
+    }, { prepend: true });
   }
   normalizeDefaultVariantInstance();
   expandedFrameIds.clear();
@@ -1109,7 +1265,20 @@ function restoreWorkspaceState(snapshot, options = {}) {
     syncCustomColorControl(colorPicker, canvasColorValue, canvasColorOpacity);
   }
   selectTool(snapshot.activeTool);
-  isRestoringHistory = false;
+}
+
+function restoreWorkspaceState(snapshot, options = {}) {
+  if (!(canvas instanceof HTMLElement)) return;
+
+  const normalizedSnapshot = normalizeWorkspaceSnapshot(snapshot);
+  const preparedVectorSvgs = normalizedSnapshot.vectors.map((entry) => createCanvasSvg(entry.svgSource));
+  const previousRestoringHistory = isRestoringHistory;
+  isRestoringHistory = true;
+  try {
+    applyWorkspaceSnapshot(normalizedSnapshot, preparedVectorSvgs);
+  } finally {
+    isRestoringHistory = previousRestoringHistory;
+  }
   if (options.render !== false) renderTree();
 }
 

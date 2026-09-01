@@ -8,6 +8,94 @@ const REACT_EXPORT_INTERNAL_NAMES = [
   "selectedVariant",
 ];
 
+const JAVASCRIPT_RESERVED_WORDS = new Set([
+  "arguments",
+  "await",
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "eval",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "implements",
+  "import",
+  "in",
+  "instanceof",
+  "interface",
+  "let",
+  "new",
+  "null",
+  "package",
+  "private",
+  "protected",
+  "public",
+  "return",
+  "static",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+]);
+
+function createExportIdentifierAllocator(reservedNames = []) {
+  const usedNames = new Set(reservedNames);
+  return (value, fallback) => {
+    const sanitizedName = String(value ?? "").trim().replace(/[^a-zA-Z0-9_$]/g, "");
+    let exportName = /^[a-zA-Z_$]/.test(sanitizedName) && !JAVASCRIPT_RESERVED_WORDS.has(sanitizedName)
+      ? sanitizedName
+      : fallback;
+    const baseName = exportName;
+    let suffix = 2;
+    while (usedNames.has(exportName) || JAVASCRIPT_RESERVED_WORDS.has(exportName)) {
+      exportName = `${baseName}${suffix++}`;
+    }
+    usedNames.add(exportName);
+    return exportName;
+  };
+}
+
+function createExportCssClassAllocator(reservedNames = []) {
+  const usedNames = new Set(reservedNames.map((name) => String(name).toLowerCase()));
+  return (value) => {
+    const sanitizedName = String(value ?? "")
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    const baseName = /^[a-zA-Z_]/.test(sanitizedName)
+      ? sanitizedName
+      : sanitizedName
+        ? `Component-${sanitizedName}`
+        : "GeneratedComponent";
+    let className = baseName;
+    let suffix = 2;
+    while (usedNames.has(className.toLowerCase())) className = `${baseName}-${suffix++}`;
+    usedNames.add(className.toLowerCase());
+    return className;
+  };
+}
+
 function toReactComponentName(value) {
   const name = value
     .trim()
@@ -21,7 +109,11 @@ function toReactComponentName(value) {
 function formatReactStyle(style, rawProperties = null) {
   const properties = Object.entries(style)
     .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .map(([property, value]) => `${property}: ${rawProperties?.has(property) ? value : JSON.stringify(value)}`);
+    .map(([property, value]) => {
+      const propertyName = property.startsWith("--") ? JSON.stringify(property) : property;
+      const propertyValue = rawProperties?.has(property) ? value : JSON.stringify(value);
+      return `${propertyName}: ${propertyValue}`;
+    });
   return `{ ${properties.join(", ")} }`;
 }
 
@@ -221,14 +313,15 @@ function toReactSvgAttributeName(name) {
 }
 
 function parseSvgStyle(styleValue) {
-  return styleValue.split(";").reduce((style, declaration) => {
-    const separatorIndex = declaration.indexOf(":");
-    if (separatorIndex < 0) return style;
-    const property = declaration.slice(0, separatorIndex).trim();
-    const value = declaration.slice(separatorIndex + 1).trim();
-    if (!property || !value || property.startsWith("--")) return style;
-    const reactProperty = property.replace(/-([a-z])/g, (_, character) => character.toUpperCase());
-    style[reactProperty] = value;
+  const parsedStyle = document.createElement("span").style;
+  parsedStyle.cssText = String(styleValue ?? "");
+  return Array.from(parsedStyle).reduce((style, property) => {
+    const value = parsedStyle.getPropertyValue(property).trim();
+    if (!value) return style;
+    const reactProperty = property.startsWith("--") ? property : toReactStyleProperty(property);
+    style[reactProperty] = parsedStyle.getPropertyPriority(property) === "important"
+      ? `${value} !important`
+      : value;
     return style;
   }, {});
 }
@@ -297,8 +390,10 @@ function renderExportVector(record, depth, exportProps) {
   return serializeSvgElementToJsx(parsed.documentElement, depth, style, rawProperties);
 }
 
-function getExportComponentProps({ reservedNames = [], excludedVariantPropIds = new Set() } = {}) {
-  const usedNames = new Set(reservedNames);
+function getExportComponentProps({
+  allocateIdentifier = createExportIdentifierAllocator(),
+  excludedVariantPropIds = new Set(),
+} = {}) {
   return componentProps.flatMap((prop, index) => {
     if (prop.variantPropId != null && excludedVariantPropIds.has(prop.variantPropId)) return [];
     const targetFrame = getFrameRecord(prop.targetFrameId);
@@ -318,15 +413,7 @@ function getExportComponentProps({ reservedNames = [], excludedVariantPropIds = 
         : prop.property === "onClick" && hasCompatibleButtonTarget;
     if (!isValid) return [];
 
-    let exportName = prop.name.trim().replace(/[^a-zA-Z0-9_$]/g, "");
-    if (!/^[a-zA-Z_$]/.test(exportName)) exportName = `prop${index + 1}`;
-    const baseName = exportName || `prop${index + 1}`;
-    let suffix = 2;
-    while (usedNames.has(exportName)) {
-      exportName = `${baseName}${suffix}`;
-      suffix += 1;
-    }
-    usedNames.add(exportName);
+    const exportName = allocateIdentifier(prop.name, `prop${index + 1}`);
     return [{ ...prop, exportName }];
   });
 }
@@ -389,7 +476,7 @@ function getVariantExportRecord(type, record, exportContext) {
 
 function getExportVariants() {
   const usedKeys = new Set();
-  return variantInstances.map((instance, index) => {
+  return variantModel.getInstances().map((instance, index) => {
     const baseKey = instance.name.trim() || `Variant ${index + 1}`;
     let key = baseKey;
     let suffix = 2;
@@ -416,25 +503,20 @@ function isDirectVisibilityPropAxis(variantProp) {
   ));
 }
 
-function getExportVariantAxes() {
-  const usedNames = new Set(REACT_EXPORT_INTERNAL_NAMES);
-  return variantProps
+function getExportVariantAxes(
+  allocateIdentifier = createExportIdentifierAllocator(REACT_EXPORT_INTERNAL_NAMES),
+) {
+  return variantModel.getProps()
     .filter((prop) => prop.type === "enum" || prop.type === "boolean")
     .filter((prop) => !isDirectVisibilityPropAxis(prop))
     .filter((prop) => prop.variantSubtype !== "state")
     .map((prop, index) => {
-      let exportName = prop.name.trim().replace(/[^a-zA-Z0-9_$]/g, "");
-      if (!/^[a-zA-Z_$]/.test(exportName)) exportName = `variantProp${index + 1}`;
-      const baseName = exportName || `variantProp${index + 1}`;
-      let suffix = 2;
-      while (usedNames.has(exportName)) exportName = `${baseName}${suffix++}`;
-      usedNames.add(exportName);
-      return { ...prop, exportName };
+      return { ...prop, exportName: allocateIdentifier(prop.name, `variantProp${index + 1}`) };
     });
 }
 
 function getStateVariantAxes() {
-  return variantProps.filter((prop) => prop.type === "enum" && prop.variantSubtype === "state");
+  return variantModel.getProps().filter((prop) => prop.type === "enum" && prop.variantSubtype === "state");
 }
 
 function getExportVariantAxisValue(instance, axis) {
@@ -474,18 +556,18 @@ function getBaseExportVariantEntries(axes, stateAxes = getStateVariantAxes()) {
   return [...grouped.values()];
 }
 
-function getExportScopeClass(componentName, index) {
-  return `${componentName}--variant-${index + 1}`;
+function getExportScopeClass(cssClassName, index) {
+  return `${cssClassName}--variant-${index + 1}`;
 }
 
-function getExportTargetClassName(componentName, target) {
-  if (target === "component:0") return componentName;
+function getExportTargetClassName(cssClassName, target) {
+  if (target === "component:0") return cssClassName;
   const [type, id] = target.split(":");
-  return `${componentName}__${type}-${id}`;
+  return `${cssClassName}__${type}-${id}`;
 }
 
-function getExportLayerClassName(componentName, target, rootScopeClass = "") {
-  return [getExportTargetClassName(componentName, target), target === "component:0" ? rootScopeClass : ""]
+function getExportLayerClassName(cssClassName, target, rootScopeClass = "") {
+  return [getExportTargetClassName(cssClassName, target), target === "component:0" ? rootScopeClass : ""]
     .filter(Boolean)
     .join(" ");
 }
@@ -495,7 +577,7 @@ function renderExportLayer(layer, depth, exportProps, exportContext = null, expo
   const record = getVariantExportRecord(layer.type, layer.record, exportContext);
   const target = record.isComponent ? "component:0" : `${layer.type}:${record.id}`;
   const className = exportClasses
-    ? getExportLayerClassName(exportClasses.componentName, target, exportClasses.rootScopeClass)
+    ? getExportLayerClassName(exportClasses.cssClassName, target, exportClasses.rootScopeClass)
     : "";
   if (layer.type === "vector") {
     const variantStyle = getVariantExportStyle(exportContext, target);
@@ -574,12 +656,15 @@ function normalizeStateCssDeclaration(property, rawValue) {
   return { property: cssProperty, value };
 }
 
-function createStateStylesheetSource(componentName) {
+function createStateStylesheetSource(
+  componentName,
+  cssClassName = createExportCssClassAllocator()(componentName),
+) {
   const stateAxes = getStateVariantAxes();
   if (stateAxes.length === 0) return "";
   const variantAxes = getExportVariantAxes();
   const baseEntries = getBaseExportVariantEntries(variantAxes, stateAxes)
-    .map((entry, index) => ({ ...entry, scopeClass: getExportScopeClass(componentName, index) }));
+    .map((entry, index) => ({ ...entry, scopeClass: getExportScopeClass(cssClassName, index) }));
   const baseByCombination = new Map(baseEntries.map((entry) => [entry.combinationKey, entry]));
   const rules = [];
 
@@ -601,8 +686,8 @@ function createStateStylesheetSource(componentName) {
         if (declaration) declarations.push(declaration);
       });
       if (declarations.length === 0) return;
-      const rootSelector = `.${componentName}.${baseEntry.scopeClass}${pseudoClasses.join("")}`;
-      const targetClass = getExportTargetClassName(componentName, target);
+      const rootSelector = `.${cssClassName}.${baseEntry.scopeClass}${pseudoClasses.join("")}`;
+      const targetClass = getExportTargetClassName(cssClassName, target);
       let selector = target === "component:0" ? rootSelector : `${rootSelector} .${targetClass}`;
       if (declarations.some(({ property }) => property === "fill" || property === "stroke")) {
         selector = `${selector},\n${selector} *`;
@@ -617,19 +702,23 @@ function createStateStylesheetSource(componentName) {
   return `/* Interaction states authored in ${componentName}. */\n${rules.join("\n\n")}\n`;
 }
 
-function createReactComponentSource(componentName) {
-  const hasVariants = variantInstances.length > 0;
-  const variantAxes = hasVariants ? getExportVariantAxes() : [];
+function createReactComponentSource(
+  componentName,
+  cssClassName = createExportCssClassAllocator()(componentName),
+) {
+  const hasVariants = variantModel.getInstances().length > 0;
+  const allocateIdentifier = createExportIdentifierAllocator(REACT_EXPORT_INTERNAL_NAMES);
+  const variantAxes = hasVariants ? getExportVariantAxes(allocateIdentifier) : [];
   const stateAxes = hasVariants ? getStateVariantAxes() : [];
   const excludedVariantPropIds = new Set([...variantAxes, ...stateAxes].map((axis) => axis.id));
   const exportProps = getExportComponentProps({
-    reservedNames: [...REACT_EXPORT_INTERNAL_NAMES, ...variantAxes.map((axis) => axis.exportName)],
+    allocateIdentifier,
     excludedVariantPropIds,
   });
   const defaultVariant = getDefaultVariantInstance();
   if (hasVariants && defaultVariant) {
     const exportVariants = getBaseExportVariantEntries(variantAxes, stateAxes)
-      .map((entry, index) => ({ ...entry, scopeClass: getExportScopeClass(componentName, index) }));
+      .map((entry, index) => ({ ...entry, scopeClass: getExportScopeClass(cssClassName, index) }));
     const defaultExportVariant = exportVariants.find(({ instance }) => instance === defaultVariant) ?? exportVariants[0];
     const variantMarkup = exportVariants.map(({ instance, key, scopeClass }) => {
       const context = createVariantExportContext(instance);
@@ -638,7 +727,7 @@ function createReactComponentSource(componentName) {
         3,
         exportProps,
         context,
-        { componentName, rootScopeClass: scopeClass },
+        { cssClassName, rootScopeClass: scopeClass },
       );
       return `    ${JSON.stringify(key)}: (\n${markup}\n    ),`;
     }).join("\n");
@@ -676,12 +765,13 @@ function createReactComponentSource(componentName) {
 }
 
 function createStorySource(componentName) {
-  const hasVariants = variantInstances.length > 0;
-  const variantAxes = hasVariants ? getExportVariantAxes() : [];
+  const hasVariants = variantModel.getInstances().length > 0;
+  const allocateIdentifier = createExportIdentifierAllocator(REACT_EXPORT_INTERNAL_NAMES);
+  const variantAxes = hasVariants ? getExportVariantAxes(allocateIdentifier) : [];
   const stateAxes = hasVariants ? getStateVariantAxes() : [];
   const excludedVariantPropIds = new Set([...variantAxes, ...stateAxes].map((axis) => axis.id));
   const exportProps = getExportComponentProps({
-    reservedNames: [...REACT_EXPORT_INTERNAL_NAMES, ...variantAxes.map((axis) => axis.exportName)],
+    allocateIdentifier,
     excludedVariantPropIds,
   });
   const exportVariants = getBaseExportVariantEntries(variantAxes, stateAxes);
@@ -759,6 +849,7 @@ function exportAllComponents() {
   const originalComponentId = currentComponent.id;
   const exportFiles = [];
   const usedComponentNames = new Set();
+  const allocateCssClassName = createExportCssClassAllocator();
 
   try {
     components.forEach((component) => {
@@ -770,9 +861,10 @@ function exportAllComponents() {
         componentName = `${baseName}${suffix++}`;
       }
       usedComponentNames.add(componentName.toLowerCase());
-      const stateStylesheet = createStateStylesheetSource(componentName);
+      const cssClassName = allocateCssClassName(componentName);
+      const stateStylesheet = createStateStylesheetSource(componentName, cssClassName);
       exportFiles.push(
-        { name: `${componentName}.jsx`, source: createReactComponentSource(componentName) },
+        { name: `${componentName}.jsx`, source: createReactComponentSource(componentName, cssClassName) },
         { name: `${componentName}.stories.jsx`, source: createStorySource(componentName) },
         ...(stateStylesheet ? [{ name: `${componentName}.css`, source: stateStylesheet }] : []),
       );

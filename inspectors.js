@@ -634,7 +634,7 @@ function syncInferredBooleanComponentPropDefault(prop, defaultInstance = getDefa
   const nextDefault = inferBooleanComponentPropDefault(prop);
   prop.defaultValue = nextDefault;
   syncComponentPropVariantDefinition(prop, { render: false });
-  const variantProp = variantProps.find((entry) => entry.id === prop.variantPropId);
+  const variantProp = variantModel.getProps().find((entry) => entry.id === prop.variantPropId);
   if (variantProp) {
     setInferredVariantBooleanDefault(variantProp, nextDefault);
     if (defaultInstance) {
@@ -1066,12 +1066,12 @@ function renderComponentProps() {
           prop.options = getComponentPropOptions(prop).map((value) => value === optionValue ? nextValue : value);
           if (prop.defaultValue === optionValue) prop.defaultValue = nextValue;
           if (prop.variantPropId != null) {
-            variantInstances.forEach((variantInstance) => {
+            variantModel.getInstances().forEach((variantInstance) => {
               if (variantInstance.propValues[prop.variantPropId] === optionValue) {
                 variantInstance.propValues[prop.variantPropId] = nextValue;
               }
             });
-            variantRules.forEach((rule) => {
+            variantModel.getRules().forEach((rule) => {
               if (rule.conditions[prop.variantPropId] === optionValue) rule.conditions[prop.variantPropId] = nextValue;
             });
           }
@@ -1159,7 +1159,7 @@ function renderComponentProps() {
       const instance = getVariantInstance() ?? getDefaultVariantInstance();
       const currentValue = instance
         ? normalizeVariantPropValue(
-          variantProps.find((variantProp) => variantProp.id === prop.variantPropId),
+          variantModel.getProps().find((variantProp) => variantProp.id === prop.variantPropId),
           instance.propValues[prop.variantPropId],
         )
         : Boolean(prop.defaultValue);
@@ -1191,7 +1191,7 @@ function renderComponentProps() {
         valueToggleLabel.textContent = nextValue ? "True" : "False";
         recordHistory();
         if (instance) {
-          const variantProp = variantProps.find((entry) => entry.id === prop.variantPropId);
+          const variantProp = variantModel.getProps().find((entry) => entry.id === prop.variantPropId);
           setVariantBooleanValue(instance, variantProp, nextValue);
           renderVariantInstances();
         } else {
@@ -1230,7 +1230,7 @@ function renderComponentProps() {
           renderTree();
         }
         if (didChange) {
-          if (variantInstances.length > 0) scheduleVariantInstanceRender();
+          if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
           redoHistory.length = 0;
         }
         if (renderPanel) renderComponentProps();
@@ -1678,7 +1678,7 @@ function applyCustomColorValue(control, color, opacity) {
     state.record.element.dataset.textColor = normalizedColor;
     state.record.element.dataset.textColorOpacity = String(isTransparent ? 0 : normalizedOpacity);
     state.record.element.style.color = isTransparent ? "transparent" : renderedColor;
-    if (variantInstances.length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
   } else if (state.property === "frame-background") {
     state.record.element.dataset.frameColor = normalizedColor;
     state.record.element.dataset.frameColorOpacity = String(normalizedOpacity);

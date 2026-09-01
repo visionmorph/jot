@@ -259,7 +259,7 @@ function applyTreeNodeName(type, record, name) {
   if (type === "text") {
     syncTextRecordContent(record, name);
     applyLayerSizing("text", record);
-    if (variantInstances.length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
     requestAnimationFrame(syncResizeOverlay);
     renderComponentProps();
     return;

@@ -216,10 +216,10 @@ document.addEventListener("keydown", (event) => {
     ...[...textIdsToDelete].map((id) => `text:${id}`),
     ...[...vectorIdsToDelete].map((id) => `vector:${id}`),
   ]);
-  variantInstances.forEach((instance) => {
+  variantModel.getInstances().forEach((instance) => {
     instance.overrides = (instance.overrides ?? []).filter((override) => !deletedTargets.has(override.target));
   });
-  variantRules = variantRules.filter((rule) => !deletedTargets.has(rule.target));
+  variantModel.replaceRules(variantModel.getRules().filter((rule) => !deletedTargets.has(rule.target)));
 
   const removedComponentProps = componentProps.filter((prop) => (
     (prop.targetFrameId != null && frameIdsToDelete.has(prop.targetFrameId))
@@ -231,14 +231,18 @@ document.addEventListener("keydown", (event) => {
     .filter((id) => id != null));
   componentProps = componentProps.filter((prop) => !removedComponentProps.includes(prop));
   if (removedVariantPropIds.size > 0) {
-    variantProps = variantProps.filter((prop) => !removedVariantPropIds.has(prop.id));
-    variantInstances.forEach((instance) => {
+    variantModel.replaceProps(
+      variantModel.getProps().filter((prop) => !removedVariantPropIds.has(prop.id)),
+    );
+    variantModel.getInstances().forEach((instance) => {
       removedVariantPropIds.forEach((id) => { delete instance.propValues[id]; });
     });
-    variantRules.forEach((rule) => {
+    variantModel.getRules().forEach((rule) => {
       removedVariantPropIds.forEach((id) => { delete rule.conditions[id]; });
     });
-    variantRules = variantRules.filter((rule) => Object.keys(rule.conditions).length > 0);
+    variantModel.replaceRules(
+      variantModel.getRules().filter((rule) => Object.keys(rule.conditions).length > 0),
+    );
   }
 
   frameRecords.forEach((record) => {

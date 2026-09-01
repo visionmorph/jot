@@ -190,7 +190,7 @@ function syncVariantActionOverlay() {
     return;
   }
   const selectedElement = getSelectedResizeElement();
-  const anchorElement = selectedComponentId === currentComponent?.id && variantInstances.length > 0
+  const anchorElement = selectedComponentId === currentComponent?.id && variantModel.getInstances().length > 0
     ? componentSet
     : selectedElement;
   if (!(selectedElement instanceof HTMLElement)
@@ -207,7 +207,7 @@ function syncVariantActionOverlay() {
   const canvasBounds = canvas.getBoundingClientRect();
   const bounds = anchorElement.getBoundingClientRect();
   const selectedBounds = selectedElement.getBoundingClientRect();
-  const fallbackVariantRoot = selectedComponentId === currentComponent?.id && variantInstances.length > 0
+  const fallbackVariantRoot = selectedComponentId === currentComponent?.id && variantModel.getInstances().length > 0
     ? componentSet?.querySelector(".variant-preview .canvas-root-stack")
     : null;
   const measurementElement = selectedBounds.width > 0 && selectedBounds.height > 0
@@ -335,7 +335,7 @@ function applyResizePointerPosition(clientX, clientY, proportional = false) {
   }
 
   applyLayerSizing(layer.type, layer.record);
-  if (variantInstances.length > 0) scheduleVariantInstanceRender();
+  if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
   if (layer.type === "frame") syncInspectorToSelectedFrame();
   else if (layer.type === "text") syncSelectedTextSizeInputs();
   else syncInspectorToSelectedVector();
@@ -420,7 +420,7 @@ function setResizeEdgeDimensionMode(direction, mode) {
   } else {
     element.dataset[`${dimension}Mode`] = mode;
     applyLayerSizing(layer.type, layer.record);
-    if (variantInstances.length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
   }
 
   if (isFrameTarget) syncInspectorToSelectedFrame();
@@ -550,7 +550,7 @@ function runCanvasMutation(callback, options = {}) {
 function syncElementSelectionStyles() {
   clearElementSelection();
   if (selectedComponentId === currentComponent?.id && canvasRootStack instanceof HTMLElement) {
-    const componentSelectionElement = variantInstances.length > 0 ? componentSet : canvasRootStack;
+    const componentSelectionElement = variantModel.getInstances().length > 0 ? componentSet : canvasRootStack;
     componentSelectionElement?.classList.add("is-selected");
     componentSelectionElement?.setAttribute("aria-selected", "true");
   }
@@ -1530,7 +1530,7 @@ function createCanvasTextRecord(parentRecord, x, y, options = {}) {
       removeLayerKeyFromSelection(textKey);
       syncElementSelectionStyles();
     }
-    if (variantInstances.length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
     redoHistory.length = 0;
     renderTree();
     renderComponentProps();
@@ -2481,10 +2481,10 @@ function getMarqueeLayerMatches(selectionBounds, parentFrameId = null) {
 
 function applyMarqueeSelection(selectionBounds) {
   if (!selectionDrag || !currentComponent) return;
-  if (variantInstances.length > 0) {
+  if (variantModel.getInstances().length > 0) {
     const variantMatches = [];
     const layerMatches = [];
-    variantInstances.forEach((instance) => {
+    variantModel.getInstances().forEach((instance) => {
       const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`);
       const root = preview?.querySelector(".canvas-root-stack");
       if (!(root instanceof HTMLElement)) return;
@@ -2554,7 +2554,7 @@ canvas?.addEventListener("pointerdown", (event) => {
   const hit = resolveCanvasHit(event.target);
   const startsOnCanvasBackground = hit.kind === "canvas"
     || hit.kind === "component-set"
-    || (variantInstances.length === 0 && hit.kind === "component-root" && hit.direct);
+    || (variantModel.getInstances().length === 0 && hit.kind === "component-root" && hit.direct);
   if (
     !(canvas instanceof HTMLElement)
     || !startsOnCanvasBackground
@@ -2662,7 +2662,7 @@ canvasRootStack?.addEventListener("click", (event) => {
 componentSet?.addEventListener("pointerdown", (event) => {
   const hit = resolveCanvasHit(event.target);
   const isComponentSetSurface = hit.kind === "component-set";
-  const isVisibleBaseComponentSurface = variantInstances.length === 0
+  const isVisibleBaseComponentSurface = variantModel.getInstances().length === 0
     && hit.kind === "component-root";
   if (
     event.button !== 0
@@ -2680,7 +2680,7 @@ canvas?.addEventListener("click", (event) => {
   if (consumeSuppressedCanvasClick(event)) return;
 
   clearLayerSelection();
-  if (variantInstances.length > 0) return;
+  if (variantModel.getInstances().length > 0) return;
 
   const canvasBounds = canvas.getBoundingClientRect();
   const x = event.clientX - canvasBounds.left;
