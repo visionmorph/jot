@@ -590,6 +590,9 @@ canvas?.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || activeTool !== "select") return;
   const target = resolveVariantCanvasSelectionTarget(event.target);
   if (!target || target.element?.isContentEditable) return;
+  // Variant child selection and dragging are handled by the shared canvas
+  // layer gesture. This branch owns only whole-variant selection.
+  if (target.kind === "variant-layer") return;
   if (isVariantInstanceSelected(target.instanceId)
     && getSelectedVariantInstanceIds().length > 1) {
     clearMasterSelectionForVariant();
@@ -755,6 +758,7 @@ function bindVariantReorderPointer(preview, instance) {
     const selectedIds = getSelectedVariantInstanceIds();
     const instanceIds = selectedIds.includes(instance.id) ? selectedIds : [instance.id];
     const clickTarget = resolveVariantCanvasSelectionTarget(event.target);
+    if (clickTarget?.kind === "variant-layer") return;
     if (!selectedIds.includes(instance.id)) selectVariantInstance(instance.id, { render: false });
     variantPointerDrag = {
       pointerId: event.pointerId,
@@ -826,7 +830,7 @@ function renderVariantInstances() {
       const id = Number(layerElement.dataset[`${type}Id`]);
       if (!Number.isFinite(id)) return;
       const target = `${type}:${id}`;
-      const isSelectedLayer = instance.id === selectedVariantInstanceId && target === selectedVariantLayerTarget;
+      const isSelectedLayer = isVariantLayerTargetSelected(instance.id, target);
       layerElement.classList.toggle("is-selected", isSelectedLayer);
       layerElement.setAttribute("aria-selected", String(isSelectedLayer));
       layerElement.tabIndex = 0;
@@ -883,6 +887,7 @@ function renderVariantInstances() {
     bindVariantReorderPointer(preview, instance);
     preview.addEventListener("keydown", (event) => {
       if (event.target !== preview) return;
+      if (selectedVariantInstanceId === instance.id && selectedVariantLayerTargets.size > 0) return;
       const move = event.key === "ArrowLeft" || event.key === "ArrowUp"
         ? -1
         : event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : 0;
@@ -915,13 +920,27 @@ function clearMasterSelectionForVariant() {
 
 function selectVariantInstance(instanceId, options = {}) {
   if (!getVariantInstance(instanceId)) return false;
+  const hasLayerTargets = Object.prototype.hasOwnProperty.call(options, "layerTargets");
   const hasLayerTarget = Object.prototype.hasOwnProperty.call(options, "layerTarget");
-  const nextTarget = hasLayerTarget
+  const nextTargets = hasLayerTargets
+    ? options.layerTargets
+    : hasLayerTarget
+      ? options.layerTarget === null ? [] : [options.layerTarget]
+      : selectedVariantInstanceId === instanceId && options.preserveLayerSelection === true
+        ? getSelectedVariantLayerTargets()
+        : [];
+  const nextTarget = hasLayerTargets
+    ? options.anchorTarget ?? nextTargets[nextTargets.length - 1] ?? null
+    : hasLayerTarget
     ? options.layerTarget
     : selectedVariantInstanceId === instanceId && options.preserveLayerSelection === true
       ? selectedVariantLayerTarget
       : null;
-  selectVariantState(instanceId, nextTarget);
+  if (nextTargets.length > 0) {
+    selectVariantLayerTargetsState(instanceId, nextTargets, nextTarget);
+  } else {
+    selectVariantState(instanceId, null);
+  }
   clearMasterSelectionForVariant();
   if (options.render !== false) renderTree();
   else {
@@ -942,7 +961,7 @@ function selectVariantInstance(instanceId, options = {}) {
         const id = Number(layerElement.dataset[`${type}Id`]);
         const isSelectedLayer = isSelectedInstance
           && Number.isFinite(id)
-          && selectedVariantLayerTarget === `${type}:${id}`;
+          && selectedVariantLayerTargets.has(`${type}:${id}`);
         layerElement.classList.toggle("is-selected", isSelectedLayer);
         layerElement.setAttribute("aria-selected", String(isSelectedLayer));
       });
@@ -1583,7 +1602,7 @@ function appendInstanceLayerRows(fragment, parentFrameId, depth, instance) {
       getTreeNodeName(layer.type, layer.record),
       depth,
       createLayerTypeIcon(layer.type, layer.record),
-      instance.id === selectedVariantInstanceId && target === selectedVariantLayerTarget,
+      isVariantLayerTargetSelected(instance.id, target),
       instance.id,
       target,
     ));

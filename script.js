@@ -131,6 +131,7 @@ document.addEventListener("keydown", (event) => {
 
   let activeVariantLayerTarget = selectedVariantLayerTarget;
   let activeVariantInstanceId = selectedVariantInstanceId;
+  let activeVariantLayerTargets = [...selectedVariantLayerTargets];
   const eventVariantLayer = target instanceof HTMLElement
     ? target.closest(".variant-preview .canvas-frame, .variant-preview .canvas-text, .variant-preview .canvas-vector")
     : null;
@@ -142,7 +143,11 @@ document.addEventListener("keydown", (event) => {
     if (Number.isFinite(id)) activeVariantLayerTarget = `${type}:${id}`;
     const previewId = Number(eventVariantLayer.closest(".variant-preview")?.dataset.variantInstanceId);
     if (Number.isFinite(previewId)) activeVariantInstanceId = previewId;
-    if (activeVariantInstanceId !== null) selectVariantState(activeVariantInstanceId, activeVariantLayerTarget);
+    if (activeVariantInstanceId !== null
+      && !isVariantLayerTargetSelected(activeVariantInstanceId, activeVariantLayerTarget)) {
+      activeVariantLayerTargets = activeVariantLayerTarget === null ? [] : [activeVariantLayerTarget];
+      selectVariantState(activeVariantInstanceId, activeVariantLayerTarget);
+    }
   }
   if (activeVariantInstanceId !== null && activeVariantLayerTarget === null) {
     const selectedLayer = componentSet?.querySelector(
@@ -164,10 +169,14 @@ document.addEventListener("keydown", (event) => {
   }
 
   if (activeVariantInstanceId !== null && activeVariantLayerTarget !== null) {
-    const [type, rawId] = activeVariantLayerTarget.split(":");
-    const id = Number(rawId);
-    if (!["frame", "text", "vector"].includes(type) || !Number.isFinite(id)) return;
-    selectLayerKeys([getLayerKey(type, id)], getLayerKey(type, id));
+    const targets = activeVariantLayerTargets.length > 0
+      ? activeVariantLayerTargets
+      : [activeVariantLayerTarget];
+    if (targets.some((entry) => {
+      const [type, rawId] = entry.split(":");
+      return !["frame", "text", "vector"].includes(type) || !Number.isFinite(Number(rawId));
+    })) return;
+    selectLayerKeys(targets, activeVariantLayerTarget);
   }
 
   if (selectedComponentId !== null) {

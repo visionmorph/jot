@@ -202,7 +202,7 @@ function getTreeNodeName(type, record) {
 function isComponentTreeLayerSelected(component, type, id) {
   if (component.id !== currentComponent?.id) return false;
   if (selectedVariantInstanceId !== null) {
-    return selectedVariantLayerTarget === `${type}:${id}`;
+    return selectedVariantLayerTargets.has(`${type}:${id}`);
   }
   return isLayerSelected(type, id);
 }
@@ -215,7 +215,7 @@ function syncLayerTreeSelectionStyles() {
     const isSelected = layerKey
       ? componentId === currentComponent?.id
         && (selectedVariantInstanceId !== null
-          ? selectedVariantLayerTarget === layerKey
+          ? selectedVariantLayerTargets.has(layerKey)
           : selectedLayerKeys.has(layerKey))
       : selectedComponentId === componentId;
     node.classList.toggle("is-selected", isSelected);
