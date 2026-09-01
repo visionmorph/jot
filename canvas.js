@@ -2542,8 +2542,7 @@ function applyMarqueeSelection(selectionBounds) {
 canvas?.addEventListener("pointerdown", (event) => {
   const hit = resolveCanvasHit(event.target);
   const startsOnCanvasBackground = hit.kind === "canvas"
-    || hit.kind === "component-set"
-    || (variantModel.getInstances().length === 0 && hit.kind === "component-root" && hit.direct);
+    || hit.kind === "component-set";
   if (
     !(canvas instanceof HTMLElement)
     || !startsOnCanvasBackground
