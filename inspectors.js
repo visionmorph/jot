@@ -864,107 +864,326 @@ function configureOptionComponentProp(prop, type) {
   prop.property = "kind";
 }
 
-function renderComponentProps() {
-  if (!(propRowsContainer instanceof HTMLElement)) return;
-  const compatibleTargets = getCompatibleDisabledTargets();
-  const rows = componentProps.map((prop) => {
-    const row = document.createElement("div");
-    row.className = "props-table-row props-property-row";
-    row.setAttribute("role", "row");
+function createComponentPropCell(isAction = false) {
+  const cell = document.createElement("div");
+  cell.className = `props-table-cell${isAction ? " props-table-action-cell" : ""}`;
+  cell.setAttribute("role", "cell");
+  return cell;
+}
 
-    const createCell = (isAction = false) => {
-      const cell = document.createElement("div");
-      cell.className = `props-table-cell${isAction ? " props-table-action-cell" : ""}`;
-      cell.setAttribute("role", "cell");
-      return cell;
-    };
+function createComponentPropNameCell(prop) {
+  const cell = createComponentPropCell();
+  const input = document.createElement("input");
+  input.className = "prop-control";
+  input.type = "text";
+  input.value = prop.name;
+  input.setAttribute("aria-label", "Prop name");
+  const commitName = () => {
+    const fallbackName = isStateComponentProp(prop)
+      ? "Interaction"
+      : isOptionComponentProp(prop)
+        ? "Variant"
+        : prop.type === "string"
+          ? "label"
+          : prop.type === "action"
+            ? "onClick"
+            : prop.property === "visibility" ? "visible" : "disabled";
+    const name = input.value.trim() || fallbackName;
+    if (name === prop.name) return;
+    recordHistory();
+    prop.name = name;
+    if (isVariantBoundComponentProp(prop)) syncComponentPropVariantDefinition(prop);
+    input.value = name;
+  };
+  input.addEventListener("change", commitName);
+  input.addEventListener("blur", commitName);
+  cell.append(input);
+  return cell;
+}
 
-    const nameCell = createCell();
-    const nameInput = document.createElement("input");
-    nameInput.className = "prop-control";
-    nameInput.type = "text";
-    nameInput.value = prop.name;
-    nameInput.setAttribute("aria-label", "Prop name");
-    const commitPropName = () => {
-      const fallbackName = isStateComponentProp(prop)
-        ? "Interaction"
-        : isOptionComponentProp(prop)
-          ? "Variant"
-          : prop.type === "string"
-        ? "label"
-        : prop.type === "action"
-          ? "onClick"
-          : prop.property === "visibility" ? "visible" : "disabled";
-      const name = nameInput.value.trim() || fallbackName;
-      if (name === prop.name) return;
-      recordHistory();
-      prop.name = name;
-      if (isVariantBoundComponentProp(prop)) syncComponentPropVariantDefinition(prop);
-      nameInput.value = name;
-    };
-    nameInput.addEventListener("change", commitPropName);
-    nameInput.addEventListener("blur", commitPropName);
-    nameCell.append(nameInput);
+function setComponentPropType(prop, value, compatibleTargets) {
+  if (value === prop.type) return;
+  recordHistory();
+  const wasVariantBoundProp = isVariantBoundComponentProp(prop);
+  if (wasVariantBoundProp && value !== "enum" && value !== "boolean") unlinkComponentPropVariantDefinition(prop);
+  if (isOptionComponentProp(value)) {
+    configureOptionComponentProp(prop, value);
+  } else if (value === "string") {
+    const target = textRecords[0];
+    prop.name = "label";
+    prop.type = "string";
+    prop.defaultValue = target?.element.textContent ?? "";
+    prop.targetFrameId = null;
+    prop.targetTextId = target?.id ?? null;
+    prop.targetVectorId = null;
+    prop.property = "textContent";
+  } else if (value === "action") {
+    const target = compatibleTargets[0];
+    prop.name = "onClick";
+    prop.type = "action";
+    prop.defaultValue = "";
+    prop.targetFrameId = target?.id ?? null;
+    prop.targetTextId = null;
+    prop.targetVectorId = null;
+    prop.property = "onClick";
+  } else {
+    const target = getAllTargetableLayers()[0];
+    prop.name = "visible";
+    prop.type = "boolean";
+    prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
+    prop.targetTextId = target?.type === "text" ? target.record.id : null;
+    prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
+    prop.property = "visibility";
+  }
+  if (!isOptionComponentProp(value)) {
+    delete prop.options;
+    delete prop.variantSubtype;
+  }
+  if (value === "boolean") syncInferredBooleanComponentPropDefault(prop);
+  else if (value === "enum") syncComponentPropVariantDefinition(prop);
+  renderComponentProps();
+}
 
-    const typeCell = createCell();
-    typeCell.append(createPropSelect(
-      [
-        { value: "enum", label: "Variant", iconType: "prop-enum" },
-        { value: "boolean", label: "Boolean", iconType: "prop-boolean" },
-        { value: "string", label: "String", iconType: "prop-string" },
-        { value: "action", label: "Action", iconType: "prop-action" },
-      ],
-      prop.type,
-      "Prop type",
-      (value) => {
-        if (value === prop.type) return;
-        recordHistory();
-        const wasVariantBoundProp = isVariantBoundComponentProp(prop);
-        if (wasVariantBoundProp && value !== "enum" && value !== "boolean") unlinkComponentPropVariantDefinition(prop);
-        if (isOptionComponentProp(value)) {
-          configureOptionComponentProp(prop, value);
-        } else if (value === "string") {
-          const target = textRecords[0];
-          prop.name = "label";
-          prop.type = "string";
-          prop.defaultValue = target?.element.textContent ?? "";
-          prop.targetFrameId = null;
-          prop.targetTextId = target?.id ?? null;
-          prop.targetVectorId = null;
-          prop.property = "textContent";
-        } else if (value === "action") {
-          const target = compatibleTargets[0];
-          prop.name = "onClick";
-          prop.type = "action";
-          prop.defaultValue = "";
-          prop.targetFrameId = target?.id ?? null;
-          prop.targetTextId = null;
-          prop.targetVectorId = null;
-          prop.property = "onClick";
-        } else {
-          const target = getAllTargetableLayers()[0];
-          prop.name = "visible";
-          prop.type = "boolean";
-          prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
-          prop.targetTextId = target?.type === "text" ? target.record.id : null;
-          prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
-          prop.property = "visibility";
-        }
-        if (!isOptionComponentProp(value)) {
-          delete prop.options;
-          delete prop.variantSubtype;
-        }
-        if (value === "boolean") syncInferredBooleanComponentPropDefault(prop);
-        else if (value === "enum") syncComponentPropVariantDefinition(prop);
-        renderComponentProps();
-      },
+function createComponentPropTypeCell(prop, compatibleTargets) {
+  const cell = createComponentPropCell();
+  cell.append(createPropSelect(
+    [
+      { value: "enum", label: "Variant", iconType: "prop-enum" },
+      { value: "boolean", label: "Boolean", iconType: "prop-boolean" },
+      { value: "string", label: "String", iconType: "prop-string" },
+      { value: "action", label: "Action", iconType: "prop-action" },
+    ],
+    prop.type,
+    "Prop type",
+    (value) => setComponentPropType(prop, value, compatibleTargets),
+  ));
+  return cell;
+}
+
+function createComponentPropActionCell(prop) {
+  const cell = createComponentPropCell(true);
+  const tooltip = document.createElement("span");
+  const button = document.createElement("button");
+  const icon = document.createElement("span");
+  const tooltipContent = document.createElement("span");
+  tooltip.className = "tooltip tooltip--top tooltip--align-center tooltip--fixed";
+  button.className = "icon-button icon-button--size-24 icon-button--rounded";
+  button.type = "button";
+  button.setAttribute("aria-label", `Remove ${prop.name} prop`);
+  icon.className = "subtract-icon";
+  icon.setAttribute("aria-hidden", "true");
+  tooltipContent.className = "tooltip__content";
+  tooltipContent.setAttribute("role", "tooltip");
+  tooltipContent.textContent = "Remove";
+  button.append(icon);
+  button.addEventListener("click", () => {
+    recordHistory();
+    if (isVariantBoundComponentProp(prop)) unlinkComponentPropVariantDefinition(prop);
+    componentProps = componentProps.filter((componentProp) => componentProp.id !== prop.id);
+    renderComponentProps();
+  });
+  tooltip.append(button, tooltipContent);
+  bindPropsActionTooltip(tooltip, button);
+  cell.append(tooltip);
+  return cell;
+}
+
+function setEnumComponentPropProperty(prop, value, currentProperty) {
+  if (value === currentProperty) return;
+  recordHistory();
+  const wasStateProp = isStateComponentProp(prop);
+  if (value === "state") {
+    prop.variantSubtype = "state";
+    prop.name = "Interaction";
+    prop.property = "state";
+    prop.options = [...INTERACTION_STATE_OPTIONS];
+    prop.defaultValue = prop.options[0];
+  } else {
+    delete prop.variantSubtype;
+    prop.property = value;
+    if (wasStateProp) {
+      prop.name = `${value[0].toUpperCase()}${value.slice(1)}`;
+      prop.options = [DEFAULT_ENUM_OPTION];
+      prop.defaultValue = prop.options[0];
+    }
+  }
+  syncComponentPropVariantDefinition(prop);
+  renderComponentProps();
+}
+
+function createComponentPropPropertyCell(prop, compatibleTargets, hasCurrentTarget) {
+  const cell = createComponentPropCell();
+  if (isOptionComponentProp(prop)) {
+    const enumProperty = getEnumComponentProperty(prop);
+    cell.append(createPropSelect(
+      ENUM_COMPONENT_PROPERTY_OPTIONS,
+      enumProperty,
+      "Variant property",
+      (value) => setEnumComponentPropProperty(prop, value, enumProperty),
     ));
+  } else if (prop.type === "boolean") {
+    cell.append(createPropSelect(
+      [
+        { value: "visibility", label: "Visibility" },
+        { value: "disabled", label: "Disabled", disabled: compatibleTargets.length === 0 },
+      ],
+      prop.property,
+      "Target property",
+      (value) => setBooleanPropProperty(prop, value),
+    ));
+  } else {
+    cell.append(createPropSelect(
+      [{
+        value: prop.property,
+        label: prop.property === "textContent" ? "Text content" : prop.property,
+      }],
+      prop.property,
+      "Target property",
+      () => {},
+      !hasCurrentTarget,
+    ));
+  }
+  return cell;
+}
 
-    const defaultCell = createCell();
-    defaultCell.classList.add("props-table-value-cell");
-    defaultCell.dataset.propValueCell = String(prop.id);
-    defaultCell.tabIndex = -1;
-    if (isOptionComponentProp(prop)) {
+function getComponentPropTargetConfig(prop, compatibleTargets) {
+  const isStringProp = prop.type === "string";
+  const isOptionProp = isOptionComponentProp(prop);
+  const isVisibilityProp = prop.type === "boolean" && prop.property === "visibility";
+  if (isOptionProp) {
+    return {
+      isStringProp,
+      isOptionProp,
+      isVisibilityProp,
+      hasCurrentTarget: true,
+      currentValue: "component:0",
+      targetsEmpty: false,
+      options: [{
+        value: "component:0",
+        label: currentComponent?.name || "Component",
+        iconType: "component",
+      }],
+    };
+  }
+  if (isStringProp) {
+    const hasCurrentTarget = textRecords.some((record) => record.id === prop.targetTextId);
+    const targetsEmpty = textRecords.length === 0;
+    return {
+      isStringProp,
+      isOptionProp,
+      isVisibilityProp,
+      hasCurrentTarget,
+      currentValue: hasCurrentTarget ? String(prop.targetTextId) : "",
+      targetsEmpty,
+      options: targetsEmpty
+        ? [{ value: "", label: "No text target", disabled: true }]
+        : [
+            { value: "", label: "Select layer", disabled: true },
+            ...textRecords.map((record) => ({
+              value: String(record.id),
+              label: getTreeNodeName("text", record),
+              iconType: "text",
+            })),
+          ],
+    };
+  }
+  if (isVisibilityProp) {
+    const allLayers = getAllTargetableLayers();
+    const encodedTarget = prop.targetFrameId != null
+      ? `frame:${prop.targetFrameId}`
+      : prop.targetTextId != null
+        ? `text:${prop.targetTextId}`
+        : prop.targetVectorId != null
+          ? `vector:${prop.targetVectorId}`
+          : "";
+    const hasCurrentTarget = allLayers.some((layer) => `${layer.type}:${layer.record.id}` === encodedTarget);
+    const targetsEmpty = allLayers.length === 0;
+    return {
+      isStringProp,
+      isOptionProp,
+      isVisibilityProp,
+      hasCurrentTarget,
+      currentValue: hasCurrentTarget ? encodedTarget : "",
+      targetsEmpty,
+      options: targetsEmpty
+        ? [{ value: "", label: "No layer target", disabled: true }]
+        : [
+            { value: "", label: "Select layer", disabled: true },
+            ...allLayers.map((layer) => ({
+              value: `${layer.type}:${layer.record.id}`,
+              label: getVisibilityTargetLabel(layer.type, layer.record),
+              iconType: getTargetLayerIconType(layer.type, layer.record),
+              iconRecord: layer.type === "component" ? null : layer.record,
+            })),
+          ],
+    };
+  }
+  const hasCurrentTarget = compatibleTargets.some((record) => record.id === prop.targetFrameId);
+  const targetsEmpty = compatibleTargets.length === 0;
+  return {
+    isStringProp,
+    isOptionProp,
+    isVisibilityProp,
+    hasCurrentTarget,
+    currentValue: hasCurrentTarget ? String(prop.targetFrameId) : "",
+    targetsEmpty,
+    options: targetsEmpty
+      ? [{ value: "", label: "No button target", disabled: true }]
+      : [
+          ...(prop.type === "action" ? [] : [{ value: "", label: "Select layer", disabled: true }]),
+          ...compatibleTargets.map((record) => ({
+            value: String(record.id),
+            label: record.isComponent
+              ? currentComponent?.name || "Component"
+              : getTreeNodeName("frame", record),
+            iconType: getTargetLayerIconType("frame", record),
+            iconRecord: record.isComponent ? null : record,
+          })),
+        ],
+  };
+}
+
+function setComponentPropTarget(prop, value, config) {
+  if (!value || value === config.currentValue || config.isOptionProp) return;
+  recordHistory();
+  const defaultInstance = getDefaultVariantInstance();
+  if (config.isStringProp) {
+    const targetId = Number(value);
+    const target = getTextRecord(targetId);
+    prop.targetTextId = targetId;
+    prop.targetFrameId = null;
+    prop.targetVectorId = null;
+    prop.defaultValue = target?.element.textContent ?? "";
+  } else if (config.isVisibilityProp) {
+    const [type, rawId] = value.split(":");
+    const targetId = Number(rawId);
+    prop.targetFrameId = type === "frame" ? targetId : null;
+    prop.targetTextId = type === "text" ? targetId : null;
+    prop.targetVectorId = type === "vector" ? targetId : null;
+  } else {
+    const targetId = Number(value);
+    prop.targetFrameId = targetId;
+    prop.targetTextId = null;
+    prop.targetVectorId = null;
+  }
+  if (prop.type === "boolean") syncInferredBooleanComponentPropDefault(prop, defaultInstance);
+  renderComponentProps();
+}
+
+function createComponentPropTargetCell(prop, compatibleTargets) {
+  const cell = createComponentPropCell();
+  const config = getComponentPropTargetConfig(prop, compatibleTargets);
+  cell.append(createPropSelect(
+    config.options,
+    config.currentValue,
+    "Target layer",
+    (value) => setComponentPropTarget(prop, value, config),
+    config.targetsEmpty,
+  ));
+  return { cell, hasCurrentTarget: config.hasCurrentTarget };
+}
+
+function populateOptionComponentPropDefaultCell(defaultCell, prop) {
       const options = getComponentPropOptions(prop);
       const isStateProp = isStateComponentProp(prop);
       const instance = getVariantInstance();
@@ -1155,6 +1374,15 @@ function renderComponentProps() {
         addValueInput.setSelectionRange(0, 0);
       });
       if (!isStateProp) defaultCell.append(addValueInput);
+}
+
+function createComponentPropDefaultCell(prop) {
+    const defaultCell = createComponentPropCell();
+    defaultCell.classList.add("props-table-value-cell");
+    defaultCell.dataset.propValueCell = String(prop.id);
+    defaultCell.tabIndex = -1;
+    if (isOptionComponentProp(prop)) {
+      populateOptionComponentPropDefaultCell(defaultCell, prop);
     } else if (prop.type === "boolean" && prop.variantPropId != null) {
       const instance = getVariantInstance() ?? getDefaultVariantInstance();
       const currentValue = instance
@@ -1262,197 +1490,31 @@ function renderComponentProps() {
       }
       defaultCell.append(valueTag);
     }
+    return defaultCell;
+}
 
-    const targetCell = createCell();
-    const isStringProp = prop.type === "string";
-    const isOptionProp = isOptionComponentProp(prop);
-    const isVisibilityProp = prop.type === "boolean" && prop.property === "visibility";
-    let targetOptions;
-    let currentValue;
-    let hasCurrentTarget;
-    let targetsEmpty;
+function renderComponentPropRow(prop, compatibleTargets) {
+    const row = document.createElement("div");
+    row.className = "props-table-row props-property-row";
+    row.setAttribute("role", "row");
+    const nameCell = createComponentPropNameCell(prop);
+    const typeCell = createComponentPropTypeCell(prop, compatibleTargets);
+    const defaultCell = createComponentPropDefaultCell(prop);
 
-    if (isOptionProp) {
-      hasCurrentTarget = true;
-      currentValue = "component:0";
-      targetsEmpty = false;
-      targetOptions = [{
-        value: "component:0",
-        label: currentComponent?.name || "Component",
-        iconType: "component",
-      }];
-    } else if (isStringProp) {
-      hasCurrentTarget = textRecords.some((record) => record.id === prop.targetTextId);
-      currentValue = hasCurrentTarget ? String(prop.targetTextId) : "";
-      targetsEmpty = textRecords.length === 0;
-      targetOptions = targetsEmpty
-        ? [{ value: "", label: "No text target", disabled: true }]
-        : [
-            { value: "", label: "Select layer", disabled: true },
-            ...textRecords.map((record) => ({
-              value: String(record.id),
-              label: getTreeNodeName("text", record),
-              iconType: "text",
-            })),
-          ];
-    } else if (isVisibilityProp) {
-      const allLayers = getAllTargetableLayers();
-      const encodedTarget = prop.targetFrameId != null
-        ? `frame:${prop.targetFrameId}`
-        : prop.targetTextId != null
-          ? `text:${prop.targetTextId}`
-          : prop.targetVectorId != null
-            ? `vector:${prop.targetVectorId}`
-            : "";
-      hasCurrentTarget = allLayers.some((layer) => `${layer.type}:${layer.record.id}` === encodedTarget);
-      currentValue = hasCurrentTarget ? encodedTarget : "";
-      targetsEmpty = allLayers.length === 0;
-      targetOptions = targetsEmpty
-        ? [{ value: "", label: "No layer target", disabled: true }]
-        : [
-            { value: "", label: "Select layer", disabled: true },
-            ...allLayers.map((layer) => ({
-              value: `${layer.type}:${layer.record.id}`,
-              label: getVisibilityTargetLabel(layer.type, layer.record),
-              iconType: getTargetLayerIconType(layer.type, layer.record),
-              iconRecord: layer.type === "component" ? null : layer.record,
-            })),
-          ];
-    } else {
-      hasCurrentTarget = compatibleTargets.some((record) => record.id === prop.targetFrameId);
-      currentValue = hasCurrentTarget ? String(prop.targetFrameId) : "";
-      targetsEmpty = compatibleTargets.length === 0;
-      targetOptions = targetsEmpty
-        ? [{ value: "", label: "No button target", disabled: true }]
-        : [
-            ...(prop.type === "action" ? [] : [{ value: "", label: "Select layer", disabled: true }]),
-            ...compatibleTargets.map((record) => ({
-              value: String(record.id),
-              label: record.isComponent
-                ? currentComponent?.name || "Component"
-                : getTreeNodeName("frame", record),
-              iconType: getTargetLayerIconType("frame", record),
-              iconRecord: record.isComponent ? null : record,
-            })),
-          ];
-    }
+    const target = createComponentPropTargetCell(prop, compatibleTargets);
+    const targetCell = target.cell;
+    const propertyCell = createComponentPropPropertyCell(prop, compatibleTargets, target.hasCurrentTarget);
 
-    targetCell.append(createPropSelect(
-      targetOptions,
-      currentValue,
-      "Target layer",
-      (value) => {
-        if (!value || value === currentValue) return;
-        recordHistory();
-        const defaultInstance = getDefaultVariantInstance();
-        if (isOptionProp) {
-          return;
-        } else if (isStringProp) {
-          const targetId = Number(value);
-          const target = getTextRecord(targetId);
-          prop.targetTextId = targetId;
-          prop.targetFrameId = null;
-          prop.targetVectorId = null;
-          prop.defaultValue = target?.element.textContent ?? "";
-        } else if (isVisibilityProp) {
-          const [type, rawId] = value.split(":");
-          const targetId = Number(rawId);
-          prop.targetFrameId = type === "frame" ? targetId : null;
-          prop.targetTextId = type === "text" ? targetId : null;
-          prop.targetVectorId = type === "vector" ? targetId : null;
-        } else {
-          const targetId = Number(value);
-          prop.targetFrameId = targetId;
-          prop.targetTextId = null;
-          prop.targetVectorId = null;
-        }
-        if (prop.type === "boolean") syncInferredBooleanComponentPropDefault(prop, defaultInstance);
-        renderComponentProps();
-      },
-      targetsEmpty,
-    ));
-
-    const propertyCell = createCell();
-    if (isOptionProp) {
-      const enumProperty = getEnumComponentProperty(prop);
-      propertyCell.append(createPropSelect(
-        ENUM_COMPONENT_PROPERTY_OPTIONS,
-        enumProperty,
-        "Variant property",
-        (value) => {
-          if (value === enumProperty) return;
-          recordHistory();
-          const wasStateProp = isStateComponentProp(prop);
-          if (value === "state") {
-            prop.variantSubtype = "state";
-            prop.name = "Interaction";
-            prop.property = "state";
-            prop.options = [...INTERACTION_STATE_OPTIONS];
-            prop.defaultValue = prop.options[0];
-          } else {
-            delete prop.variantSubtype;
-            prop.property = value;
-            if (wasStateProp) {
-              prop.name = `${value[0].toUpperCase()}${value.slice(1)}`;
-              prop.options = [DEFAULT_ENUM_OPTION];
-              prop.defaultValue = prop.options[0];
-            }
-          }
-          syncComponentPropVariantDefinition(prop);
-          renderComponentProps();
-        },
-      ));
-    } else if (prop.type === "boolean") {
-      propertyCell.append(createPropSelect(
-        [
-          { value: "visibility", label: "Visibility" },
-          { value: "disabled", label: "Disabled", disabled: compatibleTargets.length === 0 },
-        ],
-        prop.property,
-        "Target property",
-        (value) => setBooleanPropProperty(prop, value),
-      ));
-    } else {
-      propertyCell.append(createPropSelect(
-        [{
-          value: prop.property,
-          label: prop.property === "textContent" ? "Text content" : prop.property,
-        }],
-        prop.property,
-        "Target property",
-        () => {},
-        !hasCurrentTarget,
-      ));
-    }
-
-    const actionCell = createCell(true);
-    const removeTooltip = document.createElement("span");
-    const removeButton = document.createElement("button");
-    const removeIcon = document.createElement("span");
-    const removeTooltipContent = document.createElement("span");
-    removeTooltip.className = "tooltip tooltip--top tooltip--align-center tooltip--fixed";
-    removeButton.className = "icon-button icon-button--size-24 icon-button--rounded";
-    removeButton.type = "button";
-    removeButton.setAttribute("aria-label", `Remove ${prop.name} prop`);
-    removeIcon.className = "subtract-icon";
-    removeIcon.setAttribute("aria-hidden", "true");
-    removeTooltipContent.className = "tooltip__content";
-    removeTooltipContent.setAttribute("role", "tooltip");
-    removeTooltipContent.textContent = "Remove";
-    removeButton.append(removeIcon);
-    removeButton.addEventListener("click", () => {
-      recordHistory();
-      if (isVariantBoundComponentProp(prop)) unlinkComponentPropVariantDefinition(prop);
-      componentProps = componentProps.filter((componentProp) => componentProp.id !== prop.id);
-      renderComponentProps();
-    });
-    removeTooltip.append(removeButton, removeTooltipContent);
-    bindPropsActionTooltip(removeTooltip, removeButton);
-    actionCell.append(removeTooltip);
+    const actionCell = createComponentPropActionCell(prop);
 
     row.append(nameCell, typeCell, targetCell, propertyCell, defaultCell, actionCell);
     return row;
-  });
+}
+
+function renderComponentProps() {
+  if (!(propRowsContainer instanceof HTMLElement)) return;
+  const compatibleTargets = getCompatibleDisabledTargets();
+  const rows = componentProps.map((prop) => renderComponentPropRow(prop, compatibleTargets));
   propRowsContainer.replaceChildren(...rows);
 }
 
