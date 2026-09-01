@@ -762,6 +762,7 @@ function updateVariantPointerDrag(event) {
   if (!variantPointerDrag.hasStarted && distance < CANVAS_DRAG_THRESHOLD) return false;
   if (!variantPointerDrag.hasStarted) {
     variantPointerDrag.hasStarted = true;
+    variantActionOverlay?.classList.add("is-variant-reordering");
     if (canvas instanceof HTMLElement && !canvas.hasPointerCapture(event.pointerId)) {
       canvas.setPointerCapture(event.pointerId);
     }
@@ -796,6 +797,7 @@ function finishVariantPointerDrag(event, shouldCommit) {
   if (pointerDrag.hasStarted) updateVariantPointerDrag(event);
   const drop = shouldCommit ? pointerDrag.drop : null;
   variantPointerDrag = null;
+  variantActionOverlay?.classList.remove("is-variant-reordering");
   if (canvas?.hasPointerCapture(event.pointerId)) {
     canvas.releasePointerCapture(event.pointerId);
   }

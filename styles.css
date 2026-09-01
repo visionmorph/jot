@@ -1377,6 +1377,10 @@ textarea:focus-visible {
   user-select: none;
 }
 
+.variant-action-overlay.is-variant-reordering .component-variant-size-label {
+  display: none;
+}
+
 .canvas-add-variant-button {
   display: flex;
   width: 16px;
