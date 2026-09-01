@@ -49,6 +49,39 @@ test("creates, selects, undoes, and redoes a frame", async ({ page }) => {
   await expect(frameTreeItem).toHaveAttribute("aria-selected", "true");
 });
 
+test("duplicates a selected frame and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const frameTool = page.getByRole("button", { name: "Frame", exact: true });
+  const component = page.locator("[data-canvas-root-stack]");
+  const frames = component.locator(":scope > [data-frame-id]");
+  const originalFrame = component.locator(':scope > [data-frame-id="1"]');
+  const duplicateFrame = component.locator(':scope > [data-frame-id="2"]');
+  const duplicateTreeItem = page.locator('[data-selection-layer-key="frame:2"]');
+
+  await frameTool.click();
+  await component.click({ position: { x: 50, y: 50 } });
+  await expect(originalFrame).toHaveAttribute("aria-selected", "true");
+
+  await page.keyboard.press("ControlOrMeta+d");
+
+  await expect(frames).toHaveCount(2);
+  await expect(originalFrame).toHaveAttribute("aria-selected", "false");
+  await expect(duplicateFrame).toHaveAttribute("aria-selected", "true");
+  await expect(duplicateFrame).toHaveCSS("width", "100px");
+  await expect(duplicateFrame).toHaveCSS("height", "100px");
+  await expect(duplicateTreeItem).toHaveAttribute("aria-selected", "true");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(frames).toHaveCount(1);
+  await expect(duplicateTreeItem).toHaveCount(0);
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(frames).toHaveCount(2);
+  await expect(duplicateFrame).toHaveAttribute("aria-selected", "true");
+  await expect(duplicateTreeItem).toHaveAttribute("aria-selected", "true");
+});
+
 test("creates and edits a text layer", async ({ page }) => {
   await openApp(page);
 
