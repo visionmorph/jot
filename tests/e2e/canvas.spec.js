@@ -82,6 +82,89 @@ test("duplicates a selected frame and supports undo and redo", async ({ page }) 
   await expect(duplicateTreeItem).toHaveAttribute("aria-selected", "true");
 });
 
+test("wraps selected frames and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const frameTool = page.getByRole("button", { name: "Frame", exact: true });
+  const component = page.locator("[data-canvas-root-stack]");
+  const firstTreeItem = page.locator('[data-selection-layer-key="frame:1"]');
+  const secondTreeItem = page.locator('[data-selection-layer-key="frame:2"]');
+  const wrapper = component.locator(':scope > [data-frame-id="3"]');
+  const wrapperTreeItem = page.locator('[data-selection-layer-key="frame:3"]');
+
+  await frameTool.click();
+  await component.click({ position: { x: 50, y: 50 } });
+  await page.keyboard.press("ControlOrMeta+d");
+  await firstTreeItem.click();
+  await secondTreeItem.click({ modifiers: ["Control"] });
+
+  await expect(firstTreeItem).toHaveAttribute("aria-selected", "true");
+  await expect(secondTreeItem).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Shift+a");
+
+  await expect(wrapper).toBeVisible();
+  await expect(wrapper.locator(':scope > [data-frame-id="1"]')).toBeVisible();
+  await expect(wrapper.locator(':scope > [data-frame-id="2"]')).toBeVisible();
+  await expect(wrapperTreeItem).toHaveAttribute("aria-selected", "true");
+  await expect(firstTreeItem).toHaveAttribute("aria-level", "3");
+  await expect(secondTreeItem).toHaveAttribute("aria-level", "3");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(wrapper).toHaveCount(0);
+  await expect(component.locator(':scope > [data-frame-id="1"]')).toBeVisible();
+  await expect(component.locator(':scope > [data-frame-id="2"]')).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(wrapper).toBeVisible();
+  await expect(wrapperTreeItem).toHaveAttribute("aria-selected", "true");
+});
+
+test("reorders a selected frame and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const frameTool = page.getByRole("button", { name: "Frame", exact: true });
+  const component = page.locator("[data-canvas-root-stack]");
+  const frameOrder = () => component.locator(":scope > [data-frame-id]").evaluateAll(
+    (frames) => frames.map((frame) => frame.dataset.frameId),
+  );
+
+  await frameTool.click();
+  await component.click({ position: { x: 50, y: 50 } });
+  await page.keyboard.press("ControlOrMeta+d");
+  await expect.poll(frameOrder).toEqual(["1", "2"]);
+
+  await page.keyboard.press("[");
+  await expect.poll(frameOrder).toEqual(["2", "1"]);
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(frameOrder).toEqual(["1", "2"]);
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect.poll(frameOrder).toEqual(["2", "1"]);
+});
+
+test("changes selected frame opacity with a number shortcut", async ({ page }) => {
+  await openApp(page);
+
+  const frameTool = page.getByRole("button", { name: "Frame", exact: true });
+  const component = page.locator("[data-canvas-root-stack]");
+  const frame = component.locator(':scope > [data-frame-id="1"]');
+
+  await frameTool.click();
+  await component.click({ position: { x: 50, y: 50 } });
+  await page.keyboard.press("5");
+
+  await expect(frame).toHaveAttribute("data-opacity", "50");
+  await expect(frame).toHaveCSS("opacity", "0.5");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(frame).not.toHaveAttribute("data-opacity", "50");
+  await expect(frame).toHaveCSS("opacity", "1");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(frame).toHaveCSS("opacity", "0.5");
+});
+
 test("creates and edits a text layer", async ({ page }) => {
   await openApp(page);
 
@@ -147,6 +230,16 @@ test("creates a frame nested inside another frame", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(childFrame).toBeVisible();
   await expect(childTreeItem).toHaveAttribute("aria-selected", "true");
+
+  await page.keyboard.press("\\");
+  await expect(parentTreeItem).toHaveAttribute("aria-selected", "true");
+  await expect(childTreeItem).toHaveAttribute("aria-selected", "false");
+
+  await page.keyboard.press("Enter");
+  await expect(childTreeItem).toHaveAttribute("aria-selected", "true");
+
+  await page.keyboard.press("Shift+Enter");
+  await expect(parentTreeItem).toHaveAttribute("aria-selected", "true");
 });
 
 test("imports, selects, undoes, and redoes an SVG vector", async ({ page }) => {
