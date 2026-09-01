@@ -1255,12 +1255,7 @@ textarea:focus-visible {
 }
 
 .variant-preview.is-selected {
-  cursor: grab;
   touch-action: none;
-}
-
-.variant-preview.is-selected:active {
-  cursor: grabbing;
 }
 
 .variant-preview:focus {
@@ -1305,12 +1300,7 @@ textarea:focus-visible {
 }
 
 .variant-preview-label.is-reorder-handle {
-  cursor: grab;
   touch-action: none;
-}
-
-.variant-preview-label.is-reorder-handle:active {
-  cursor: grabbing;
 }
 
 .variant-preview.is-selected .variant-preview-label {
