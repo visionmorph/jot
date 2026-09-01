@@ -1183,314 +1183,350 @@ function createComponentPropTargetCell(prop, compatibleTargets) {
   return { cell, hasCurrentTarget: config.hasCurrentTarget };
 }
 
+function focusComponentPropValueControl(propId, selector = "") {
+  requestAnimationFrame(() => {
+    propRowsContainer
+      ?.querySelector(`[data-prop-value-cell="${propId}"]${selector}`)
+      ?.focus();
+  });
+}
+
+function setActiveComponentPropOption(context, value) {
+  const { defaultCell, instance, prop } = context;
+  if (!instance) return;
+  if (prop.variantPropId == null) syncComponentPropVariantDefinition(prop);
+  if (prop.variantPropId == null || instance.propValues[prop.variantPropId] === value) return;
+  recordHistory();
+  instance.propValues[prop.variantPropId] = value;
+  defaultCell.querySelectorAll("[data-tag-value]").forEach((tagValue) => {
+    tagValue.closest(".tag")?.classList.toggle("is-active", tagValue.value === value);
+  });
+  renderVariantInstances();
+}
+
+function renameComponentPropOption(prop, optionValue, nextValue) {
+  if (!nextValue || nextValue === optionValue) return false;
+  if (getComponentPropOptions(prop).some((value) => value !== optionValue && value === nextValue)) return false;
+  recordHistory();
+  prop.options = getComponentPropOptions(prop).map((value) => value === optionValue ? nextValue : value);
+  if (prop.defaultValue === optionValue) prop.defaultValue = nextValue;
+  if (prop.variantPropId != null) {
+    variantModel.getInstances().forEach((variantInstance) => {
+      if (variantInstance.propValues[prop.variantPropId] === optionValue) {
+        variantInstance.propValues[prop.variantPropId] = nextValue;
+      }
+    });
+    variantModel.getRules().forEach((rule) => {
+      if (rule.conditions[prop.variantPropId] === optionValue) rule.conditions[prop.variantPropId] = nextValue;
+    });
+  }
+  syncComponentPropVariantDefinition(prop);
+  renderComponentProps();
+  return true;
+}
+
+function removeComponentPropOption(prop, options, optionValue) {
+  if (options.length <= 1) return;
+  recordHistory();
+  prop.options = options.filter((value) => value !== optionValue);
+  syncComponentPropVariantDefinition(prop);
+  renderVariantInstances();
+  renderComponentProps();
+}
+
+function createComponentPropOptionDismissControl(context, optionValue) {
+  const { isStateProp, options, prop } = context;
+  const tooltip = document.createElement("span");
+  const button = document.createElement("button");
+  const tooltipContent = document.createElement("span");
+  tooltip.className = "tooltip tooltip--top tooltip--align-center tooltip--fixed";
+  tooltip.dataset.propValueDismissTooltip = "";
+  tooltip.hidden = isStateProp;
+  button.className = "icon-button icon-button--size-24 icon-button--circle";
+  button.dataset.iconButton = "prop-value-dismiss";
+  button.type = "button";
+  button.disabled = isStateProp || options.length <= 1;
+  button.setAttribute("aria-label", `Dismiss ${optionValue}`);
+  button.append(createSvgAssetIcon("close"));
+  tooltipContent.className = "tooltip__content";
+  tooltipContent.setAttribute("role", "tooltip");
+  tooltipContent.textContent = "Dismiss";
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    removeComponentPropOption(prop, options, optionValue);
+  });
+  tooltip.append(button, tooltipContent);
+  bindPropsActionTooltip(tooltip, button);
+  return tooltip;
+}
+
+function finishComponentPropOptionEdit(context, input, optionValue) {
+  const wasEditing = input.classList.contains("is-editing");
+  input.readOnly = true;
+  input.tabIndex = -1;
+  input.classList.remove("is-editing");
+  if (!wasEditing) return;
+  if (!renameComponentPropOption(context.prop, optionValue, input.value.trim())) input.value = optionValue;
+  if (context.retainValueCellFocusAfterEdit) {
+    context.retainValueCellFocusAfterEdit = false;
+    focusComponentPropValueControl(context.prop.id);
+  }
+}
+
+function createComponentPropOptionTag(context, optionValue, optionIndex) {
+  const { currentValue, isStateProp, prop } = context;
+  const tag = document.createElement("div");
+  const input = document.createElement("input");
+  tag.className = isStateProp ? "tag" : "tag tag--dismissable";
+  tag.tabIndex = 0;
+  tag.classList.toggle("is-active", optionValue === currentValue);
+  tag.classList.toggle("is-default", optionIndex === 0);
+  input.type = "text";
+  input.className = "tag__text";
+  input.dataset.tagValue = "";
+  input.value = optionValue;
+  input.readOnly = true;
+  input.tabIndex = -1;
+  input.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
+  if (optionIndex === 0) input.title = "Default value";
+  tag.addEventListener("focus", () => setActiveComponentPropOption(context, optionValue));
+  tag.addEventListener("click", (event) => {
+    if (event.target instanceof Element && event.target.closest('[data-icon-button="prop-value-dismiss"]')) return;
+    setActiveComponentPropOption(context, optionValue);
+    if (!input.classList.contains("is-editing")) tag.focus();
+  });
+  input.addEventListener("pointerdown", (event) => {
+    if (input.classList.contains("is-editing")) return;
+    event.preventDefault();
+    setActiveComponentPropOption(context, optionValue);
+    tag.focus();
+  });
+  tag.addEventListener("dblclick", (event) => {
+    if (isStateProp) return;
+    if (event.target instanceof Element && event.target.closest('[data-icon-button="prop-value-dismiss"]')) return;
+    event.preventDefault();
+    input.readOnly = false;
+    input.tabIndex = 0;
+    input.classList.add("is-editing");
+    input.focus();
+    input.select();
+  });
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      context.retainValueCellFocusAfterEdit = true;
+      input.blur();
+    }
+    if (event.key === "Escape") {
+      input.value = optionValue;
+      input.blur();
+    }
+  });
+  input.addEventListener("blur", () => finishComponentPropOptionEdit(context, input, optionValue));
+  tag.append(input, createComponentPropOptionDismissControl(context, optionValue));
+  return tag;
+}
+
+function addComponentPropOption(context, input, retainFocus = false) {
+  const nextValue = input.value.trim();
+  if (!nextValue) return false;
+  const existing = getComponentPropOptions(context.prop);
+  if (existing.includes(nextValue)) {
+    input.select();
+    return false;
+  }
+  recordHistory();
+  context.prop.options = [...existing, nextValue];
+  if (context.instance && context.prop.variantPropId != null) {
+    context.instance.propValues[context.prop.variantPropId] = nextValue;
+  }
+  syncComponentPropVariantDefinition(context.prop);
+  renderComponentProps();
+  if (retainFocus) focusComponentPropValueControl(context.prop.id, " .tag__add-input");
+  return true;
+}
+
+function createComponentPropAddOptionInput(context) {
+  const input = document.createElement("input");
+  const propName = context.prop.name.trim().toLowerCase();
+  const placeholderName = propName === "size" || propName === "type" ? propName : "variant";
+  input.className = "tag__add-input";
+  input.type = "text";
+  input.placeholder = `Add ${placeholderName}`;
+  input.setAttribute("aria-label", `Add ${context.prop.name} value`);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addComponentPropOption(context, input, true);
+    } else if (event.key === "Escape") {
+      input.value = "";
+      input.blur();
+    }
+  });
+  input.addEventListener("blur", () => addComponentPropOption(context, input));
+  context.defaultCell.addEventListener("pointerdown", (event) => {
+    if (event.target instanceof Element && event.target.closest(".tag, .tag__add-input")) return;
+    event.preventDefault();
+    input.focus();
+    input.setSelectionRange(0, 0);
+  });
+  return input;
+}
+
 function populateOptionComponentPropDefaultCell(defaultCell, prop) {
-      const options = getComponentPropOptions(prop);
-      const isStateProp = isStateComponentProp(prop);
-      const instance = getVariantInstance();
-      let retainValueCellFocusAfterEdit = false;
-      const focusValueCell = () => {
-        requestAnimationFrame(() => {
-          propRowsContainer?.querySelector(`[data-prop-value-cell="${prop.id}"]`)?.focus();
-        });
-      };
-      const currentValue = instance && prop.variantPropId != null
-        ? instance.propValues[prop.variantPropId]
-        : options[0];
-      const setActiveOption = (value) => {
-        if (instance) {
-          if (prop.variantPropId == null) syncComponentPropVariantDefinition(prop);
-          if (prop.variantPropId == null || instance.propValues[prop.variantPropId] === value) return;
-          recordHistory();
-          instance.propValues[prop.variantPropId] = value;
-        } else return;
-        defaultCell.querySelectorAll("[data-tag-value]").forEach((tagValue) => {
-          tagValue.closest(".tag")?.classList.toggle("is-active", tagValue.value === value);
-        });
-        renderVariantInstances();
-      };
-      options.forEach((optionValue, optionIndex) => {
-        const valueTag = document.createElement("div");
-        const valueInput = document.createElement("input");
-        const dismissTooltip = document.createElement("span");
-        const dismissButton = document.createElement("button");
-        const dismissTooltipContent = document.createElement("span");
-        valueTag.className = isStateProp ? "tag" : "tag tag--dismissable";
-        valueTag.tabIndex = 0;
-        valueInput.type = "text";
-        valueInput.className = "tag__text";
-        valueInput.dataset.tagValue = "";
-        valueInput.value = optionValue;
-        valueInput.readOnly = true;
-        valueInput.tabIndex = -1;
-        valueTag.classList.toggle("is-active", optionValue === currentValue);
-        valueTag.classList.toggle("is-default", optionIndex === 0);
-        valueInput.setAttribute("aria-label", `${prop.name} value ${optionValue}`);
-        if (optionIndex === 0) valueInput.title = "Default value";
-        valueTag.addEventListener("focus", () => setActiveOption(optionValue));
-        valueTag.addEventListener("click", (event) => {
-          if (event.target instanceof Element && event.target.closest('[data-icon-button="prop-value-dismiss"]')) return;
-          setActiveOption(optionValue);
-          if (!valueInput.classList.contains("is-editing")) valueTag.focus();
-        });
-        valueInput.addEventListener("pointerdown", (event) => {
-          if (valueInput.classList.contains("is-editing")) return;
-          event.preventDefault();
-          setActiveOption(optionValue);
-          valueTag.focus();
-        });
-        valueTag.addEventListener("dblclick", (event) => {
-          if (isStateProp) return;
-          if (event.target instanceof Element && event.target.closest('[data-icon-button="prop-value-dismiss"]')) return;
-          event.preventDefault();
-          valueInput.readOnly = false;
-          valueInput.tabIndex = 0;
-          valueInput.classList.add("is-editing");
-          valueInput.focus();
-          valueInput.select();
-        });
-        valueInput.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            retainValueCellFocusAfterEdit = true;
-            valueInput.blur();
-          }
-          if (event.key === "Escape") {
-            valueInput.value = optionValue;
-            valueInput.blur();
-          }
-        });
-        valueInput.addEventListener("blur", () => {
-          const wasEditing = valueInput.classList.contains("is-editing");
-          valueInput.readOnly = true;
-          valueInput.tabIndex = -1;
-          valueInput.classList.remove("is-editing");
-          if (!wasEditing) return;
-          const nextValue = valueInput.value.trim();
-          if (!nextValue || nextValue === optionValue) {
-            valueInput.value = optionValue;
-            if (retainValueCellFocusAfterEdit) {
-              retainValueCellFocusAfterEdit = false;
-              focusValueCell();
-            }
-            return;
-          }
-          if (getComponentPropOptions(prop).some((value) => value !== optionValue && value === nextValue)) {
-            valueInput.value = optionValue;
-            if (retainValueCellFocusAfterEdit) {
-              retainValueCellFocusAfterEdit = false;
-              focusValueCell();
-            }
-            return;
-          }
-          recordHistory();
-          prop.options = getComponentPropOptions(prop).map((value) => value === optionValue ? nextValue : value);
-          if (prop.defaultValue === optionValue) prop.defaultValue = nextValue;
-          if (prop.variantPropId != null) {
-            variantModel.getInstances().forEach((variantInstance) => {
-              if (variantInstance.propValues[prop.variantPropId] === optionValue) {
-                variantInstance.propValues[prop.variantPropId] = nextValue;
-              }
-            });
-            variantModel.getRules().forEach((rule) => {
-              if (rule.conditions[prop.variantPropId] === optionValue) rule.conditions[prop.variantPropId] = nextValue;
-            });
-          }
-          syncComponentPropVariantDefinition(prop);
-          renderComponentProps();
-          if (retainValueCellFocusAfterEdit) {
-            retainValueCellFocusAfterEdit = false;
-            focusValueCell();
-          }
-        });
-        dismissTooltip.className = "tooltip tooltip--top tooltip--align-center tooltip--fixed";
-        dismissTooltip.dataset.propValueDismissTooltip = "";
-        dismissButton.className = "icon-button icon-button--size-24 icon-button--circle";
-        dismissButton.dataset.iconButton = "prop-value-dismiss";
-        dismissButton.type = "button";
-        dismissButton.disabled = isStateProp || options.length <= 1;
-        dismissTooltip.hidden = isStateProp;
-        dismissButton.setAttribute("aria-label", `Dismiss ${optionValue}`);
-        dismissButton.append(createSvgAssetIcon("close"));
-        dismissTooltipContent.className = "tooltip__content";
-        dismissTooltipContent.setAttribute("role", "tooltip");
-        dismissTooltipContent.textContent = "Dismiss";
-        dismissButton.addEventListener("click", (event) => {
-          event.stopPropagation();
-          if (options.length <= 1) return;
-          recordHistory();
-          prop.options = options.filter((value) => value !== optionValue);
-          syncComponentPropVariantDefinition(prop);
-          renderVariantInstances();
-          renderComponentProps();
-        });
-        dismissTooltip.append(dismissButton, dismissTooltipContent);
-        bindPropsActionTooltip(dismissTooltip, dismissButton);
-        valueTag.append(valueInput, dismissTooltip);
-        defaultCell.append(valueTag);
-      });
-      const addValueInput = document.createElement("input");
-      const focusAddValueInput = () => {
-        requestAnimationFrame(() => {
-          propRowsContainer
-            ?.querySelector(`[data-prop-value-cell="${prop.id}"] .tag__add-input`)
-            ?.focus();
-        });
-      };
-      const addValue = (retainFocus = false) => {
-        const nextValue = addValueInput.value.trim();
-        if (!nextValue) return false;
-        const existing = getComponentPropOptions(prop);
-        if (existing.includes(nextValue)) {
-          addValueInput.select();
-          return false;
-        }
-        recordHistory();
-        prop.options = [...existing, nextValue];
-        if (instance && prop.variantPropId != null) instance.propValues[prop.variantPropId] = nextValue;
-        syncComponentPropVariantDefinition(prop);
-        renderComponentProps();
-        if (retainFocus) focusAddValueInput();
-        return true;
-      };
-      addValueInput.className = "tag__add-input";
-      addValueInput.type = "text";
-      const propName = prop.name.trim().toLowerCase();
-      const placeholderName = propName === "size" || propName === "type" ? propName : "variant";
-      addValueInput.placeholder = `Add ${placeholderName}`;
-      addValueInput.setAttribute("aria-label", `Add ${prop.name} value`);
-      addValueInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          addValue(true);
-        } else if (event.key === "Escape") {
-          addValueInput.value = "";
-          addValueInput.blur();
-        }
-      });
-      addValueInput.addEventListener("blur", () => addValue());
-      defaultCell.addEventListener("pointerdown", (event) => {
-        if (event.target instanceof Element && event.target.closest(".tag, .tag__add-input")) return;
-        event.preventDefault();
-        addValueInput.focus();
-        addValueInput.setSelectionRange(0, 0);
-      });
-      if (!isStateProp) defaultCell.append(addValueInput);
+  const options = getComponentPropOptions(prop);
+  const instance = getVariantInstance();
+  const context = {
+    currentValue: instance && prop.variantPropId != null ? instance.propValues[prop.variantPropId] : options[0],
+    defaultCell,
+    instance,
+    isStateProp: isStateComponentProp(prop),
+    options,
+    prop,
+    retainValueCellFocusAfterEdit: false,
+  };
+  options.forEach((optionValue, optionIndex) => {
+    defaultCell.append(createComponentPropOptionTag(context, optionValue, optionIndex));
+  });
+  const addValueInput = createComponentPropAddOptionInput(context);
+  if (!context.isStateProp) defaultCell.append(addValueInput);
+}
+
+function createComponentPropValueCell(prop) {
+  const cell = createComponentPropCell();
+  cell.classList.add("props-table-value-cell");
+  cell.dataset.propValueCell = String(prop.id);
+  cell.tabIndex = -1;
+  return cell;
+}
+
+function createVariantBooleanDefaultControl(prop) {
+  const instance = getVariantInstance() ?? getDefaultVariantInstance();
+  const currentValue = instance
+    ? normalizeVariantPropValue(
+      variantModel.getProps().find((variantProp) => variantProp.id === prop.variantPropId),
+      instance.propValues[prop.variantPropId],
+    )
+    : Boolean(prop.defaultValue);
+  const toggle = document.createElement("button");
+  const track = document.createElement("span");
+  const handle = document.createElement("span");
+  const checkmark = document.createElement("span");
+  const label = document.createElement("span");
+  toggle.className = "toggle";
+  toggle.type = "button";
+  toggle.setAttribute("role", "switch");
+  toggle.setAttribute("aria-checked", String(currentValue));
+  toggle.setAttribute("aria-label", `${prop.name} value`);
+  track.className = "toggle__track";
+  track.setAttribute("aria-hidden", "true");
+  handle.className = "toggle__handle";
+  checkmark.className = "toggle__checkmark";
+  label.className = "toggle__label";
+  label.textContent = currentValue ? "True" : "False";
+  handle.append(checkmark);
+  track.append(handle);
+  toggle.append(track, label);
+  toggle.addEventListener("click", () => {
+    if (toggle.dataset.transitioning === "true") return;
+    const nextValue = !currentValue;
+    const transitionDuration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 120;
+    toggle.dataset.transitioning = "true";
+    toggle.setAttribute("aria-checked", String(nextValue));
+    label.textContent = nextValue ? "True" : "False";
+    recordHistory();
+    if (instance) {
+      const variantProp = variantModel.getProps().find((entry) => entry.id === prop.variantPropId);
+      setVariantBooleanValue(instance, variantProp, nextValue);
+      renderVariantInstances();
+    } else {
+      prop.defaultValue = nextValue;
+      syncComponentPropVariantDefinition(prop, { render: false });
+    }
+    if (transitionDuration === 0) {
+      renderComponentProps();
+      return;
+    }
+    let didFinishTransition = false;
+    const finishTransition = () => {
+      if (didFinishTransition) return;
+      didFinishTransition = true;
+      renderComponentProps();
+    };
+    handle.addEventListener("transitionend", finishTransition, { once: true });
+    window.setTimeout(finishTransition, transitionDuration + 60);
+  });
+  return toggle;
+}
+
+function createStringDefaultControl(prop) {
+  const input = document.createElement("input");
+  input.className = "prop-control";
+  input.type = "text";
+  input.value = String(prop.defaultValue ?? "");
+  input.setAttribute("aria-label", `Default ${prop.name} value`);
+  const commitValue = (renderPanel = false) => {
+    const didChange = input.value !== String(prop.defaultValue ?? "");
+    if (didChange) recordHistoryForGesture(input);
+    const target = getTextRecord(prop.targetTextId);
+    if (target) {
+      syncTextRecordContent(target, input.value);
+      applyLayerSizing("text", target);
+      requestAnimationFrame(syncResizeOverlay);
+      renderTree();
+    }
+    if (didChange) {
+      if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+      redoHistory.length = 0;
+    }
+    if (renderPanel) renderComponentProps();
+  };
+  input.addEventListener("input", () => commitValue());
+  input.addEventListener("blur", () => commitValue(true));
+  bindHistoryGesture(input);
+  return input;
+}
+
+function createActionDefaultControl() {
+  const value = document.createElement("span");
+  value.className = "prop-empty-value prop-empty-value--action";
+  value.textContent = "—";
+  return value;
+}
+
+function createStaticDefaultControl(prop) {
+  const value = document.createElement("span");
+  value.className = "tag";
+  if (prop.type === "boolean") {
+    value.textContent = Boolean(prop.defaultValue) ? "True" : "False";
+    value.setAttribute("aria-label", `Default Boolean value: ${value.textContent}`);
+  } else if (prop.type === "string") {
+    const stringValue = String(prop.defaultValue);
+    value.textContent = stringValue || '\"\"';
+    value.setAttribute("aria-label", `Default string value: ${stringValue || "empty string"}`);
+  } else {
+    value.classList.add("prop-empty-value");
+    value.textContent = "—";
+    value.setAttribute("aria-label", "No default value");
+  }
+  return value;
 }
 
 function createComponentPropDefaultCell(prop) {
-    const defaultCell = createComponentPropCell();
-    defaultCell.classList.add("props-table-value-cell");
-    defaultCell.dataset.propValueCell = String(prop.id);
-    defaultCell.tabIndex = -1;
-    if (isOptionComponentProp(prop)) {
-      populateOptionComponentPropDefaultCell(defaultCell, prop);
-    } else if (prop.type === "boolean" && prop.variantPropId != null) {
-      const instance = getVariantInstance() ?? getDefaultVariantInstance();
-      const currentValue = instance
-        ? normalizeVariantPropValue(
-          variantModel.getProps().find((variantProp) => variantProp.id === prop.variantPropId),
-          instance.propValues[prop.variantPropId],
-        )
-        : Boolean(prop.defaultValue);
-      const valueToggle = document.createElement("button");
-      const valueToggleTrack = document.createElement("span");
-      const valueToggleHandle = document.createElement("span");
-      const valueToggleCheckmark = document.createElement("span");
-      const valueToggleLabel = document.createElement("span");
-      valueToggle.className = "toggle";
-      valueToggle.type = "button";
-      valueToggle.setAttribute("role", "switch");
-      valueToggle.setAttribute("aria-checked", String(currentValue));
-      valueToggle.setAttribute("aria-label", `${prop.name} value`);
-      valueToggleTrack.className = "toggle__track";
-      valueToggleTrack.setAttribute("aria-hidden", "true");
-      valueToggleHandle.className = "toggle__handle";
-      valueToggleCheckmark.className = "toggle__checkmark";
-      valueToggleLabel.className = "toggle__label";
-      valueToggleLabel.textContent = currentValue ? "True" : "False";
-      valueToggleHandle.append(valueToggleCheckmark);
-      valueToggleTrack.append(valueToggleHandle);
-      valueToggle.append(valueToggleTrack, valueToggleLabel);
-      valueToggle.addEventListener("click", () => {
-        if (valueToggle.dataset.transitioning === "true") return;
-        const nextValue = !currentValue;
-        const transitionDuration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 120;
-        valueToggle.dataset.transitioning = "true";
-        valueToggle.setAttribute("aria-checked", String(nextValue));
-        valueToggleLabel.textContent = nextValue ? "True" : "False";
-        recordHistory();
-        if (instance) {
-          const variantProp = variantModel.getProps().find((entry) => entry.id === prop.variantPropId);
-          setVariantBooleanValue(instance, variantProp, nextValue);
-          renderVariantInstances();
-        } else {
-          prop.defaultValue = nextValue;
-          syncComponentPropVariantDefinition(prop, { render: false });
-        }
-        if (transitionDuration === 0) {
-          renderComponentProps();
-          return;
-        }
-        let didFinishTransition = false;
-        const finishTransition = () => {
-          if (didFinishTransition) return;
-          didFinishTransition = true;
-          renderComponentProps();
-        };
-        valueToggleHandle.addEventListener("transitionend", finishTransition, { once: true });
-        window.setTimeout(finishTransition, transitionDuration + 60);
-      });
-      defaultCell.append(valueToggle);
-    } else if (prop.type === "string" && prop.property === "textContent") {
-      defaultCell.classList.add("props-table-value-cell--control");
-      const valueInput = document.createElement("input");
-      valueInput.className = "prop-control";
-      valueInput.type = "text";
-      valueInput.value = String(prop.defaultValue ?? "");
-      valueInput.setAttribute("aria-label", `Default ${prop.name} value`);
-      const commitStringValue = (renderPanel = false) => {
-        const didChange = valueInput.value !== String(prop.defaultValue ?? "");
-        if (didChange) recordHistoryForGesture(valueInput);
-        const target = getTextRecord(prop.targetTextId);
-        if (target) {
-          syncTextRecordContent(target, valueInput.value);
-          applyLayerSizing("text", target);
-          requestAnimationFrame(syncResizeOverlay);
-          renderTree();
-        }
-        if (didChange) {
-          if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
-          redoHistory.length = 0;
-        }
-        if (renderPanel) renderComponentProps();
-      };
-      valueInput.addEventListener("input", () => commitStringValue());
-      valueInput.addEventListener("blur", () => commitStringValue(true));
-      bindHistoryGesture(valueInput);
-      defaultCell.append(valueInput);
-    } else if (prop.type === "action" && prop.property === "onClick") {
-      const actionValue = document.createElement("span");
-      actionValue.className = "prop-empty-value prop-empty-value--action";
-      actionValue.textContent = "—";
-      defaultCell.append(actionValue);
-      defaultCell.setAttribute("aria-label", "Value supplied by component consumer");
-    } else {
-      const valueTag = document.createElement("span");
-      valueTag.className = "tag";
-      if (prop.type === "boolean") {
-        valueTag.textContent = Boolean(prop.defaultValue) ? "True" : "False";
-        valueTag.setAttribute("aria-label", `Default Boolean value: ${valueTag.textContent}`);
-      } else if (prop.type === "string") {
-        const stringValue = String(prop.defaultValue);
-        valueTag.textContent = stringValue || '""';
-        valueTag.setAttribute("aria-label", `Default string value: ${stringValue || "empty string"}`);
-      } else {
-        valueTag.classList.add("prop-empty-value");
-        valueTag.textContent = "—";
-        valueTag.setAttribute("aria-label", "No default value");
-      }
-      defaultCell.append(valueTag);
-    }
-    return defaultCell;
+  const cell = createComponentPropValueCell(prop);
+  if (isOptionComponentProp(prop)) {
+    populateOptionComponentPropDefaultCell(cell, prop);
+  } else if (prop.type === "boolean" && prop.variantPropId != null) {
+    cell.append(createVariantBooleanDefaultControl(prop));
+  } else if (prop.type === "string" && prop.property === "textContent") {
+    cell.classList.add("props-table-value-cell--control");
+    cell.append(createStringDefaultControl(prop));
+  } else if (prop.type === "action" && prop.property === "onClick") {
+    cell.setAttribute("aria-label", "Value supplied by component consumer");
+    cell.append(createActionDefaultControl());
+  } else {
+    cell.append(createStaticDefaultControl(prop));
+  }
+  return cell;
 }
 
 function renderComponentPropRow(prop, compatibleTargets) {
