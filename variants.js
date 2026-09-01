@@ -3,6 +3,7 @@
 let variantRenderFrame = null;
 
 let variantPointerDrag = null;
+let variantOverlayRestoreTimer = null;
 
 function getVariantPropValues(prop) {
   if (prop.type === "boolean") return [false, true];
@@ -762,6 +763,10 @@ function updateVariantPointerDrag(event) {
   if (!variantPointerDrag.hasStarted && distance < CANVAS_DRAG_THRESHOLD) return false;
   if (!variantPointerDrag.hasStarted) {
     variantPointerDrag.hasStarted = true;
+    if (variantOverlayRestoreTimer !== null) {
+      clearTimeout(variantOverlayRestoreTimer);
+      variantOverlayRestoreTimer = null;
+    }
     variantActionOverlay?.classList.add("is-variant-reordering");
     if (canvas instanceof HTMLElement && !canvas.hasPointerCapture(event.pointerId)) {
       canvas.setPointerCapture(event.pointerId);
@@ -797,7 +802,6 @@ function finishVariantPointerDrag(event, shouldCommit) {
   if (pointerDrag.hasStarted) updateVariantPointerDrag(event);
   const drop = shouldCommit ? pointerDrag.drop : null;
   variantPointerDrag = null;
-  variantActionOverlay?.classList.remove("is-variant-reordering");
   if (canvas?.hasPointerCapture(event.pointerId)) {
     canvas.releasePointerCapture(event.pointerId);
   }
@@ -814,7 +818,19 @@ function finishVariantPointerDrag(event, shouldCommit) {
   event.preventDefault();
   event.stopPropagation();
   suppressCanvasClickForGesture(event);
-  if (drop) reorderVariantInstances(pointerDrag.instanceIds, drop.destinationIndex, pointerDrag.instanceId);
+  const didReorder = drop
+    ? reorderVariantInstances(pointerDrag.instanceIds, drop.destinationIndex, pointerDrag.instanceId)
+    : false;
+  const restoreVariantActionOverlay = () => {
+    variantOverlayRestoreTimer = null;
+    variantActionOverlay?.classList.remove("is-variant-reordering");
+    syncResizeOverlay();
+  };
+  if (didReorder) {
+    variantOverlayRestoreTimer = setTimeout(restoreVariantActionOverlay, CANVAS_REFLOW_DURATION);
+  } else {
+    requestAnimationFrame(restoreVariantActionOverlay);
+  }
 }
 
 function bindVariantReorderPointer(preview, instance) {

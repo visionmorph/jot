@@ -1,0 +1,17 @@
+{
+  "name": "component-authoring-tool",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "description": "Browser regression tests for the component authoring tool.",
+  "scripts": {
+    "serve": "node tests/support/static-server.cjs",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

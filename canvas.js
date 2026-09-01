@@ -155,6 +155,7 @@ function getSelectedResizeRecord() {
 
 function positionResizeOverlay() {
   if (!(canvas instanceof HTMLElement)) return;
+  if (canvasReflowAnimations.has(resizeOverlay)) return;
   if (activeTool !== "select" || canvasDragSession || canvasPointerDrag?.hasStarted) {
     resizeOverlay.hidden = true;
     return;
@@ -185,12 +186,24 @@ function positionResizeOverlay() {
 
 function syncVariantActionOverlay() {
   if (!(canvas instanceof HTMLElement)) return;
+  if (variantActionOverlay.classList.contains("is-variant-reordering")) return;
   if (activeTool !== "select") {
     variantActionOverlay.hidden = true;
     return;
   }
-  const selectedElement = getSelectedResizeElement();
-  const anchorElement = selectedComponentId === currentComponent?.id && variantModel.getInstances().length > 0
+  const selectedVariantPreviews = Array.from(
+    componentSet?.querySelectorAll(".variant-preview.is-selected") ?? [],
+  );
+  const selectedVariantRoot = selectedVariantPreviews.length === 1
+    ? selectedVariantPreviews[0].querySelector(".canvas-root-stack.is-selected")
+    : null;
+  const selectedElement = selectedVariantRoot instanceof HTMLElement
+    ? selectedVariantRoot
+    : getSelectedResizeElement();
+  const isComponentRootSelected = selectedComponentId === currentComponent?.id
+    && selectedVariantPreviews.length === 0;
+  const isVariantRootSelected = selectedVariantRoot instanceof HTMLElement;
+  const anchorElement = isComponentRootSelected && variantModel.getInstances().length > 0
     ? componentSet
     : selectedElement;
   if (!(selectedElement instanceof HTMLElement)
@@ -200,14 +213,12 @@ function syncVariantActionOverlay() {
     variantActionOverlay.hidden = true;
     return;
   }
-  const isComponentRootSelected = selectedComponentId === currentComponent?.id;
-  const isVariantRootSelected = selectedVariantInstanceId !== null && selectedVariantLayerTarget === null;
   const canAddVariant = isComponentRootSelected || isVariantRootSelected;
   variantAddTooltip.hidden = !canAddVariant;
   const canvasBounds = canvas.getBoundingClientRect();
   const bounds = anchorElement.getBoundingClientRect();
   const selectedBounds = selectedElement.getBoundingClientRect();
-  const fallbackVariantRoot = selectedComponentId === currentComponent?.id && variantModel.getInstances().length > 0
+  const fallbackVariantRoot = isComponentRootSelected && variantModel.getInstances().length > 0
     ? componentSet?.querySelector(".variant-preview .canvas-root-stack")
     : null;
   const measurementElement = selectedBounds.width > 0 && selectedBounds.height > 0
@@ -1108,6 +1119,9 @@ function captureCanvasItemPositions(elements, getKey = (element) => element, get
     activeAnimation?.cancel();
     canvasReflowAnimations.delete(element);
   });
+  const activeResizeAnimation = canvasReflowAnimations.get(resizeOverlay);
+  activeResizeAnimation?.cancel();
+  canvasReflowAnimations.delete(resizeOverlay);
   return positions;
 }
 
@@ -1156,6 +1170,40 @@ function animateCanvasItemReflow(previousPositions, elements, {
     movements.set(element, { x, y });
   });
 
+  const trackAnimation = (element, animation) => {
+    canvasReflowAnimations.set(element, animation);
+    animation.addEventListener("finish", () => {
+      if (canvasReflowAnimations.get(element) === animation) canvasReflowAnimations.delete(element);
+    }, { once: true });
+    animation.addEventListener("cancel", () => {
+      if (canvasReflowAnimations.get(element) === animation) canvasReflowAnimations.delete(element);
+    }, { once: true });
+  };
+
+  const selectedResizeElement = getSelectedResizeElement();
+  let resizeMovement = selectedResizeElement instanceof HTMLElement
+    ? movements.get(selectedResizeElement)
+    : null;
+  if (!resizeMovement && selectedResizeElement instanceof HTMLElement) {
+    const movingAncestors = Array.from(movements.entries())
+      .filter(([element]) => element.contains(selectedResizeElement));
+    resizeMovement = movingAncestors[movingAncestors.length - 1]?.[1] ?? null;
+  }
+  if (resizeMovement) {
+    positionResizeOverlay();
+    const animation = resizeOverlay.animate(
+      [
+        { transform: `translate(${resizeMovement.x}px, ${resizeMovement.y}px)` },
+        { transform: "translate(0, 0)" },
+      ],
+      {
+        duration: CANVAS_REFLOW_DURATION,
+        easing: CANVAS_REFLOW_EASING,
+      },
+    );
+    trackAnimation(resizeOverlay, animation);
+  }
+
   movements.forEach((movement, element) => {
     const animatedAncestor = getAnimatedAncestor(element);
     const ancestorMovement = animatedAncestor ? movements.get(animatedAncestor) : null;
@@ -1172,13 +1220,7 @@ function animateCanvasItemReflow(previousPositions, elements, {
         easing: CANVAS_REFLOW_EASING,
       },
     );
-    canvasReflowAnimations.set(element, animation);
-    animation.addEventListener("finish", () => {
-      if (canvasReflowAnimations.get(element) === animation) canvasReflowAnimations.delete(element);
-    }, { once: true });
-    animation.addEventListener("cancel", () => {
-      if (canvasReflowAnimations.get(element) === animation) canvasReflowAnimations.delete(element);
-    }, { once: true });
+    trackAnimation(element, animation);
   });
 }
 
