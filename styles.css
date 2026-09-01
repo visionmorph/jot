@@ -1262,10 +1262,6 @@ textarea:focus-visible {
   outline: 0;
 }
 
-.variant-preview.is-variant-dragging {
-  opacity: 0.45;
-}
-
 .variant-preview.is-variant-drop-before {
   box-shadow: inset 2px 0 #992cff;
 }
