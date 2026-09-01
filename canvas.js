@@ -1068,6 +1068,14 @@ function syncCanvasDragGroupLayout(group, parentElement) {
   group.style.flexDirection = isVertical ? "column" : "row";
   group.style.gap = isVertical ? style.rowGap : style.columnGap;
   group.style.alignItems = style.alignItems;
+  if (group.classList.contains("is-variant-drag-placeholder")) {
+    const parentGap = Number.parseFloat(isVertical ? style.rowGap : style.columnGap) || 0;
+    group.style.width = isVertical ? "" : "0px";
+    group.style.height = isVertical ? "0px" : "";
+    group.style.marginRight = isVertical ? "" : `${-parentGap}px`;
+    group.style.marginBottom = isVertical ? `${-parentGap}px` : "";
+    group.style.overflow = "hidden";
+  }
 }
 
 function createCanvasDragPlaceholder(elements, parentElement) {
@@ -1298,7 +1306,20 @@ function startCanvasDragSession(
   const parentElement = getCanvasParentElement(originalParentId, variantInstanceId);
   if (!(parentElement instanceof HTMLElement)) return null;
   const { placeholder, placeholderItems } = createCanvasDragPlaceholder(elements, parentElement);
+  if (variantInstanceId !== null) {
+    placeholder.classList.add("is-variant-drag-placeholder");
+    syncCanvasDragGroupLayout(placeholder, parentElement);
+  }
   elements[0].insertAdjacentElement("beforebegin", placeholder);
+  const draggingInlineStyles = variantInstanceId === null
+    ? []
+    : elements.map((element) => ({
+        element,
+        position: [element.style.getPropertyValue("position"), element.style.getPropertyPriority("position")],
+        zIndex: [element.style.getPropertyValue("z-index"), element.style.getPropertyPriority("z-index")],
+        opacity: [element.style.getPropertyValue("opacity"), element.style.getPropertyPriority("opacity")],
+        pointerEvents: [element.style.getPropertyValue("pointer-events"), element.style.getPropertyPriority("pointer-events")],
+      }));
   canvasDragSession = {
     draggedLayer,
     draggedLayers,
@@ -1313,15 +1334,27 @@ function startCanvasDragSession(
     intent: null,
     targetElement: null,
     insideLock: null,
+    draggingInlineStyles,
   };
   const applyDraggingStyle = () => {
     if (canvasDragSession?.element !== elements[0]) return;
-    elements.forEach((element) => element.classList.add("is-canvas-dragging"));
+    applyCanvasDraggingPresentation();
   };
   if (deferDraggingStyle) requestAnimationFrame(applyDraggingStyle);
   else applyDraggingStyle();
   resizeOverlay.hidden = true;
   return canvasDragSession;
+}
+
+function applyCanvasDraggingPresentation() {
+  if (!canvasDragSession) return;
+  canvasDragSession.elements.forEach((element) => element.classList.add("is-canvas-dragging"));
+  canvasDragSession.draggingInlineStyles.forEach(({ element }) => {
+    element.style.setProperty("position", "fixed", "important");
+    element.style.setProperty("z-index", "-1", "important");
+    element.style.setProperty("opacity", "0", "important");
+    element.style.setProperty("pointer-events", "none", "important");
+  });
 }
 
 function restoreCanvasDragPreview() {
@@ -1370,6 +1403,17 @@ function clearCanvasDragSession() {
   clearCanvasDropTarget();
   canvasDragSession.preview?.remove();
   canvasDragSession.placeholder.remove();
+  canvasDragSession.draggingInlineStyles.forEach((entry) => {
+    [
+      ["position", entry.position],
+      ["z-index", entry.zIndex],
+      ["opacity", entry.opacity],
+      ["pointer-events", entry.pointerEvents],
+    ].forEach(([property, [value, priority]]) => {
+      if (value) entry.element.style.setProperty(property, value, priority);
+      else entry.element.style.removeProperty(property);
+    });
+  });
   canvasDragSession.elements.forEach((element) => element.classList.remove("is-canvas-dragging"));
   canvasDragSession = null;
   requestAnimationFrame(syncResizeOverlay);
@@ -2244,7 +2288,7 @@ function createCanvasPointerDragPreview(pointerDrag, event) {
       item.removeAttribute("aria-label");
       item.removeAttribute("aria-selected");
       item.removeAttribute("contenteditable");
-      item.style.color = textStyle.color;
+      item.style.setProperty("color", element.style.color || textStyle.color, "important");
       item.style.fontFamily = textStyle.fontFamily;
       item.style.fontSize = textStyle.fontSize;
       item.style.fontWeight = textStyle.fontWeight;
@@ -2304,6 +2348,7 @@ function updateCanvasPointerDrag(event) {
   const intent = getPointerCanvasDropIntent(event, canvasPointerDrag.draggedLayers);
   if (intent) previewCanvasDropIntent(intent);
   else restoreCanvasDragPreview();
+  applyCanvasDraggingPresentation();
   return true;
 }
 
