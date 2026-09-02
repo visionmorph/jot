@@ -17,6 +17,25 @@ async function dropSvg(page, name, source) {
   }, { name, source });
 }
 
+async function dragLayer(page, source, target, position = { x: 0.5, y: 0.5 }) {
+  const sourceBounds = await source.boundingBox();
+  const targetBounds = await target.boundingBox();
+  expect(sourceBounds).not.toBeNull();
+  expect(targetBounds).not.toBeNull();
+
+  await page.mouse.move(
+    sourceBounds.x + sourceBounds.width / 2,
+    sourceBounds.y + sourceBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    targetBounds.x + targetBounds.width * position.x,
+    targetBounds.y + targetBounds.height * position.y,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+}
+
 test("creates, selects, undoes, and redoes a frame", async ({ page }) => {
   await openApp(page);
 
@@ -141,6 +160,64 @@ test("reorders a selected frame and supports undo and redo", async ({ page }) =>
 
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect.poll(frameOrder).toEqual(["2", "1"]);
+});
+
+test("reorders sibling frames with drag and drop", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const firstFrame = component.locator(':scope > [data-frame-id="1"]');
+  const secondFrame = component.locator(':scope > [data-frame-id="2"]');
+  const frameOrder = () => component.locator(":scope > [data-frame-id]").evaluateAll(
+    (frames) => frames.map((frame) => frame.dataset.frameId),
+  );
+
+  await page.evaluate(() => {
+    createCanvasFrame(0, 0, currentComponent.frameRecord);
+    createCanvasFrame(0, 0, currentComponent.frameRecord);
+  });
+  await expect.poll(frameOrder).toEqual(["1", "2"]);
+
+  await dragLayer(page, secondFrame, firstFrame, { x: 0.1, y: 0.5 });
+  await expect.poll(frameOrder).toEqual(["2", "1"]);
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(frameOrder).toEqual(["1", "2"]);
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect.poll(frameOrder).toEqual(["2", "1"]);
+});
+
+test("drags a text layer into a frame and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const frame = component.locator(':scope > [data-frame-id="1"]');
+  const rootText = component.locator(':scope > [data-text-id="1"]');
+  const nestedText = frame.locator(':scope > [data-text-id="1"]');
+  const textTreeItem = page.locator('[data-selection-layer-key="text:1"]');
+
+  await page.evaluate(() => {
+    createCanvasFrame(0, 0, currentComponent.frameRecord);
+    createCanvasText(currentComponent.frameRecord, 0, 0, {
+      beginEditing: false,
+      isNew: false,
+      textContent: "Drag me",
+    });
+  });
+  await expect(rootText).toBeVisible();
+
+  await dragLayer(page, rootText, frame);
+  await expect(nestedText).toBeVisible();
+  await expect(textTreeItem).toHaveAttribute("aria-level", "3");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(rootText).toBeVisible();
+  await expect(textTreeItem).toHaveAttribute("aria-level", "2");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(nestedText).toBeVisible();
+  await expect(textTreeItem).toHaveAttribute("aria-level", "3");
 });
 
 test("changes selected frame opacity with a number shortcut", async ({ page }) => {
