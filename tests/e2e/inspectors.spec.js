@@ -17,6 +17,16 @@ async function dropSvg(page, name, source) {
   }, { name, source });
 }
 
+async function createTextLayer(page, content = "Text target") {
+  const component = page.locator("[data-canvas-root-stack]");
+  const text = component.locator(':scope > [data-text-id="1"]');
+  await page.getByRole("button", { name: "Text", exact: true }).click();
+  await component.click({ position: { x: 50, y: 50 } });
+  await text.fill(content);
+  await text.press("Escape");
+  return text;
+}
+
 test("changes frame fill opacity and supports undo and redo", async ({ page }) => {
   await openApp(page);
 
@@ -40,12 +50,7 @@ test("changes frame fill opacity and supports undo and redo", async ({ page }) =
 test("changes text color and supports undo and redo", async ({ page }) => {
   await openApp(page);
 
-  const component = page.locator("[data-canvas-root-stack]");
-  const text = component.locator(':scope > [data-text-id="1"]');
-  await page.getByRole("button", { name: "Text", exact: true }).click();
-  await component.click({ position: { x: 50, y: 50 } });
-  await text.fill("Color target");
-  await text.press("Escape");
+  const text = await createTextLayer(page, "Color target");
 
   const colorHex = page.getByRole("textbox", { name: "Text color hex value" });
   await colorHex.fill("7A3E9D");
@@ -57,6 +62,49 @@ test("changes text color and supports undo and redo", async ({ page }) => {
 
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(text).toHaveCSS("color", "rgb(122, 62, 157)");
+});
+
+test("changes text typography and alignment", async ({ page }) => {
+  await openApp(page);
+
+  const text = await createTextLayer(page, "Typography target");
+  const sizeInput = page.locator("#text-size");
+  const lineHeightInput = page.locator("#text-line-height");
+  const letterSpacingInput = page.locator("#text-letter-spacing");
+
+  await sizeInput.fill("24");
+  await sizeInput.press("Tab");
+  await lineHeightInput.fill("32");
+  await lineHeightInput.press("Tab");
+  await letterSpacingInput.fill("10%");
+  await letterSpacingInput.press("Tab");
+  await page.getByRole("button", { name: "Align text vertically and horizontally centered" }).click();
+
+  await expect(text).toHaveCSS("font-size", "24px");
+  await expect(text).toHaveCSS("line-height", "32px");
+  await expect(text).toHaveCSS("letter-spacing", "2.4px");
+  await expect(text).toHaveCSS("text-align", "center");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(text).toHaveCSS("text-align", "left");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(text).toHaveCSS("text-align", "center");
+});
+
+test("changes text weight and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const text = await createTextLayer(page, "Weight target");
+  await page.getByRole("button", { name: "Open font weight options" }).click();
+  await page.getByRole("option", { name: "Bold", exact: true }).click();
+  await expect(text).toHaveCSS("font-weight", "700");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(text).toHaveCSS("font-weight", "400");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(text).toHaveCSS("font-weight", "700");
 });
 
 test("changes vector color and supports undo and redo", async ({ page }) => {
