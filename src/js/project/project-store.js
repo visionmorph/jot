@@ -323,67 +323,6 @@ let componentProps = [];
 
 let nextComponentPropId = 1;
 
-/* Owns variant collection structure and ID allocation; contained records remain live editable objects. */
-function createVariantModel() {
-  let props = Object.freeze([]);
-  let rules = Object.freeze([]);
-  let instances = Object.freeze([]);
-  let nextPropId = 1;
-  let nextRuleId = 1;
-  let nextInstanceId = 1;
-
-  return Object.freeze({
-    getProps: () => props,
-    getRules: () => rules,
-    getInstances: () => instances,
-    peekNextPropId: () => nextPropId,
-    addProp(input) {
-      const prop = { ...input, id: nextPropId++ };
-      props = Object.freeze([...props, prop]);
-      return prop;
-    },
-    addRule(input) {
-      const rule = { ...input, id: nextRuleId++ };
-      rules = Object.freeze([...rules, rule]);
-      return rule;
-    },
-    addInstance(input, { prepend = false } = {}) {
-      const instance = { ...input, id: nextInstanceId++ };
-      instances = Object.freeze(prepend ? [instance, ...instances] : [...instances, instance]);
-      return instance;
-    },
-    replaceProps(nextProps) {
-      props = Object.freeze([...nextProps]);
-    },
-    replaceRules(nextRules) {
-      rules = Object.freeze([...nextRules]);
-    },
-    replaceInstances(nextInstances) {
-      instances = Object.freeze([...nextInstances]);
-    },
-    capture() {
-      return {
-        variantProps: structuredClone(props),
-        variantRules: structuredClone(rules),
-        variantInstances: structuredClone(instances),
-        nextVariantPropId: nextPropId,
-        nextVariantRuleId: nextRuleId,
-        nextVariantInstanceId: nextInstanceId,
-      };
-    },
-    restore(snapshot) {
-      props = Object.freeze(structuredClone(snapshot.variantProps));
-      rules = Object.freeze(structuredClone(snapshot.variantRules));
-      instances = Object.freeze(structuredClone(snapshot.variantInstances));
-      nextPropId = snapshot.nextVariantPropId;
-      nextRuleId = snapshot.nextVariantRuleId;
-      nextInstanceId = snapshot.nextVariantInstanceId;
-    },
-  });
-}
-
-const variantModel = createVariantModel();
-
 const MIN_INTERACTIVE_LAYER_SIZE = 1;
 
 const expandedFrameIds = new Set();
