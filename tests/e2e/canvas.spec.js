@@ -165,6 +165,43 @@ test("changes selected frame opacity with a number shortcut", async ({ page }) =
   await expect(frame).toHaveCSS("opacity", "0.5");
 });
 
+test("resizes a selected frame with a canvas handle", async ({ page }) => {
+  await openApp(page);
+
+  const frameTool = page.getByRole("button", { name: "Frame", exact: true });
+  const component = page.locator("[data-canvas-root-stack]");
+  const frame = component.locator(':scope > [data-frame-id="1"]');
+  const southeastHandle = page.locator('[data-resize-handle="se"]');
+  const widthInput = page.getByRole("combobox", { name: "Frame width" });
+  const heightInput = page.getByRole("combobox", { name: "Frame height" });
+
+  await frameTool.click();
+  await component.click({ position: { x: 50, y: 50 } });
+  await expect(southeastHandle).toBeVisible();
+
+  const handleBounds = await southeastHandle.boundingBox();
+  expect(handleBounds).not.toBeNull();
+  const startX = handleBounds.x + handleBounds.width / 2;
+  const startY = handleBounds.y + handleBounds.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 40, startY + 30, { steps: 5 });
+  await page.mouse.up();
+
+  await expect(frame).toHaveCSS("width", "140px");
+  await expect(frame).toHaveCSS("height", "130px");
+  await expect(widthInput).toHaveValue("140");
+  await expect(heightInput).toHaveValue("130");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(frame).toHaveCSS("width", "100px");
+  await expect(frame).toHaveCSS("height", "100px");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(frame).toHaveCSS("width", "140px");
+  await expect(frame).toHaveCSS("height", "130px");
+});
+
 test("creates and edits a text layer", async ({ page }) => {
   await openApp(page);
 
