@@ -220,6 +220,60 @@ test("drags a text layer into a frame and supports undo and redo", async ({ page
   await expect(textTreeItem).toHaveAttribute("aria-level", "3");
 });
 
+test("multi-selects canvas layers and clears the selection from the canvas", async ({ page }) => {
+  await openApp(page);
+
+  const canvas = page.getByRole("region", { name: "Canvas" });
+  const component = page.locator("[data-canvas-root-stack]");
+  const firstFrame = component.locator(':scope > [data-frame-id="1"]');
+  const secondFrame = component.locator(':scope > [data-frame-id="2"]');
+
+  await page.evaluate(() => {
+    createCanvasFrame(0, 0, currentComponent.frameRecord);
+    createCanvasFrame(0, 0, currentComponent.frameRecord);
+  });
+
+  await firstFrame.click();
+  await secondFrame.click({ modifiers: ["Shift"] });
+  await expect(firstFrame).toHaveAttribute("aria-selected", "true");
+  await expect(secondFrame).toHaveAttribute("aria-selected", "true");
+
+  await canvas.click({ position: { x: 20, y: 20 } });
+  await expect(firstFrame).toHaveAttribute("aria-selected", "false");
+  await expect(secondFrame).toHaveAttribute("aria-selected", "false");
+});
+
+test("selects a text layer with a marquee drag", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const text = component.locator(':scope > [data-text-id="1"]');
+
+  await page.evaluate(() => {
+    createCanvasText(currentComponent.frameRecord, 0, 0, {
+      beginEditing: false,
+      isNew: false,
+      textContent: "Marquee target",
+    });
+    selectCanvasState();
+    syncElementSelectionStyles();
+  });
+
+  const componentBounds = await component.boundingBox();
+  const textBounds = await text.boundingBox();
+  expect(componentBounds).not.toBeNull();
+  expect(textBounds).not.toBeNull();
+
+  await page.mouse.move(componentBounds.x - 6, textBounds.y - 2);
+  await page.mouse.down();
+  await page.mouse.move(textBounds.x + textBounds.width + 2, textBounds.y + textBounds.height + 2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+
+  await expect(text).toHaveAttribute("aria-selected", "true");
+});
+
 test("changes selected frame opacity with a number shortcut", async ({ page }) => {
   await openApp(page);
 
