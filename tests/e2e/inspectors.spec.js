@@ -81,3 +81,25 @@ test("changes vector color and supports undo and redo", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(path).toHaveCSS("fill", "rgb(204, 85, 0)");
 });
+
+test("changes vector width and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const vector = page.locator('[data-canvas-root-stack] > [data-vector-id="1"]');
+  await dropSvg(
+    page,
+    "size-target.svg",
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M2 2h20v20H2z" fill="#336699"/></svg>',
+  );
+
+  const widthInput = page.getByRole("spinbutton", { name: "Vector width" });
+  await widthInput.fill("40");
+  await widthInput.press("Tab");
+  await expect(vector).toHaveCSS("width", "40px");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(vector).toHaveCSS("width", "24px");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(vector).toHaveCSS("width", "40px");
+});
