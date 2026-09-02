@@ -84,7 +84,9 @@ test("changes a component property type and default with undo and redo", async (
   await expect(booleanDefault).toHaveAttribute("aria-checked", "true");
 
   await booleanDefault.click();
-  await expect(page.getByRole("switch", { name: "visible value" })).toHaveAttribute("aria-checked", "false");
+  const updatedBooleanDefault = page.getByRole("switch", { name: "visible value" });
+  await expect(updatedBooleanDefault).toHaveAttribute("aria-checked", "false");
+  await expect(updatedBooleanDefault).not.toHaveAttribute("data-transitioning", "true");
 
   await page.keyboard.press("ControlOrMeta+z");
   await expect(page.getByRole("switch", { name: "visible value" })).toHaveAttribute("aria-checked", "true");
