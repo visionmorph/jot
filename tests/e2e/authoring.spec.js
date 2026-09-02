@@ -102,3 +102,84 @@ test("changes a component property type and default with undo and redo", async (
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(page.getByRole("button", { name: "Prop type" })).toContainText("String");
 });
+
+test("adds, renames, and removes a variant property option", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Variant" }).click();
+
+  const addValue = page.getByRole("textbox", { name: "Add Kind value" });
+  await addValue.fill("Primary");
+  await addValue.press("Enter");
+  await expect(page.getByRole("textbox", { name: "Kind value Primary" })).toBeVisible();
+
+  const primaryValue = page.getByRole("textbox", { name: "Kind value Primary" });
+  await primaryValue.dblclick();
+  await primaryValue.fill("Secondary");
+  await primaryValue.press("Enter");
+  await expect(page.getByRole("textbox", { name: "Kind value Secondary" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Dismiss Secondary" }).click();
+  await expect(page.getByRole("textbox", { name: "Kind value Secondary" })).toHaveCount(0);
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(page.getByRole("textbox", { name: "Kind value Secondary" })).toBeVisible();
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(page.getByRole("textbox", { name: "Kind value Secondary" })).toHaveCount(0);
+});
+
+test("changes a component property target and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const text = component.locator(':scope > [data-text-id="1"]');
+  await page.getByRole("button", { name: "Text", exact: true }).click();
+  await component.click({ position: { x: 50, y: 50 } });
+  await text.fill("Target label");
+  await text.press("Escape");
+  await page.getByRole("treeitem", { name: "Component 1" }).click();
+
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Boolean" }).click();
+
+  const targetControl = page.getByRole("button", { name: "Target layer" });
+  await expect(targetControl).toContainText("Component 1");
+  await targetControl.click();
+  await page.getByRole("option", { name: "Target label" }).click();
+  await expect(page.getByRole("button", { name: "Target layer" })).toContainText("Target label");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(page.getByRole("button", { name: "Target layer" })).toContainText("Component 1");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(page.getByRole("button", { name: "Target layer" })).toContainText("Target label");
+});
+
+test("changes a String property value and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const text = component.locator(':scope > [data-text-id="1"]');
+  await page.getByRole("button", { name: "Text", exact: true }).click();
+  await component.click({ position: { x: 50, y: 50 } });
+  await text.fill("Original label");
+  await text.press("Escape");
+  await page.getByRole("treeitem", { name: "Component 1" }).click();
+
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "String", exact: true }).click();
+
+  const valueInput = page.getByRole("textbox", { name: "Default label value" });
+  await expect(valueInput).toHaveValue("Original label");
+  await valueInput.fill("Updated label");
+  await valueInput.press("Tab");
+  await expect(text).toHaveText("Updated label");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(text).toHaveText("Original label");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(text).toHaveText("Updated label");
+});
