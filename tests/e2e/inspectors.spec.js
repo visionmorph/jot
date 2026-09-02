@@ -94,6 +94,35 @@ test("changes the frame HTML tag and supports undo and redo", async ({ page }) =
   await expect(component).toHaveAttribute("data-html-tag", "button");
 });
 
+test("changes frame sizing modes and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const widthControl = page.locator('[data-size-combobox="frame-width"]');
+  const widthInput = widthControl.getByRole("combobox", { name: "Frame width" });
+
+  await widthControl.getByRole("button", { name: "Open frame width sizing options" }).click();
+  await widthControl.getByRole("option", { name: "Fixed width" }).click();
+  await expect(component).toHaveAttribute("data-width-mode", "fixed");
+
+  await widthInput.fill("160");
+  await widthInput.press("Enter");
+  await expect(component).toHaveCSS("width", "160px");
+
+  await widthControl.getByRole("button", { name: "Open frame width sizing options" }).click();
+  await widthControl.getByRole("option", { name: "Fill container" }).click();
+  await expect(component).toHaveAttribute("data-width-mode", "fill");
+  await expect(component).toHaveAttribute("style", /width: 100%/);
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(component).toHaveAttribute("data-width-mode", "fixed");
+  await expect(component).toHaveCSS("width", "160px");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(component).toHaveAttribute("data-width-mode", "fill");
+  await expect(component).toHaveAttribute("style", /width: 100%/);
+});
+
 test("changes text color and supports undo and redo", async ({ page }) => {
   await openApp(page);
 
@@ -152,6 +181,32 @@ test("changes text weight and supports undo and redo", async ({ page }) => {
 
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(text).toHaveCSS("font-weight", "700");
+});
+
+test("changes text sizing modes and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const text = await createTextLayer(page, "Sizing target");
+  const widthControl = page.locator('[data-size-combobox="text-width"]');
+  const widthInput = widthControl.getByRole("combobox", { name: "Text width" });
+
+  await expect(text).toHaveAttribute("data-width-mode", "hug");
+  await widthControl.getByRole("button", { name: "Open text width sizing options" }).click();
+  await widthControl.getByRole("option", { name: "Fill container" }).click();
+  await expect(text).toHaveAttribute("data-width-mode", "fill");
+  await widthInput.press("Enter");
+
+  await widthInput.fill("180");
+  await widthInput.press("Enter");
+  await expect(text).toHaveAttribute("data-width-mode", "fixed");
+  await expect(text).toHaveCSS("width", "180px");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(text).toHaveAttribute("data-width-mode", "fill");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(text).toHaveAttribute("data-width-mode", "fixed");
+  await expect(text).toHaveCSS("width", "180px");
 });
 
 test("changes vector color and supports undo and redo", async ({ page }) => {
