@@ -47,6 +47,53 @@ test("changes frame fill opacity and supports undo and redo", async ({ page }) =
   await expect(component).toHaveCSS("background-color", "rgba(51, 102, 153, 0.5)");
 });
 
+test("changes frame layout controls and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const horizontalPadding = page.getByRole("textbox", { name: "Horizontal padding" });
+  const verticalPadding = page.getByRole("textbox", { name: "Vertical padding" });
+  const gapInput = page.locator("#frame-gap");
+  const radiusInput = page.getByRole("spinbutton", { name: "Radius" });
+
+  await horizontalPadding.fill("16");
+  await horizontalPadding.press("Tab");
+  await verticalPadding.fill("12");
+  await verticalPadding.press("Tab");
+  await gapInput.fill("18");
+  await gapInput.press("Tab");
+  await radiusInput.fill("8");
+  await radiusInput.press("Tab");
+  await page.getByRole("button", { name: "Vertical", exact: true }).click();
+
+  await expect(component).toHaveCSS("padding-left", "16px");
+  await expect(component).toHaveCSS("padding-top", "12px");
+  await expect(component).toHaveCSS("gap", "18px");
+  await expect(component).toHaveCSS("border-radius", "8px");
+  await expect(component).toHaveCSS("flex-direction", "column");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(component).toHaveCSS("flex-direction", "row");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(component).toHaveCSS("flex-direction", "column");
+});
+
+test("changes the frame HTML tag and supports undo and redo", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  await page.getByRole("button", { name: "Open HTML tag options" }).click();
+  await page.getByRole("option", { name: "button", exact: true }).click();
+  await expect(component).toHaveAttribute("data-html-tag", "button");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(component).toHaveAttribute("data-html-tag", "div");
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(component).toHaveAttribute("data-html-tag", "button");
+});
+
 test("changes text color and supports undo and redo", async ({ page }) => {
   await openApp(page);
 
