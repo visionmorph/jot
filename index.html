@@ -124,18 +124,18 @@
         </section>
 
         <aside class="right-sidebar" aria-label="Inspector">
-        <section class="sidebar-panel page-panel" aria-labelledby="page-heading" data-page-inspector>
+        <section class="sidebar-panel" aria-labelledby="page-heading" data-page-inspector>
           <div class="panel-heading-wrap">
             <h2 class="panel-heading" id="page-heading">Page</h2>
           </div>
-          <div class="section-wrapper paint-section" data-paint-section>
+          <div class="section-wrapper" data-paint-section>
             <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
               </div>
             </div>
-            <div class="custom-color-control" data-color-control="canvas">
+            <div class="color-input" data-color-control="canvas">
             <div class="custom-color-value">
               <label class="custom-color-swatch" aria-label="Choose page color">
                 <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true" style="background-color: #121619;"></span>
@@ -165,15 +165,15 @@
             </div>
 
           <div class="text-toggle-field">
-            <span class="inspector-label" id="frame-direction-label">Direction</span>
+            <span class="label" id="frame-direction-label">Direction</span>
             <div class="text-toggle" role="group" aria-labelledby="frame-direction-label">
               <button class="text-toggle__item is-selected" type="button" aria-pressed="true" data-frame-direction="horizontal">Horizontal</button>
               <button class="text-toggle__item" type="button" aria-pressed="false" data-frame-direction="vertical">Vertical</button>
             </div>
           </div>
 
-          <div class="inspector-field layer-size-field">
-            <span class="inspector-label" id="frame-size-label">Size</span>
+          <div class="inspector-field">
+            <span class="label" id="frame-size-label">Size</span>
             <div class="inspector-row" role="group" aria-labelledby="frame-size-label">
               <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="frame-width">
                 <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
@@ -201,7 +201,7 @@
           <div class="frame-alignment-padding-stack">
           <div class="frame-alignment-div">
             <div class="frame-alignment-field">
-              <span class="inspector-label" id="frame-alignment-label">Alignment</span>
+              <span class="label" id="frame-alignment-label">Alignment</span>
               <div class="frame-alignment-grid" role="group" aria-labelledby="frame-alignment-label" data-frame-alignment-grid data-direction="horizontal">
                 <button class="frame-alignment-option is-selected" type="button" aria-label="Align top left" aria-pressed="true" data-frame-alignment="top-left"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
                 <button class="frame-alignment-option" type="button" aria-label="Align top center" aria-pressed="false" data-frame-alignment="top-center"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
@@ -217,7 +217,7 @@
 
             <div class="section-wrapper">
               <div class="inspector-field">
-                <label class="inspector-label" for="frame-gap">Gap</label>
+                <label class="label" for="frame-gap">Gap</label>
                 <div class="dropdown dropdown--combobox" data-dropdown data-gap-combobox>
                   <input
                     class="dropdown__input"
@@ -242,15 +242,15 @@
               </div>
 
               <div class="inspector-field">
-                <label class="inspector-label" for="frame-radius">Radius</label>
+                <label class="label" for="frame-radius">Radius</label>
                 <input class="text-input" id="frame-radius" type="number" min="0" step="1" value="0" data-select-on-focus />
               </div>
             </div>
           </div>
 
-          <div class="inspector-field frame-padding-field">
+          <div class="inspector-field">
             <div class="frame-padding-heading">
-              <span class="inspector-label" id="frame-padding-label">Padding</span>
+              <span class="label" id="frame-padding-label">Padding</span>
               <span class="tooltip tooltip--top tooltip--align-center">
                 <button class="icon-button icon-button--size-24 icon-button--rounded icon-button--toggle" type="button" aria-label="Individual padding sides" aria-pressed="false" data-padding-mode-toggle>
                   <span class="svg-icon svg-icon--padding" aria-hidden="true"></span>
@@ -290,7 +290,7 @@
           </div>
           </div>
 
-          <div class="section-wrapper paint-section" data-paint-section>
+          <div class="section-wrapper" data-paint-section>
             <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
@@ -298,7 +298,7 @@
                 <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
             </div>
-            <div class="custom-color-control is-empty" data-color-control="frame-background" hidden>
+            <div class="color-input is-empty" data-color-control="frame-background" hidden>
             <div class="custom-color-value">
               <label class="custom-color-swatch" aria-label="Choose frame background color">
                 <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true"></span>
@@ -312,11 +312,11 @@
               <span class="text-input__suffix" role="button" aria-label="Adjust frame background opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
             </div>
             <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
-            <span class="tooltip tooltip--top tooltip--align-center custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
+            <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
             </div>
           </div>
 
-          <div class="section-wrapper paint-section" data-paint-section>
+          <div class="section-wrapper" data-paint-section>
             <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
@@ -324,7 +324,7 @@
                 <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame border" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
             </div>
-            <div class="custom-color-control is-empty" data-color-control="frame-outline" hidden>
+            <div class="color-input is-empty" data-color-control="frame-outline" hidden>
             <div class="custom-color-value">
               <label class="custom-color-swatch" aria-label="Choose frame outline color">
                 <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true"></span>
@@ -338,13 +338,13 @@
               <span class="text-input__suffix" role="button" aria-label="Adjust frame outline opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
             </div>
             <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
-            <span class="tooltip tooltip--top tooltip--align-center custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame border" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
+            <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame border" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
             </div>
           </div>
 
           <div class="inspector-row" data-frame-outline-controls hidden>
             <div class="inspector-field">
-              <label class="inspector-label" for="frame-outline-position">Position</label>
+              <label class="label" for="frame-outline-position">Position</label>
               <div class="dropdown dropdown--default" data-dropdown>
                 <input class="dropdown__input" id="frame-outline-position" type="text" value="Inside" data-value="inside" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-outline-position-menu" readonly />
                 <button class="dropdown__toggle" type="button" aria-label="Open border position options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
@@ -356,7 +356,7 @@
               </div>
             </div>
             <div class="inspector-field">
-              <label class="inspector-label" for="frame-outline-weight">Weight</label>
+              <label class="label" for="frame-outline-weight">Weight</label>
               <input class="text-input" id="frame-outline-weight" type="number" min="0" step="1" value="1" data-select-on-focus />
             </div>
           </div>
@@ -367,7 +367,7 @@
               <h3 class="inspector-section-title">Accessibility</h3>
             </div>
             <div class="inspector-field">
-              <label class="inspector-label" for="frame-html-tag">HTML tag</label>
+              <label class="label" for="frame-html-tag">HTML tag</label>
               <div class="dropdown dropdown--default frame-html-tag-dropdown" data-dropdown>
                 <input class="dropdown__input" id="frame-html-tag" type="text" value="div" data-value="div" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-html-tag-menu" readonly />
                 <button class="dropdown__toggle" type="button" aria-label="Open HTML tag options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
@@ -392,8 +392,8 @@
               <h3 class="inspector-section-title">Layout</h3>
             </div>
 
-          <div class="inspector-field layer-size-field">
-            <span class="inspector-label" id="text-layer-size-label">Size</span>
+          <div class="inspector-field">
+            <span class="label" id="text-layer-size-label">Size</span>
             <div class="inspector-row" role="group" aria-labelledby="text-layer-size-label">
               <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="text-width">
                 <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
@@ -420,7 +420,7 @@
 
             <div class="frame-alignment-div">
               <div class="frame-alignment-field text-alignment-field">
-                <span class="inspector-label" id="text-alignment-label">Alignment</span>
+                <span class="label" id="text-alignment-label">Alignment</span>
                 <div class="frame-alignment-grid" role="group" aria-labelledby="text-alignment-label">
                   <button class="frame-alignment-option is-selected" type="button" aria-label="Align text top left" aria-pressed="true" data-text-alignment="top-left"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
                   <button class="frame-alignment-option" type="button" aria-label="Align text top center" aria-pressed="false" data-text-alignment="top-center"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
@@ -444,7 +444,7 @@
             </div>
 
           <div class="inspector-field text-font-field">
-            <label class="inspector-label" for="text-font">Font</label>
+            <label class="label" for="text-font">Font</label>
             <div class="dropdown dropdown--default" data-dropdown>
               <input class="dropdown__input" id="text-font" type="text" value="Inter" data-value="Inter" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-font-menu" readonly />
               <button class="dropdown__toggle" type="button" aria-label="Open font family options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
@@ -456,7 +456,7 @@
 
           <div class="inspector-row">
           <div class="inspector-field">
-            <label class="inspector-label" for="text-weight">Weight</label>
+            <label class="label" for="text-weight">Weight</label>
             <div class="dropdown dropdown--default" data-dropdown>
               <input class="dropdown__input" id="text-weight" type="text" value="Regular" data-value="400" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-weight-menu" readonly />
               <button class="dropdown__toggle" type="button" aria-label="Open font weight options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
@@ -467,7 +467,7 @@
           </div>
 
           <div class="inspector-field">
-            <label class="inspector-label" for="text-size">Size</label>
+            <label class="label" for="text-size">Size</label>
             <div class="dropdown dropdown--combobox text-size-combobox" data-dropdown data-text-size-combobox>
               <input class="dropdown__input" id="text-size" type="text" inputmode="decimal" value="14" data-select-on-focus role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-size-menu" />
               <button class="dropdown__toggle" type="button" aria-label="Open text size options" aria-expanded="false" data-dropdown-toggle data-text-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
@@ -495,18 +495,18 @@
 
           <div class="inspector-row">
           <div class="inspector-field">
-            <label class="inspector-label" for="text-line-height">Line height</label>
+            <label class="label" for="text-line-height">Line height</label>
             <input class="text-input" id="text-line-height" type="text" inputmode="text" value="Auto" data-select-on-focus />
           </div>
 
           <div class="inspector-field">
-            <label class="inspector-label" for="text-letter-spacing">Letter spacing</label>
+            <label class="label" for="text-letter-spacing">Letter spacing</label>
             <input class="text-input" id="text-letter-spacing" type="text" inputmode="decimal" value="0%" />
           </div>
           </div>
           </div>
 
-          <div class="section-wrapper paint-section" data-paint-section>
+          <div class="section-wrapper" data-paint-section>
             <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
@@ -514,7 +514,7 @@
                 <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add text fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
             </div>
-            <div class="custom-color-control" data-color-control="text">
+            <div class="color-input" data-color-control="text">
             <div class="custom-color-value">
               <label class="custom-color-swatch" aria-label="Choose text color">
                 <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true" style="background-color: #000000;"></span>
@@ -528,7 +528,7 @@
               <span class="text-input__suffix" role="button" aria-label="Adjust text color opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
             </div>
             <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
-            <span class="tooltip tooltip--top tooltip--align-center custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove text fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
+            <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove text fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
             </div>
           </div>
         </section>
@@ -545,8 +545,8 @@
               <h3 class="inspector-section-title">Layout</h3>
             </div>
 
-          <div class="inspector-field layer-size-field">
-            <span class="inspector-label" id="vector-size-label">Size</span>
+          <div class="inspector-field">
+            <span class="label" id="vector-size-label">Size</span>
             <div class="inspector-row" role="group" aria-labelledby="vector-size-label">
               <label class="text-input-shell text-input-shell--prefix">
                 <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
@@ -560,7 +560,7 @@
           </div>
           </div>
 
-          <div class="section-wrapper paint-section" data-paint-section>
+          <div class="section-wrapper" data-paint-section>
             <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
@@ -568,7 +568,7 @@
                 <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add vector fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
             </div>
-            <div class="custom-color-control" data-color-control="vector">
+            <div class="color-input" data-color-control="vector">
             <div class="custom-color-value">
               <label class="custom-color-swatch" aria-label="Choose vector color">
                 <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true" style="background-color: #000000;"></span>
@@ -582,7 +582,7 @@
               <span class="text-input__suffix" role="button" aria-label="Adjust vector color opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
             </div>
             <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
-            <span class="tooltip tooltip--top tooltip--align-center custom-color-remove-action"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove vector fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
+            <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove vector fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
             </div>
           </div>
         </section>
