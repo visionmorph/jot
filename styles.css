@@ -1917,7 +1917,8 @@ textarea:focus-visible {
 }
 
 .frame-alignment-div {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: flex-start;
   width: 100%;
   gap: 8px;
@@ -2079,8 +2080,7 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
-  width: 119.5px;
-  height: 119.5px;
+  aspect-ratio: 1 / 1;
   padding: 1px;
   gap: 1px;
   border-radius: 4px;
@@ -2607,12 +2607,16 @@ textarea:focus-visible {
 .dropdown {
   position: relative;
   display: flex;
-  width: 119.5px;
+  width: 100%;
   height: 24px;
   align-items: center;
   border-radius: 4px;
   background: var(--layer-01);
   box-shadow: inset 0 0 0 1px var(--border-subtle-01);
+}
+
+.frame-html-tag-dropdown {
+  width: 123px;
 }
 
 .dropdown:has(.dropdown__input:focus),
