@@ -1881,27 +1881,11 @@ textarea:focus-visible {
   padding-left: 12px;
 }
 
-.inspector-field.text-font-field,
-.text-inspector-row {
+.inspector-field.text-font-field {
   width: 100%;
 }
 
 .text-font-field .dropdown {
-  width: 100%;
-}
-
-.text-inspector-row {
-  display: flex;
-  gap: 8px;
-}
-
-.text-inspector-row .inspector-field {
-  width: 100%;
-  min-width: 0;
-  flex: 1 1 0;
-}
-
-.text-inspector-row .dropdown {
   width: 100%;
 }
 
@@ -2420,16 +2404,7 @@ textarea:focus-visible {
   letter-spacing: 0;
 }
 
-.inspector-section-group {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-  gap: 8px;
-}
-
-.paint-section-heading {
+.section-wrapper {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -2455,13 +2430,19 @@ textarea:focus-visible {
   flex: 1 1 auto;
 }
 
-.frame-outline-row {
+.inspector-row {
   display: flex;
   width: 100%;
   gap: 8px;
 }
 
-.frame-outline-row[hidden] {
+.inspector-row > :is(.inspector-field, .dropdown, .text-input-shell) {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.inspector-row[hidden] {
   display: none;
 }
 
@@ -2500,41 +2481,21 @@ textarea:focus-visible {
 
 .frame-padding-grid {
   display: grid;
-  grid-template-columns: repeat(2, 119.5px);
-  width: 247px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
   gap: 8px;
 }
 
-.frame-padding-axis-row {
-  display: flex;
-  width: 247px;
-  gap: 8px;
-}
-
-.frame-padding-axis-row .text-input-shell {
+.frame-padding-grid .text-input-shell {
   width: 100%;
   min-width: 0;
-  flex: 1 1 0;
 }
 
-.frame-padding-grid[hidden],
-.frame-padding-axis-row[hidden] {
+.frame-padding-grid[hidden] {
   display: none;
 }
 
-.layer-size-field,
-.layer-size-row {
-  width: 100%;
-}
-
-.layer-size-row {
-  display: flex;
-  gap: 8px;
-}
-
-.layer-size-row .dropdown,
-.layer-size-row .text-input-shell {
-  flex: 1 1 0;
+.layer-size-field {
   width: 100%;
 }
 
@@ -2896,13 +2857,6 @@ textarea:focus-visible {
   cursor: crosshair;
   overflow: visible;
   touch-action: none;
-}
-
-.color-picker-sliders {
-  display: flex;
-  width: 208px;
-  flex-direction: column;
-  gap: 8px;
 }
 
 .color-picker-slider {

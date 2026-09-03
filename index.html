@@ -128,8 +128,8 @@
           <div class="panel-heading-wrap">
             <h2 class="panel-heading" id="page-heading">Page</h2>
           </div>
-          <div class="inspector-section-group paint-section" data-paint-section>
-            <div class="paint-section-heading">
+          <div class="section-wrapper paint-section" data-paint-section>
+            <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
@@ -158,7 +158,7 @@
             </span>
           </div>
 
-          <div class="inspector-section-group">
+          <div class="section-wrapper">
             <div class="divider" aria-hidden="true"></div>
             <div class="section-title-row">
               <h3 class="inspector-section-title">Layout</h3>
@@ -174,7 +174,7 @@
 
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="frame-size-label">Size</span>
-            <div class="layer-size-row" role="group" aria-labelledby="frame-size-label">
+            <div class="inspector-row" role="group" aria-labelledby="frame-size-label">
               <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="frame-width">
                 <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
                 <input class="dropdown__input" aria-label="Frame width" data-frame-size="width" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-width-size-menu" />
@@ -215,7 +215,7 @@
               </div>
             </div>
 
-            <div class="inspector-section-group">
+            <div class="section-wrapper">
               <div class="inspector-field">
                 <label class="inspector-label" for="frame-gap">Gap</label>
                 <div class="dropdown dropdown--combobox" data-dropdown data-gap-combobox>
@@ -276,7 +276,7 @@
                 <span class="text-input__text-wrapper"><input class="text-input" aria-label="Bottom padding" data-frame-padding="bottom" data-select-on-focus type="number" min="0" step="1" value="10" /></span>
               </label>
             </div>
-            <div class="frame-padding-axis-row" role="group" aria-labelledby="frame-padding-label" data-padding-axes>
+            <div class="inspector-row" role="group" aria-labelledby="frame-padding-label" data-padding-axes>
               <label class="text-input-shell text-input-shell--prefix">
                 <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">x</span></span>
                 <span class="text-input__text-wrapper"><input class="text-input" aria-label="Horizontal padding" data-frame-padding-axis="x" data-select-on-focus data-min="0" type="text" inputmode="decimal" value="10" /></span>
@@ -290,8 +290,8 @@
           </div>
           </div>
 
-          <div class="inspector-section-group paint-section" data-paint-section>
-            <div class="paint-section-heading">
+          <div class="section-wrapper paint-section" data-paint-section>
+            <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
@@ -316,8 +316,8 @@
             </div>
           </div>
 
-          <div class="inspector-section-group paint-section" data-paint-section>
-            <div class="paint-section-heading">
+          <div class="section-wrapper paint-section" data-paint-section>
+            <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
                 <h3 class="inspector-section-title">Border</h3>
@@ -342,7 +342,7 @@
             </div>
           </div>
 
-          <div class="frame-outline-row" data-frame-outline-controls hidden>
+          <div class="inspector-row" data-frame-outline-controls hidden>
             <div class="inspector-field">
               <label class="inspector-label" for="frame-outline-position">Position</label>
               <div class="dropdown dropdown--default" data-dropdown>
@@ -361,7 +361,7 @@
             </div>
           </div>
 
-          <div class="inspector-section-group">
+          <div class="section-wrapper">
             <div class="divider" aria-hidden="true"></div>
             <div class="section-title-row">
               <h3 class="inspector-section-title">Accessibility</h3>
@@ -385,7 +385,7 @@
             <h2 class="panel-heading" id="text-heading">Text</h2>
           </div>
 
-          <div class="inspector-section-group">
+          <div class="section-wrapper">
             <div class="divider" aria-hidden="true"></div>
 
             <div class="section-title-row">
@@ -394,7 +394,7 @@
 
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="text-layer-size-label">Size</span>
-            <div class="layer-size-row" role="group" aria-labelledby="text-layer-size-label">
+            <div class="inspector-row" role="group" aria-labelledby="text-layer-size-label">
               <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="text-width">
                 <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
                 <input class="dropdown__input" aria-label="Text width" data-text-layer-size="width" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-width-size-menu" />
@@ -437,7 +437,7 @@
             </div>
           </div>
 
-          <div class="inspector-section-group">
+          <div class="section-wrapper">
             <div class="divider" aria-hidden="true"></div>
             <div class="section-title-row">
               <h3 class="inspector-section-title">Typography</h3>
@@ -454,7 +454,7 @@
             </div>
           </div>
 
-          <div class="text-inspector-row">
+          <div class="inspector-row">
           <div class="inspector-field">
             <label class="inspector-label" for="text-weight">Weight</label>
             <div class="dropdown dropdown--default" data-dropdown>
@@ -493,7 +493,7 @@
           </div>
           </div>
 
-          <div class="text-inspector-row">
+          <div class="inspector-row">
           <div class="inspector-field">
             <label class="inspector-label" for="text-line-height">Line height</label>
             <input class="text-input" id="text-line-height" type="text" inputmode="text" value="Auto" data-select-on-focus />
@@ -506,8 +506,8 @@
           </div>
           </div>
 
-          <div class="inspector-section-group paint-section" data-paint-section>
-            <div class="paint-section-heading">
+          <div class="section-wrapper paint-section" data-paint-section>
+            <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
@@ -538,7 +538,7 @@
             <h2 class="panel-heading" id="vector-heading">Vector</h2>
           </div>
 
-          <div class="inspector-section-group">
+          <div class="section-wrapper">
             <div class="divider" aria-hidden="true"></div>
 
             <div class="section-title-row">
@@ -547,7 +547,7 @@
 
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="vector-size-label">Size</span>
-            <div class="layer-size-row" role="group" aria-labelledby="vector-size-label">
+            <div class="inspector-row" role="group" aria-labelledby="vector-size-label">
               <label class="text-input-shell text-input-shell--prefix">
                 <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
                 <span class="text-input__text-wrapper"><input class="text-input" aria-label="Vector width" data-vector-size="width" data-select-on-focus type="number" min="1" step="1" value="24" /></span>
@@ -560,8 +560,8 @@
           </div>
           </div>
 
-          <div class="inspector-section-group paint-section" data-paint-section>
-            <div class="paint-section-heading">
+          <div class="section-wrapper paint-section" data-paint-section>
+            <div class="section-wrapper">
               <div class="divider" aria-hidden="true"></div>
               <div class="section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
