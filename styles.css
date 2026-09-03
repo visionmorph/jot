@@ -1263,7 +1263,7 @@ textarea:focus-visible {
   padding: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--component);
+  color: var(--component-light);
   font-size: 10px;
   line-height: 12px;
   white-space: normal;
@@ -1282,11 +1282,10 @@ textarea:focus-visible {
 
 .variant-preview.is-selected .variant-preview-label {
   background: transparent;
-  color: var(--component);
+  color: var(--component-light);
 }
 
 .component-preview-label {
-  color: var(--component-light);
   pointer-events: auto;
   cursor: default;
 }
