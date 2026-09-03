@@ -2403,11 +2403,11 @@ textarea:focus-visible {
   background: var(--layer-selected-hover-01);
 }
 
-.inspector-section-divider {
+.divider {
   width: 100%;
   height: 1px;
   flex: 0 0 1px;
-  background: var(--border-subtle-01);
+  background: var(--border-subtle-00);
 }
 
 .inspector-section-title {
@@ -2463,13 +2463,6 @@ textarea:focus-visible {
 
 .frame-outline-row[hidden] {
   display: none;
-}
-
-.inspector-divider {
-  width: 100%;
-  height: 1px;
-  flex: 0 0 1px;
-  background: var(--border-subtle-00);
 }
 
 .inspector-field {
@@ -2994,9 +2987,8 @@ textarea:focus-visible {
   padding: 4px;
 }
 
-.color-picker-fields .custom-color-divider {
+.color-picker-fields .divider-vertical {
   height: 22px;
-  background: var(--border-subtle-02);
 }
 
 .color-picker-fields .custom-color-opacity {
@@ -3050,11 +3042,22 @@ textarea:focus-visible {
   text-align: center;
 }
 
-.custom-color-divider {
+.divider-vertical {
   width: 1px;
   height: 24px;
   flex: 0 0 1px;
+}
+
+.divider-vertical--subtle-00 {
+  background: var(--border-subtle-00);
+}
+
+.divider-vertical--subtle-01 {
   background: var(--border-subtle-01);
+}
+
+.divider-vertical--subtle-02 {
+  background: var(--border-subtle-02);
 }
 
 .subtract-icon {
