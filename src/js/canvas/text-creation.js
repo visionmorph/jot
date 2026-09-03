@@ -1,5 +1,24 @@
 /* Canvas text creation, editing lifecycle, and text interaction wiring. */
 
+function focusTextEditor(textElement, { selectContents = true } = {}) {
+  textElement.draggable = false;
+  textElement.contentEditable = "true";
+  textElement.focus();
+
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(textElement);
+  if (!selectContents) range.collapse(false);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function startEditingText(textElement, selectText = true) {
+  if (selectText) selectCanvasText(textElement);
+  beginHistoryGesture(textElement);
+  focusTextEditor(textElement, { selectContents: selectText });
+}
+
 function createCanvasText(parentRecord, x, y, options = {}) {
   const record = runCanvasMutation(
     () => createCanvasTextRecord(parentRecord, x, y, options),

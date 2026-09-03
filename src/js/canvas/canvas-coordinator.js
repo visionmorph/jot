@@ -87,20 +87,6 @@ function removeCanvasText(textElement) {
   queueCanvasMutationEffects({ sizing: true, selection: true, tree: true });
 }
 
-function startEditingText(textElement, selectText = true) {
-  if (selectText) selectCanvasText(textElement);
-  beginHistoryGesture(textElement);
-  textElement.draggable = false;
-  textElement.contentEditable = "true";
-  textElement.focus();
-
-  const selection = window.getSelection();
-  const range = document.createRange();
-  range.selectNodeContents(textElement);
-  selection?.removeAllRanges();
-  selection?.addRange(range);
-}
-
 function getCanvasLayerDescriptor(element) {
   if (!(element instanceof HTMLElement)) return null;
   const frameId = Number(element.dataset.frameId);
