@@ -34,6 +34,7 @@
   --field-01: #21272a;
   --field-hover-01: #343a3f;
   --component: #a56eff;
+  --component-light: #c5a3ff;
 }
 
 * {
@@ -1285,6 +1286,7 @@ textarea:focus-visible {
 }
 
 .component-preview-label {
+  color: var(--component-light);
   pointer-events: auto;
   cursor: default;
 }
