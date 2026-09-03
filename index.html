@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A static design prototype for a user interface component authoring tool."
+    />
+    <title>Component Authoring Tool</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preload" href="src/icons/add.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/cursor--1.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/cursor--2.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/diamond--group.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/diamond--outline.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/add--diamond.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/letter--t.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/padding.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/text.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/toggle--on.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/view.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/view--off.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/align--horizontal--left.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/align--horizontal--center.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/align--horizontal--right.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/align--vertical--top.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/align--vertical--center.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/align--vertical--bottom.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/chevron--down.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/chevron--up.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/checkmark.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/checkmark--toggle.svg" as="image" type="image/svg+xml" />
+    <link rel="preload" href="src/icons/subtract.svg" as="image" type="image/svg+xml" />
+    <script src="src/js/variants/variant-model.js" defer></script>
+    <script src="src/js/project/project-store.js" defer></script>
+    <script src="src/js/project/selection-model.js" defer></script>
+    <script src="src/js/project/workspace-history.js" defer></script>
+    <script src="src/js/input-controls.js" defer></script>
+    <script src="src/js/layers/layer-structure.js" defer></script>
+    <script src="src/js/canvas/canvas-coordinator.js" defer></script>
+    <script src="src/js/canvas/selection.js" defer></script>
+    <script src="src/js/canvas/drag/drop-placement.js" defer></script>
+    <script src="src/js/canvas/drag/drag-coordinator.js" defer></script>
+    <script src="src/js/canvas/drag/drag-preview.js" defer></script>
+    <script src="src/js/canvas/drag/pointer-drag.js" defer></script>
+    <script src="src/js/canvas/canvas-sizing.js" defer></script>
+    <script src="src/js/canvas/frame-creation.js" defer></script>
+    <script src="src/js/canvas/text-creation.js" defer></script>
+    <script src="src/js/canvas/vector.js" defer></script>
+    <script src="src/js/canvas/canvas-actions.js" defer></script>
+    <script src="src/js/layers/layer-controls.js" defer></script>
+    <script src="src/js/layers/layer-view.js" defer></script>
+    <script src="src/js/inspectors/color-values.js" defer></script>
+    <script src="src/js/inspectors/color-controls.js" defer></script>
+    <script src="src/js/inspectors/color-picker.js" defer></script>
+    <script src="src/js/inspectors/size-controls.js" defer></script>
+    <script src="src/js/inspectors/frame-inspector.js" defer></script>
+    <script src="src/js/inspectors/vector-inspector.js" defer></script>
+    <script src="src/js/inspectors/text-inspector.js" defer></script>
+    <script src="src/js/components/property-targets.js" defer></script>
+    <script src="src/js/components/property-options.js" defer></script>
+    <script src="src/js/components/property-values.js" defer></script>
+    <script src="src/js/components/property-coordinator.js" defer></script>
+    <script src="src/js/inspectors/inspector-coordinator.js" defer></script>
+    <script src="src/js/variants/variant-behavior.js" defer></script>
+    <script src="src/js/variants/variant-order.js" defer></script>
+    <script src="src/js/variants/variant-preview.js" defer></script>
+    <script src="src/js/variants/variant-coordinator.js" defer></script>
+    <script src="src/js/export/export-styles.js" defer></script>
+    <script src="src/js/export/export-svg.js" defer></script>
+    <script src="src/js/export/export-variants.js" defer></script>
+    <script src="src/js/export/export.js" defer></script>
+    <script src="src/js/app.js" defer></script>
+  </head>
+  <body>
+    <main class="authoring-shell">
+      <aside class="left-sidebar" aria-label="Components">
+        <section class="sidebar-panel" aria-labelledby="components-heading">
+          <div class="components-heading-row">
+            <h1 class="panel-heading" id="components-heading">Components</h1>
+            <span class="tooltip tooltip--bottom tooltip--align-end">
+              <button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add component" data-add-component>
+                <span class="plus-icon" aria-hidden="true"></span>
+              </button>
+              <span class="tooltip__content" role="tooltip">Add</span>
+            </span>
+          </div>
+
+          <div class="tree-view" role="tree" aria-label="Components" data-tree-view></div>
+
+          <button class="export-button" type="button" data-export-components>Export</button>
+        </section>
+
+      </aside>
+
+      <div class="canvas-properties-wrapper">
+        <section class="canvas" id="canvas" aria-label="Canvas">
+        <div class="component-set" data-component-set>
+          <div class="canvas-root-stack" data-canvas-root-stack>
+            <span class="component-preview-label" data-component-preview-label></span>
+          </div>
+        </div>
+        <div class="toolbar" role="toolbar" aria-label="Canvas tools">
+          <span class="tooltip tooltip--top tooltip--align-center">
+            <button class="icon-button icon-button--size-32 icon-button--rounded icon-button--icon-20 icon-button--toggle" type="button" aria-label="Select" aria-pressed="true" data-tool="select">
+              <span class="tool-icon svg-icon svg-icon--cursor-2" aria-hidden="true"></span>
+            </button>
+            <span class="tooltip__content" role="tooltip"><span>Cursor</span><kbd>V</kbd></span>
+          </span>
+          <span class="tooltip tooltip--top tooltip--align-center">
+            <button class="icon-button icon-button--size-32 icon-button--rounded icon-button--icon-20 icon-button--toggle" type="button" aria-label="Frame" aria-pressed="false" data-tool="frame">
+              <svg class="tool-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M24 26V28H8V26H24ZM26 24V8C26 6.89543 25.1046 6 24 6H8C6.89543 6 6 6.89543 6 8V24C6 25.1046 6.89543 26 8 26V28C5.79086 28 4 26.2091 4 24V8C4 5.79086 5.79086 4 8 4H24C26.2091 4 28 5.79086 28 8V24C28 26.2091 26.2091 28 24 28V26C25.1046 26 26 25.1046 26 24Z" fill="currentColor" /></svg>
+            </button>
+            <span class="tooltip__content" role="tooltip"><span>Frame</span><kbd>F</kbd></span>
+          </span>
+          <span class="tooltip tooltip--top tooltip--align-center">
+            <button class="icon-button icon-button--size-32 icon-button--rounded icon-button--icon-20 icon-button--toggle" type="button" aria-label="Text" aria-pressed="false" data-tool="text">
+              <span class="tool-icon svg-icon svg-icon--letter-t" aria-hidden="true"></span>
+            </button>
+            <span class="tooltip__content" role="tooltip"><span>Text</span><kbd>T</kbd></span>
+          </span>
+        </div>
+        </section>
+
+        <aside class="right-sidebar" aria-label="Inspector">
+        <section class="sidebar-panel" aria-labelledby="page-heading" data-page-inspector>
+          <div class="section-title-row">
+            <h2 class="panel-heading" id="page-heading">Page</h2>
+          </div>
+          <div class="section-wrapper" data-paint-section>
+            <div class="divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Fill</h3>
+            </div>
+            <div class="color-input" data-color-control="canvas">
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose page color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true" style="background-color: #121619;"></span>
+                <input class="canvas-color-picker" id="canvas-color-picker" type="color" value="#121619" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="121619" aria-label="Page color hex value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-color-hex />
+            </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="sidebar-panel" aria-labelledby="frame-heading" data-frame-inspector hidden>
+          <div class="panel-heading-wrap section-title-row">
+            <h2 class="panel-heading" id="frame-heading">Frame</h2>
+            <span class="tooltip tooltip--bottom tooltip--align-end" data-add-variant-action>
+              <button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add variant preview" data-add-variant>
+                <span class="svg-icon svg-icon--add-diamond" aria-hidden="true"></span>
+              </button>
+              <span class="tooltip__content" role="tooltip">Add variant</span>
+            </span>
+          </div>
+
+          <div class="section-wrapper">
+            <div class="divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Layout</h3>
+            </div>
+
+          <div class="text-toggle-field">
+            <span class="label" id="frame-direction-label">Direction</span>
+            <div class="text-toggle" role="group" aria-labelledby="frame-direction-label">
+              <button class="text-toggle__item is-selected" type="button" aria-pressed="true" data-frame-direction="horizontal">Horizontal</button>
+              <button class="text-toggle__item" type="button" aria-pressed="false" data-frame-direction="vertical">Vertical</button>
+            </div>
+          </div>
+
+          <div class="inspector-field">
+            <span class="label" id="frame-size-label">Size</span>
+            <div class="inspector-row" role="group" aria-labelledby="frame-size-label">
+              <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="frame-width">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
+                <input class="dropdown__input" aria-label="Frame width" data-frame-size="width" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-width-size-menu" />
+                <button class="dropdown__toggle size-mode-combobox__toggle" type="button" aria-label="Open frame width sizing options" aria-expanded="false" data-size-toggle><span class="size-mode-combobox__toggle-label" data-size-toggle-label></span><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="frame-width-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fixed">Fixed width</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="hug">Hug content</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fill">Fill container</button>
+                </div>
+              </div>
+              <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="frame-height">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">h</span></span>
+                <input class="dropdown__input" aria-label="Frame height" data-frame-size="height" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-height-size-menu" />
+                <button class="dropdown__toggle size-mode-combobox__toggle" type="button" aria-label="Open frame height sizing options" aria-expanded="false" data-size-toggle><span class="size-mode-combobox__toggle-label" data-size-toggle-label></span><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="frame-height-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fixed">Fixed height</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="hug">Hug content</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fill">Fill container</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="frame-alignment-padding-stack">
+          <div class="frame-alignment-div">
+            <div class="frame-alignment-field">
+              <span class="label" id="frame-alignment-label">Alignment</span>
+              <div class="frame-alignment-grid" role="group" aria-labelledby="frame-alignment-label" data-frame-alignment-grid data-direction="horizontal">
+                <button class="frame-alignment-option is-selected" type="button" aria-label="Align top left" aria-pressed="true" data-frame-alignment="top-left"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                <button class="frame-alignment-option" type="button" aria-label="Align top center" aria-pressed="false" data-frame-alignment="top-center"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                <button class="frame-alignment-option" type="button" aria-label="Align top right" aria-pressed="false" data-frame-alignment="top-right"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                <button class="frame-alignment-option" type="button" aria-label="Align left" aria-pressed="false" data-frame-alignment="center-left"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                <button class="frame-alignment-option" type="button" aria-label="Align horizontal and vertical center" aria-pressed="false" data-frame-alignment="center"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                <button class="frame-alignment-option" type="button" aria-label="Align right" aria-pressed="false" data-frame-alignment="center-right"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                <button class="frame-alignment-option" type="button" aria-label="Align bottom left" aria-pressed="false" data-frame-alignment="bottom-left"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                <button class="frame-alignment-option" type="button" aria-label="Align bottom" aria-pressed="false" data-frame-alignment="bottom-center"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                <button class="frame-alignment-option" type="button" aria-label="Align bottom right" aria-pressed="false" data-frame-alignment="bottom-right"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+              </div>
+            </div>
+
+            <div class="section-wrapper">
+              <div class="inspector-field">
+                <label class="label" for="frame-gap">Gap</label>
+                <div class="dropdown dropdown--combobox" data-dropdown data-gap-combobox>
+                  <input
+                    class="dropdown__input"
+                    id="frame-gap"
+                    type="text"
+                    inputmode="decimal"
+                    value="10px"
+                    data-select-on-focus
+                    role="combobox"
+                    aria-autocomplete="none"
+                    aria-expanded="false"
+                    aria-controls="frame-gap-menu"
+                  />
+                  <button class="dropdown__toggle" type="button" aria-label="Open gap options" aria-expanded="false" data-dropdown-toggle data-gap-toggle>
+                    <span class="chevron inspector-select-chevron" aria-hidden="true"></span>
+                  </button>
+                  <div class="dropdown__menu" id="frame-gap-menu" role="listbox" data-dropdown-menu data-gap-menu hidden>
+                    <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="10" data-gap-option="fixed">10</button>
+                    <button class="dropdown__option" type="button" role="option" data-dropdown-value="auto" data-gap-option="auto">Auto</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="inspector-field">
+                <label class="label" for="frame-radius">Radius</label>
+                <input class="text-input" id="frame-radius" type="number" min="0" step="1" value="0" data-select-on-focus />
+              </div>
+            </div>
+          </div>
+
+          <div class="inspector-field">
+            <div class="frame-padding-heading">
+              <span class="label" id="frame-padding-label">Padding</span>
+              <span class="tooltip tooltip--top tooltip--align-center">
+                <button class="icon-button icon-button--size-24 icon-button--rounded icon-button--toggle" type="button" aria-label="Individual padding sides" aria-pressed="false" data-padding-mode-toggle>
+                  <span class="svg-icon svg-icon--padding" aria-hidden="true"></span>
+                </button>
+                <span class="tooltip__content" role="tooltip">Padding</span>
+              </span>
+            </div>
+            <div class="frame-padding-grid" role="group" aria-labelledby="frame-padding-label" data-padding-sides hidden>
+              <label class="text-input-shell text-input-shell--prefix">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">l</span></span>
+                <span class="text-input__text-wrapper"><input class="text-input" aria-label="Left padding" data-frame-padding="left" data-select-on-focus type="number" min="0" step="1" value="10" /></span>
+              </label>
+              <label class="text-input-shell text-input-shell--prefix">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">t</span></span>
+                <span class="text-input__text-wrapper"><input class="text-input" aria-label="Top padding" data-frame-padding="top" data-select-on-focus type="number" min="0" step="1" value="10" /></span>
+              </label>
+              <label class="text-input-shell text-input-shell--prefix">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">r</span></span>
+                <span class="text-input__text-wrapper"><input class="text-input" aria-label="Right padding" data-frame-padding="right" data-select-on-focus type="number" min="0" step="1" value="10" /></span>
+              </label>
+              <label class="text-input-shell text-input-shell--prefix">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">b</span></span>
+                <span class="text-input__text-wrapper"><input class="text-input" aria-label="Bottom padding" data-frame-padding="bottom" data-select-on-focus type="number" min="0" step="1" value="10" /></span>
+              </label>
+            </div>
+            <div class="inspector-row" role="group" aria-labelledby="frame-padding-label" data-padding-axes>
+              <label class="text-input-shell text-input-shell--prefix">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">x</span></span>
+                <span class="text-input__text-wrapper"><input class="text-input" aria-label="Horizontal padding" data-frame-padding-axis="x" data-select-on-focus data-min="0" type="text" inputmode="decimal" value="10" /></span>
+              </label>
+              <label class="text-input-shell text-input-shell--prefix">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">y</span></span>
+                <span class="text-input__text-wrapper"><input class="text-input" aria-label="Vertical padding" data-frame-padding-axis="y" data-select-on-focus data-min="0" type="text" inputmode="decimal" value="10" /></span>
+              </label>
+            </div>
+          </div>
+          </div>
+          </div>
+
+          <div class="section-wrapper" data-paint-section>
+            <div class="divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Fill</h3>
+              <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
+            </div>
+            <div class="color-input is-empty" data-color-control="frame-background" hidden>
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose frame background color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true"></span>
+                <input class="canvas-color-picker" id="frame-color-picker" type="color" value="#000000" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="" aria-label="Frame background hex value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-color-hex />
+            </div>
+            <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
+            <div class="custom-color-opacity">
+              <input type="text" inputmode="decimal" maxlength="3" value="100" aria-label="Frame background opacity" data-color-opacity />
+              <span class="text-input__suffix" role="button" aria-label="Adjust frame background opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
+            </div>
+            <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
+            <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
+            </div>
+          </div>
+
+          <div class="section-wrapper" data-paint-section>
+            <div class="divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Border</h3>
+              <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame border" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
+            </div>
+            <div class="color-input is-empty" data-color-control="frame-outline" hidden>
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose frame outline color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true"></span>
+                <input class="canvas-color-picker" id="frame-outline-color-picker" type="color" value="#000000" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="" aria-label="Frame outline hex value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-color-hex />
+            </div>
+            <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
+            <div class="custom-color-opacity">
+              <input type="text" inputmode="decimal" maxlength="3" value="100" aria-label="Frame outline opacity" data-color-opacity />
+              <span class="text-input__suffix" role="button" aria-label="Adjust frame outline opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
+            </div>
+            <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
+            <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove frame border" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
+            </div>
+          </div>
+
+          <div class="inspector-row" data-frame-outline-controls hidden>
+            <div class="inspector-field">
+              <label class="label" for="frame-outline-position">Position</label>
+              <div class="dropdown dropdown--default" data-dropdown>
+                <input class="dropdown__input" id="frame-outline-position" type="text" value="Inside" data-value="inside" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-outline-position-menu" readonly />
+                <button class="dropdown__toggle" type="button" aria-label="Open border position options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="frame-outline-position-menu" role="listbox" data-dropdown-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="inside">Inside</button>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="outside">Outside</button>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="center">Center</button>
+                </div>
+              </div>
+            </div>
+            <div class="inspector-field">
+              <label class="label" for="frame-outline-weight">Weight</label>
+              <input class="text-input" id="frame-outline-weight" type="number" min="0" step="1" value="1" data-select-on-focus />
+            </div>
+          </div>
+
+          <div class="section-wrapper">
+            <div class="divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Accessibility</h3>
+            </div>
+            <div class="inspector-field">
+              <label class="label" for="frame-html-tag">HTML tag</label>
+              <div class="dropdown dropdown--default frame-html-tag-dropdown" data-dropdown>
+                <input class="dropdown__input" id="frame-html-tag" type="text" value="div" data-value="div" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-html-tag-menu" readonly />
+                <button class="dropdown__toggle" type="button" aria-label="Open HTML tag options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="frame-html-tag-menu" role="listbox" data-dropdown-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="div">div</button>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="button">button</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="sidebar-panel" aria-labelledby="text-heading" data-text-inspector hidden>
+          <div class="section-title-row">
+            <h2 class="panel-heading" id="text-heading">Text</h2>
+          </div>
+
+          <div class="section-wrapper">
+            <div class="divider" aria-hidden="true"></div>
+
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Layout</h3>
+            </div>
+
+          <div class="inspector-field">
+            <span class="label" id="text-layer-size-label">Size</span>
+            <div class="inspector-row" role="group" aria-labelledby="text-layer-size-label">
+              <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="text-width">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
+                <input class="dropdown__input" aria-label="Text width" data-text-layer-size="width" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-width-size-menu" />
+                <button class="dropdown__toggle size-mode-combobox__toggle" type="button" aria-label="Open text width sizing options" aria-expanded="false" data-size-toggle><span class="size-mode-combobox__toggle-label" data-size-toggle-label>Hug</span><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="text-width-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fixed">Fixed width</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="hug">Hug content</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fill">Fill container</button>
+                </div>
+              </div>
+              <div class="dropdown dropdown--combobox dropdown--prefix size-mode-combobox" data-size-combobox="text-height">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">h</span></span>
+                <input class="dropdown__input" aria-label="Text height" data-text-layer-size="height" type="text" inputmode="decimal" value="100" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-height-size-menu" />
+                <button class="dropdown__toggle size-mode-combobox__toggle" type="button" aria-label="Open text height sizing options" aria-expanded="false" data-size-toggle><span class="size-mode-combobox__toggle-label" data-size-toggle-label>Hug</span><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <div class="dropdown__menu" id="text-height-size-menu" role="listbox" data-size-menu hidden>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fixed">Fixed height</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="hug">Hug content</button>
+                  <button class="dropdown__option" type="button" role="option" data-size-option="fill">Fill container</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+            <div class="frame-alignment-div">
+              <div class="frame-alignment-field text-alignment-field">
+                <span class="label" id="text-alignment-label">Alignment</span>
+                <div class="frame-alignment-grid" role="group" aria-labelledby="text-alignment-label">
+                  <button class="frame-alignment-option is-selected" type="button" aria-label="Align text top left" aria-pressed="true" data-text-alignment="top-left"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                  <button class="frame-alignment-option" type="button" aria-label="Align text top center" aria-pressed="false" data-text-alignment="top-center"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                  <button class="frame-alignment-option" type="button" aria-label="Align text top right" aria-pressed="false" data-text-alignment="top-right"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                  <button class="frame-alignment-option" type="button" aria-label="Align text vertically centered left" aria-pressed="false" data-text-alignment="center-left"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                  <button class="frame-alignment-option" type="button" aria-label="Align text vertically and horizontally centered" aria-pressed="false" data-text-alignment="center"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                  <button class="frame-alignment-option" type="button" aria-label="Align text vertically centered right" aria-pressed="false" data-text-alignment="center-right"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                  <button class="frame-alignment-option" type="button" aria-label="Align text bottom left" aria-pressed="false" data-text-alignment="bottom-left"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                  <button class="frame-alignment-option" type="button" aria-label="Align text bottom center" aria-pressed="false" data-text-alignment="bottom-center"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                  <button class="frame-alignment-option" type="button" aria-label="Align text bottom right" aria-pressed="false" data-text-alignment="bottom-right"><span class="alignment-dot" aria-hidden="true"></span><span class="alignment-lines" aria-hidden="true"><span></span><span></span></span></button>
+                </div>
+              </div>
+              <div aria-hidden="true"></div>
+            </div>
+          </div>
+
+          <div class="section-wrapper">
+            <div class="divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Typography</h3>
+            </div>
+
+          <div class="inspector-field">
+            <label class="label" for="text-font">Font</label>
+            <div class="dropdown dropdown--default" data-dropdown>
+              <input class="dropdown__input" id="text-font" type="text" value="Inter" data-value="Inter" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-font-menu" readonly />
+              <button class="dropdown__toggle" type="button" aria-label="Open font family options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+              <div class="dropdown__menu" id="text-font-menu" role="listbox" data-dropdown-menu hidden>
+                <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="Inter">Inter</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="inspector-row">
+          <div class="inspector-field">
+            <label class="label" for="text-weight">Weight</label>
+            <div class="dropdown dropdown--default" data-dropdown>
+              <input class="dropdown__input" id="text-weight" type="text" value="Regular" data-value="400" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-weight-menu" readonly />
+              <button class="dropdown__toggle" type="button" aria-label="Open font weight options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+              <div class="dropdown__menu" id="text-weight-menu" role="listbox" data-dropdown-menu hidden>
+                <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="400">Regular</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="inspector-field">
+            <label class="label" for="text-size">Size</label>
+            <div class="dropdown dropdown--combobox text-size-combobox" data-dropdown data-text-size-combobox>
+              <input class="dropdown__input" id="text-size" type="text" inputmode="decimal" value="14" data-select-on-focus role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="text-size-menu" />
+              <button class="dropdown__toggle" type="button" aria-label="Open text size options" aria-expanded="false" data-dropdown-toggle data-text-size-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+              <div class="dropdown__menu" id="text-size-menu" role="listbox" data-dropdown-menu data-text-size-menu hidden>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="10" data-text-size-option="10">10</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="11" data-text-size-option="11">11</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="12" data-text-size-option="12">12</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="13" data-text-size-option="13">13</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="14" data-text-size-option="14" aria-selected="true">14</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="15" data-text-size-option="15">15</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="16" data-text-size-option="16">16</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="20" data-text-size-option="20">20</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="24" data-text-size-option="24">24</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="32" data-text-size-option="32">32</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="36" data-text-size-option="36">36</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="40" data-text-size-option="40">40</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="48" data-text-size-option="48">48</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="64" data-text-size-option="64">64</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="96" data-text-size-option="96">96</button>
+                <button class="dropdown__option" type="button" role="option" data-dropdown-value="128" data-text-size-option="128">128</button>
+              </div>
+            </div>
+          </div>
+          </div>
+
+          <div class="inspector-row">
+          <div class="inspector-field">
+            <label class="label" for="text-line-height">Line height</label>
+            <input class="text-input" id="text-line-height" type="text" inputmode="text" value="Auto" data-select-on-focus />
+          </div>
+
+          <div class="inspector-field">
+            <label class="label" for="text-letter-spacing">Letter spacing</label>
+            <input class="text-input" id="text-letter-spacing" type="text" inputmode="decimal" value="0%" />
+          </div>
+          </div>
+          </div>
+
+          <div class="section-wrapper" data-paint-section>
+            <div class="divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Fill</h3>
+              <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add text fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
+            </div>
+            <div class="color-input" data-color-control="text">
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose text color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true" style="background-color: #000000;"></span>
+                <input class="canvas-color-picker" id="text-color-picker" type="color" value="#000000" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="000000" aria-label="Text color hex value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-color-hex />
+            </div>
+            <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
+            <div class="custom-color-opacity">
+              <input type="text" inputmode="decimal" maxlength="3" value="100" aria-label="Text color opacity" data-color-opacity />
+              <span class="text-input__suffix" role="button" aria-label="Adjust text color opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
+            </div>
+            <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
+            <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove text fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="sidebar-panel" aria-labelledby="vector-heading" data-vector-inspector hidden>
+          <div class="panel-heading-wrap">
+            <h2 class="panel-heading" id="vector-heading">Vector</h2>
+          </div>
+
+          <div class="section-wrapper">
+            <div class="divider" aria-hidden="true"></div>
+
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Layout</h3>
+            </div>
+
+          <div class="inspector-field">
+            <span class="label" id="vector-size-label">Size</span>
+            <div class="inspector-row" role="group" aria-labelledby="vector-size-label">
+              <label class="text-input-shell text-input-shell--prefix">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">w</span></span>
+                <span class="text-input__text-wrapper"><input class="text-input" aria-label="Vector width" data-vector-size="width" data-select-on-focus type="number" min="1" step="1" value="24" /></span>
+              </label>
+              <label class="text-input-shell text-input-shell--prefix">
+                <span class="text-input__prefix" aria-hidden="true" data-text-input-prefix><span class="text-input__prefix-value">h</span></span>
+                <span class="text-input__text-wrapper"><input class="text-input" aria-label="Vector height" data-vector-size="height" data-select-on-focus type="number" min="1" step="1" value="24" /></span>
+              </label>
+            </div>
+          </div>
+          </div>
+
+          <div class="section-wrapper" data-paint-section>
+            <div class="divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Fill</h3>
+              <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add vector fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
+            </div>
+            <div class="color-input" data-color-control="vector">
+            <div class="custom-color-value">
+              <label class="custom-color-swatch" aria-label="Choose vector color">
+                <span class="custom-color-swatch-fill" data-color-swatch aria-hidden="true" style="background-color: #000000;"></span>
+                <input class="canvas-color-picker" id="vector-color-picker" type="color" value="#000000" />
+              </label>
+              <input class="custom-color-hex" type="text" inputmode="text" maxlength="6" value="000000" aria-label="Vector color hex value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-color-hex />
+            </div>
+            <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
+            <div class="custom-color-opacity">
+              <input type="text" inputmode="decimal" maxlength="3" value="100" aria-label="Vector color opacity" data-color-opacity />
+              <span class="text-input__suffix" role="button" aria-label="Adjust vector color opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span>
+            </div>
+            <div class="divider-vertical divider-vertical--subtle-01" aria-hidden="true"></div>
+            <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Remove vector fill" data-color-remove-action><span class="subtract-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip">Remove</span></span>
+            </div>
+          </div>
+        </section>
+
+        </aside>
+
+      <section class="props-panel" aria-label="Component properties">
+        <div class="props-table" role="table" aria-label="Props">
+          <div class="props-table-row props-table-header" role="row">
+            <div class="props-table-cell" role="columnheader">Name</div>
+            <div class="props-table-cell" role="columnheader">Type</div>
+            <div class="props-table-cell" role="columnheader">Target</div>
+            <div class="props-table-cell" role="columnheader">Property</div>
+            <div class="props-table-cell props-table-value-cell" role="columnheader">Value</div>
+            <div class="props-table-cell props-table-action-cell" role="columnheader">
+              <span class="sr-only">Actions</span>
+              <div class="overflow-menu" data-prop-overflow-menu>
+                <span class="tooltip tooltip--top tooltip--align-center tooltip--fixed">
+                  <button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add prop" aria-haspopup="listbox" aria-expanded="false" aria-controls="add-prop-menu" data-add-prop>
+                    <span class="plus-icon" aria-hidden="true"></span>
+                  </button>
+                  <span class="tooltip__content" role="tooltip">Add prop</span>
+                </span>
+                <div class="dropdown__menu overflow-menu__menu" id="add-prop-menu" role="listbox" aria-label="Prop type" data-prop-menu hidden>
+                  <button class="dropdown__option overflow-menu__option" type="button" role="option" aria-selected="false" data-prop-type="enum"><span class="layer-type-icon prop-type-icon svg-icon svg-icon--diamond-outline" aria-hidden="true"></span><span>Variant</span></button>
+                  <button class="dropdown__option overflow-menu__option" type="button" role="option" aria-selected="false" data-prop-type="boolean"><span class="layer-type-icon prop-type-icon svg-icon svg-icon--toggle-on" aria-hidden="true"></span><span>Boolean</span></button>
+                  <button class="dropdown__option overflow-menu__option" type="button" role="option" aria-selected="false" data-prop-type="string"><span class="layer-type-icon prop-type-icon svg-icon svg-icon--text" aria-hidden="true"></span><span>String</span></button>
+                  <button class="dropdown__option overflow-menu__option" type="button" role="option" aria-selected="false" data-prop-type="action"><span class="layer-type-icon prop-type-icon svg-icon svg-icon--cursor-1" aria-hidden="true"></span><span>Action</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="props-table-body" role="rowgroup" data-prop-rows></div>
+        </div>
+      </section>
+      </div>
+    </main>
+  </body>
+</html>
