@@ -1403,8 +1403,8 @@ textarea:focus-visible {
   display: none;
   margin: 0;
   padding: 0;
-  border: 1px solid #992CFF;
-  background: rgba(153, 44, 255, 0.1);
+  border: 1px solid var(--focus);
+  background: rgba(15, 98, 254, 0.2);
   pointer-events: none;
 }
 
@@ -1860,14 +1860,6 @@ textarea:focus-visible {
 
 .tool-icon {
   color: currentColor;
-}
-
-.inspector-field.text-font-field {
-  width: 100%;
-}
-
-.text-font-field .dropdown {
-  width: 100%;
 }
 
 .text-toggle-field {
