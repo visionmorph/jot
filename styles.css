@@ -110,6 +110,8 @@ textarea:focus-visible {
 .right-sidebar {
   position: relative;
   z-index: 3;
+  display: flex;
+  flex-direction: column;
   width: 280px;
   min-width: 280px;
   height: 100%;
@@ -780,8 +782,6 @@ textarea:focus-visible {
 }
 
 .left-sidebar {
-  display: flex;
-  flex-direction: column;
   border-right: 1px solid var(--border-subtle-00);
 }
 
@@ -793,8 +793,9 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 50%;
-  padding: 16px 8px;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 12px;
   gap: 12px;
 }
 
@@ -802,11 +803,8 @@ textarea:focus-visible {
   display: none;
 }
 
-.components-tree-panel {
-  height: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
-  padding-top: 12px;
+.sidebar-panel .panel-heading-wrap {
+  padding-left: 0;
 }
 
 .components-heading-row {
@@ -834,14 +832,11 @@ textarea:focus-visible {
 .tree-view {
   display: flex;
   flex-direction: column;
+  min-height: 24px;
   margin: 0;
   padding: 0;
-  gap: 0;
-}
-
-.components-tree-panel .tree-view {
   flex: 1 1 auto;
-  min-height: 24px;
+  gap: 0;
   overflow-y: auto;
 }
 
@@ -1768,22 +1763,11 @@ textarea:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
 }
 
 .tooltip[hidden] {
   display: none;
-}
-
-.toolbar > .tooltip {
-  width: 32px;
-  height: 32px;
-  flex: 0 0 32px;
-}
-
-.paint-section-title-row > .tooltip {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
 }
 
 .tooltip__content {
@@ -1893,25 +1877,8 @@ textarea:focus-visible {
 }
 
 .page-panel {
-  padding-right: 16px;
-  padding-left: 16px;
-}
-
-.page-panel .panel-heading-wrap {
-  padding-left: 0;
-}
-
-.text-panel,
-.vector-panel {
-  padding-right: 16px;
-  padding-left: 16px;
-  gap: 12px;
-}
-
-.text-panel .panel-heading-wrap,
-.vector-panel .panel-heading-wrap,
-.frame-panel .panel-heading-wrap {
-  padding-left: 0;
+  padding-right: 12px;
+  padding-left: 12px;
 }
 
 .inspector-field.text-font-field,
@@ -1938,12 +1905,6 @@ textarea:focus-visible {
   width: 100%;
 }
 
-.frame-panel {
-  padding-right: 16px;
-  padding-left: 16px;
-  gap: 12px;
-}
-
 .text-toggle-field {
   display: flex;
   flex-direction: column;
@@ -1952,7 +1913,7 @@ textarea:focus-visible {
 }
 
 .frame-alignment-field {
-  width: 119.5px;
+  width: 100%;
 }
 
 .frame-alignment-div {
@@ -1960,13 +1921,6 @@ textarea:focus-visible {
   align-items: flex-start;
   width: 100%;
   gap: 8px;
-}
-
-.frame-gap-radius-stack {
-  display: flex;
-  flex-direction: column;
-  width: 119.5px;
-  gap: 12px;
 }
 
 .text-toggle {
@@ -2472,7 +2426,7 @@ textarea:focus-visible {
   width: 100%;
   margin: 0;
   padding: 0;
-  gap: 12px;
+  gap: 8px;
 }
 
 .paint-section-heading {
@@ -2482,18 +2436,6 @@ textarea:focus-visible {
   margin: 0;
   padding: 0;
   gap: 8px;
-}
-
-.paint-section-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  height: 24px;
-  flex: 0 0 24px;
-  margin: 0;
-  padding: 0;
-  gap: 0;
 }
 
 .section-title-row {
@@ -2508,24 +2450,7 @@ textarea:focus-visible {
   gap: 0;
 }
 
-.section-title-row .inspector-section-title {
-  width: auto;
-  flex: 1 1 auto;
-}
-
-.component-inspector-title-row {
-  padding-left: 8px;
-}
-
-.component-inspector-title-row .panel-heading {
-  flex: 1 1 auto;
-}
-
-.component-inspector-title-row [data-add-variant-action][hidden] {
-  display: none;
-}
-
-.paint-section-title-row .inspector-section-title {
+.section-title-row > :is(.panel-heading, .inspector-section-title) {
   width: auto;
   flex: 1 1 auto;
 }
@@ -2550,7 +2475,7 @@ textarea:focus-visible {
 .inspector-field {
   display: flex;
   flex-direction: column;
-  width: 119.5px;
+  width: 100%;
   gap: 4px;
 }
 
@@ -2559,7 +2484,7 @@ textarea:focus-visible {
 }
 
 .frame-padding-field {
-  width: 247px;
+  width: 100%;
   gap: 4px;
 }
 
@@ -3159,8 +3084,7 @@ textarea:focus-visible {
   flex: 0 0 24px;
 }
 
-.custom-color-remove-action[hidden],
-.paint-section-title-row > .tooltip[hidden] {
+.custom-color-remove-action[hidden] {
   display: none;
 }
 

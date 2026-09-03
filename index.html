@@ -76,7 +76,7 @@
   <body>
     <main class="authoring-shell">
       <aside class="left-sidebar" aria-label="Components">
-        <section class="sidebar-panel components-tree-panel" aria-labelledby="components-heading">
+        <section class="sidebar-panel" aria-labelledby="components-heading">
           <div class="components-heading-row">
             <h1 class="panel-heading" id="components-heading">Components</h1>
             <span class="tooltip tooltip--bottom tooltip--align-end">
@@ -131,7 +131,7 @@
           <div class="inspector-section-group paint-section" data-paint-section>
             <div class="paint-section-heading">
               <div class="inspector-section-divider" aria-hidden="true"></div>
-              <div class="paint-section-title-row">
+              <div class="section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
               </div>
             </div>
@@ -147,8 +147,8 @@
           </div>
         </section>
 
-        <section class="sidebar-panel frame-panel" aria-labelledby="frame-heading" data-frame-inspector hidden>
-          <div class="panel-heading-wrap section-title-row component-inspector-title-row">
+        <section class="sidebar-panel" aria-labelledby="frame-heading" data-frame-inspector hidden>
+          <div class="panel-heading-wrap section-title-row">
             <h2 class="panel-heading" id="frame-heading">Frame</h2>
             <span class="tooltip tooltip--bottom tooltip--align-end" data-add-variant-action>
               <button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add variant preview" data-add-variant>
@@ -160,7 +160,9 @@
 
           <div class="inspector-section-group">
             <div class="inspector-section-divider" aria-hidden="true"></div>
-            <h3 class="inspector-section-title">Layout</h3>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Layout</h3>
+            </div>
 
           <div class="text-toggle-field">
             <span class="inspector-label" id="frame-direction-label">Direction</span>
@@ -213,7 +215,7 @@
               </div>
             </div>
 
-            <div class="frame-gap-radius-stack">
+            <div class="inspector-section-group">
               <div class="inspector-field">
                 <label class="inspector-label" for="frame-gap">Gap</label>
                 <div class="dropdown dropdown--combobox" data-dropdown data-gap-combobox>
@@ -291,7 +293,7 @@
           <div class="inspector-section-group paint-section" data-paint-section>
             <div class="paint-section-heading">
               <div class="inspector-section-divider" aria-hidden="true"></div>
-              <div class="paint-section-title-row">
+              <div class="section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
                 <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
@@ -317,7 +319,7 @@
           <div class="inspector-section-group paint-section" data-paint-section>
             <div class="paint-section-heading">
               <div class="inspector-section-divider" aria-hidden="true"></div>
-              <div class="paint-section-title-row">
+              <div class="section-title-row">
                 <h3 class="inspector-section-title">Border</h3>
                 <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame border" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
@@ -361,7 +363,9 @@
 
           <div class="inspector-section-group">
             <div class="inspector-section-divider" aria-hidden="true"></div>
-            <h3 class="inspector-section-title">Accessibility</h3>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Accessibility</h3>
+            </div>
             <div class="inspector-field">
               <label class="inspector-label" for="frame-html-tag">HTML tag</label>
               <div class="dropdown dropdown--default" data-dropdown>
@@ -376,7 +380,7 @@
           </div>
         </section>
 
-        <section class="sidebar-panel text-panel" aria-labelledby="text-heading" data-text-inspector hidden>
+        <section class="sidebar-panel" aria-labelledby="text-heading" data-text-inspector hidden>
           <div class="panel-heading-wrap">
             <h2 class="panel-heading" id="text-heading">Text</h2>
           </div>
@@ -384,7 +388,9 @@
           <div class="inspector-section-group">
             <div class="inspector-divider" aria-hidden="true"></div>
 
-            <h3 class="inspector-section-title">Layout</h3>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Layout</h3>
+            </div>
 
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="text-layer-size-label">Size</span>
@@ -430,7 +436,9 @@
 
           <div class="inspector-section-group">
             <div class="inspector-section-divider" aria-hidden="true"></div>
-            <h3 class="inspector-section-title">Typography</h3>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Typography</h3>
+            </div>
 
           <div class="inspector-field text-font-field">
             <label class="inspector-label" for="text-font">Font</label>
@@ -498,7 +506,7 @@
           <div class="inspector-section-group paint-section" data-paint-section>
             <div class="paint-section-heading">
               <div class="inspector-section-divider" aria-hidden="true"></div>
-              <div class="paint-section-title-row">
+              <div class="section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
                 <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add text fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
@@ -522,7 +530,7 @@
           </div>
         </section>
 
-        <section class="sidebar-panel vector-panel" aria-labelledby="vector-heading" data-vector-inspector hidden>
+        <section class="sidebar-panel" aria-labelledby="vector-heading" data-vector-inspector hidden>
           <div class="panel-heading-wrap">
             <h2 class="panel-heading" id="vector-heading">Vector</h2>
           </div>
@@ -530,7 +538,9 @@
           <div class="inspector-section-group">
             <div class="inspector-divider" aria-hidden="true"></div>
 
-            <h3 class="inspector-section-title">Layout</h3>
+            <div class="section-title-row">
+              <h3 class="inspector-section-title">Layout</h3>
+            </div>
 
           <div class="inspector-field layer-size-field">
             <span class="inspector-label" id="vector-size-label">Size</span>
@@ -550,7 +560,7 @@
           <div class="inspector-section-group paint-section" data-paint-section>
             <div class="paint-section-heading">
               <div class="inspector-section-divider" aria-hidden="true"></div>
-              <div class="paint-section-title-row">
+              <div class="section-title-row">
                 <h3 class="inspector-section-title">Fill</h3>
                 <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add vector fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
               </div>
