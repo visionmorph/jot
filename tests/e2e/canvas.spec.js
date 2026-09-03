@@ -1,6 +1,23 @@
 const { test, expect } = require("playwright/test");
 const { openApp } = require("../support/open-app.cjs");
 
+test("starts new text with an empty caret", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  await page.getByRole("button", { name: "Text", exact: true }).click();
+  await component.click({ position: { x: 40, y: 40 } });
+
+  const text = component.locator(":scope > .canvas-text");
+  await expect(text).toHaveCount(1);
+  await expect(text).toBeFocused();
+  await expect(text).toHaveText("");
+  await expect.poll(() => text.evaluate((element) => {
+    const selection = window.getSelection();
+    return selection?.isCollapsed === true && element.contains(selection.anchorNode);
+  })).toBe(true);
+});
+
 async function dropSvg(page, name, source) {
   const canvas = page.getByRole("region", { name: "Canvas" });
   await canvas.evaluate((element, file) => {

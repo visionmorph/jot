@@ -1,6 +1,25 @@
 const { test, expect } = require("playwright/test");
 const { openApp } = require("../support/open-app.cjs");
 
+test("starts new variant text with an empty caret", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  const previews = page.locator(".variant-preview");
+  const selectedRoot = previews.nth(1).locator(".canvas-root-stack");
+  await page.getByRole("button", { name: "Text", exact: true }).click();
+  await selectedRoot.click({ position: { x: 40, y: 40 } });
+
+  const text = selectedRoot.locator(":scope > .canvas-text");
+  await expect(text).toHaveCount(1);
+  await expect(text).toBeFocused();
+  await expect(text).toHaveText("");
+  await expect.poll(() => text.evaluate((element) => {
+    const selection = window.getSelection();
+    return selection?.isCollapsed === true && element.contains(selection.anchorNode);
+  })).toBe(true);
+});
+
 test("creates variant previews and supports undo and redo", async ({ page }) => {
   await openApp(page);
 
