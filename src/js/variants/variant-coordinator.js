@@ -175,7 +175,7 @@ function selectNewSharedLayerInVariant(instanceId, target, { editText = false } 
     requestAnimationFrame(() => {
       const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`);
       const text = preview ? findVariantTarget(preview.querySelector(".canvas-root-stack"), target) : null;
-      if (text instanceof HTMLElement) text.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, button: 0 }));
+      if (text instanceof HTMLElement) text.dispatchEvent(new Event("canvas-text-create"));
     });
   }, 0);
 }
@@ -198,7 +198,6 @@ function handleVariantStructureToolClick(instance, parentTarget, event) {
   const record = createCanvasText(parentRecord, 0, 0, {
     beginEditing: false,
     isNew: false,
-    textContent: "Text",
     useDefaultName: true,
   });
   if (!record) return true;

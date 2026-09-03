@@ -218,7 +218,7 @@ function renderVariantInstances() {
       if (type !== "text") return;
       const text = layerElement;
       const textId = id;
-      const beginEditing = (event) => {
+      const beginEditing = (event, { selectContents = true } = {}) => {
         if (activeTool !== "select") return;
         event.preventDefault();
         event.stopPropagation();
@@ -226,15 +226,12 @@ function renderVariantInstances() {
         beginHistoryGesture(text);
         text.classList.add("is-selected");
         text.setAttribute("aria-selected", "true");
-        text.contentEditable = "true";
-        text.focus();
-        const range = document.createRange();
-        range.selectNodeContents(text);
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
+        focusTextEditor(text, { selectContents });
       };
       text.addEventListener("dblclick", beginEditing);
+      text.addEventListener("canvas-text-create", (event) => {
+        beginEditing(event, { selectContents: false });
+      });
       text.addEventListener("click", (event) => {
         if (activeTool !== "text") return;
         selectTool("select");
