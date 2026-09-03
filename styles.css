@@ -33,8 +33,7 @@
   --text-disabled: rgba(244, 244, 244, 0.25);
   --field-01: #21272a;
   --field-hover-01: #343a3f;
-  --canvas-hover-outline: #992cff;
-  --canvas-selected-outline: #992cff;
+  --component: #a56eff;
 }
 
 * {
@@ -926,19 +925,19 @@ textarea:focus-visible {
 }
 
 .tree-node.is-drop-before {
-  box-shadow: inset 0 2px #992CFF;
+  box-shadow: inset 0 2px var(--component);
 }
 
 .tree-node.is-drop-after {
-  box-shadow: inset 0 -2px #992CFF;
+  box-shadow: inset 0 -2px var(--component);
 }
 
 .tree-node.is-drop-inside {
-  box-shadow: inset 0 0 0 1px #992CFF;
+  box-shadow: inset 0 0 0 1px var(--component);
 }
 
 .tree-view.is-drop-root {
-  box-shadow: inset 0 -2px #992CFF;
+  box-shadow: inset 0 -2px var(--component);
 }
 
 .tree-node[hidden] {
@@ -1244,11 +1243,11 @@ textarea:focus-visible {
 }
 
 .variant-preview.is-variant-drop-before {
-  box-shadow: inset 2px 0 #992cff;
+  box-shadow: inset 2px 0 var(--component);
 }
 
 .variant-preview.is-variant-drop-after {
-  box-shadow: inset -2px 0 #992cff;
+  box-shadow: inset -2px 0 var(--component);
 }
 
 .variant-preview-label,
@@ -1263,7 +1262,7 @@ textarea:focus-visible {
   padding: 0;
   border-radius: 0;
   background: transparent;
-  color: #D1A8FF;
+  color: var(--component);
   font-size: 10px;
   line-height: 12px;
   white-space: normal;
@@ -1282,7 +1281,7 @@ textarea:focus-visible {
 
 .variant-preview.is-selected .variant-preview-label {
   background: transparent;
-  color: #D1A8FF;
+  color: var(--component);
 }
 
 .component-preview-label {
@@ -1347,8 +1346,8 @@ textarea:focus-visible {
   min-height: 16px;
   padding: 2px 4px;
   border-radius: 2px;
-  background: #8A3FFC;
-  color: var(--icon-on-color);
+  background: var(--component);
+  color: var(--text-inverse);
   font-family: Inter, sans-serif;
   font-size: 10px;
   font-weight: 400;
@@ -1372,8 +1371,8 @@ textarea:focus-visible {
   padding: 0;
   border: 0;
   border-radius: 4px;
-  background: #8A3FFC;
-  color: var(--icon-on-color);
+  background: var(--component);
+  color: var(--icon-inverse);
   cursor: pointer;
   pointer-events: auto;
 }
@@ -1387,7 +1386,7 @@ textarea:focus-visible {
 
 .canvas-root-stack.is-canvas-drop-inside,
 .canvas-frame.is-canvas-drop-inside {
-  box-shadow: inset 0 0 0 2px #992CFF;
+  box-shadow: inset 0 0 0 2px var(--component);
 }
 
 .canvas-root-stack.is-layer-hidden,
@@ -1556,7 +1555,7 @@ textarea:focus-visible {
 .canvas-frame:hover:not(.is-selected),
 .canvas-text:hover:not(.is-selected):not(.is-new-empty),
 .canvas-vector:hover:not(.is-selected) {
-  outline: 1px solid var(--canvas-hover-outline);
+  outline: 1px solid var(--component);
   outline-offset: -1px;
 }
 
@@ -1564,7 +1563,7 @@ textarea:focus-visible {
 .canvas-frame.is-selected,
 .canvas-text.is-selected,
 .canvas-vector.is-selected {
-  outline: 1px solid var(--canvas-selected-outline);
+  outline: 1px solid var(--component);
   outline-offset: -1px;
 }
 
@@ -1576,12 +1575,12 @@ textarea:focus-visible {
 .canvas-frame.is-selected.is-selection-hovered,
 .canvas-text.is-selected.is-selection-hovered:not(.is-new-empty),
 .canvas-vector.is-selected.is-selection-hovered {
-  outline: 2px solid var(--canvas-selected-outline);
+  outline: 2px solid var(--component);
   outline-offset: -2px;
 }
 
 .component-set.has-variants.is-selected {
-  outline: 1px solid var(--canvas-selected-outline);
+  outline: 1px solid var(--component);
   outline-offset: 8px;
 }
 
@@ -1606,7 +1605,7 @@ textarea:focus-visible {
   height: 8px;
   margin: 0;
   padding: 0;
-  border: 1px solid #992CFF;
+  border: 1px solid var(--component);
   background: var(--icon-on-color);
   pointer-events: auto;
   touch-action: none;
