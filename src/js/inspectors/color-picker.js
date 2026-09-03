@@ -83,7 +83,7 @@ function createColorPicker() {
     </div>
     <div class="color-picker-fields">
       <div class="custom-color-value"><input class="custom-color-hex" type="text" inputmode="text" maxlength="6" aria-label="Hex color value" autocomplete="off" autocapitalize="characters" spellcheck="false" data-picker-hex></div>
-      <div class="custom-color-divider" aria-hidden="true"></div>
+      <div class="divider-vertical divider-vertical--subtle-02" aria-hidden="true"></div>
       <div class="custom-color-opacity"><input type="text" inputmode="decimal" maxlength="3" aria-label="Color opacity" data-picker-opacity-input><span class="text-input__suffix" role="button" aria-label="Adjust color opacity" data-number-suffix data-suffix-min="0" data-suffix-max="100"><span class="text-input__suffix-value" aria-hidden="true">%</span></span></div>
     </div>`;
   return colorPicker;
