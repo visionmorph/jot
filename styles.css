@@ -91,16 +91,6 @@ textarea:focus-visible {
   gap: 0;
 }
 
-.canvas-properties-wrapper > .canvas {
-  grid-column: 1;
-  grid-row: 1;
-}
-
-.canvas-properties-wrapper > .props-panel {
-  grid-column: 1;
-  grid-row: 2;
-}
-
 .canvas-properties-wrapper > .right-sidebar {
   grid-column: 2;
   grid-row: 1 / 3;
@@ -211,7 +201,7 @@ textarea:focus-visible {
 }
 
 .text-input {
-  width: 119.5px;
+  width: 100%;
   height: 24px;
   margin: 0;
   padding: 4px 8px;
