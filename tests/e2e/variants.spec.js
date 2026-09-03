@@ -16,7 +16,12 @@ test("starts new variant text with an empty caret", async ({ page }) => {
   await expect(text).toHaveText("");
   await expect.poll(() => text.evaluate((element) => {
     const selection = window.getSelection();
-    return selection?.isCollapsed === true && element.contains(selection.anchorNode);
+    if (selection?.isCollapsed !== true || !element.contains(selection.anchorNode) || selection.rangeCount === 0) {
+      return false;
+    }
+    const contents = document.createRange();
+    contents.selectNodeContents(element);
+    return selection.getRangeAt(0).compareBoundaryPoints(Range.END_TO_END, contents) === 0;
   })).toBe(true);
 });
 
