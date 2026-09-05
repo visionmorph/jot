@@ -77,6 +77,7 @@ function attachLayerSelectionHandlers(node, type, component, record) {
   });
   node.addEventListener("keydown", (event) => {
     if (event.target === node && (event.key === "Enter" || event.key === " ")) {
+      if (event.key === "Enter" && isComponentTreeLayerSelected(component, type, record.id)) return;
       event.preventDefault();
       selectComponentLayerTreeNode(component, type, record);
     }
@@ -125,7 +126,13 @@ function selectComponentLayerTreeNode(component, type, record, additive = false)
     : type === "text" ? getTextRecord(record.id) : getVectorRecord(record.id);
   if (!activeRecord) return;
   if (selectedVariantInstanceId !== null) {
-    selectVariantInstance(selectedVariantInstanceId, { render: false, layerTarget: `${type}:${activeRecord.id}` });
+    const target = `${type}:${activeRecord.id}`;
+    const targets = additive ? getSelectedVariantLayerTargets() : [];
+    const nextTargets = targets.includes(target)
+      ? targets.filter((key) => key !== target) : [...targets, target];
+    selectVariantInstancesLayerTargetsState(getSelectedVariantInstanceIds(), nextTargets, selectedVariantInstanceId);
+    expandFramePath(type === "frame" ? activeRecord.parentId : activeRecord.parentFrameId);
+    clearMasterSelectionForVariant();
     renderTree();
     return;
   }

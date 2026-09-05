@@ -408,6 +408,35 @@ function getSelectedTextRecord() {
     : undefined;
 }
 
+function getSelectedTextRecords() {
+  if (selectionState.kind === "variant") {
+    const preview = componentSet?.querySelector(
+      `.variant-preview[data-variant-instance-id="${CSS.escape(String(selectionState.instanceId))}"]`,
+    );
+    const root = preview?.querySelector(".canvas-root-stack");
+    if (!(root instanceof HTMLElement)) return [];
+    return getSelectedVariantLayerTargets()
+      .filter((target) => target.startsWith("text:"))
+      .map((target) => {
+        const textId = Number(target.split(":")[1]);
+        const sourceRecord = getTextRecord(textId);
+        const element = findVariantTarget(root, target);
+        return sourceRecord && element instanceof HTMLElement
+          ? { ...sourceRecord, element, isVariantInstance: true }
+          : null;
+      })
+      .filter(Boolean);
+  }
+  if (selectionState.kind === "layers") {
+    return getSelectedLayerKeys()
+      .filter((key) => key.startsWith("text:"))
+      .map((key) => getTextRecord(Number(key.split(":")[1])))
+      .filter(Boolean);
+  }
+  const record = getSelectedTextRecord();
+  return record ? [record] : [];
+}
+
 function getSelectedFrameRecord() {
   if (selectedVariantInstanceId !== null) {
     const target = selectedVariantLayerTarget || "component:0";
@@ -434,15 +463,87 @@ function getSelectedFrameRecord() {
     : undefined;
 }
 
+function getSelectedFrameRecords() {
+  if (selectionState.kind === "variant") {
+    const targets = getSelectedVariantLayerTargets().filter((target) => target.startsWith("frame:"));
+    if (targets.length === 0) {
+      const record = getSelectedFrameRecord();
+      return record ? [record] : [];
+    }
+    const preview = componentSet?.querySelector(
+      `.variant-preview[data-variant-instance-id="${CSS.escape(String(selectionState.instanceId))}"]`,
+    );
+    const root = preview?.querySelector(".canvas-root-stack");
+    if (!(root instanceof HTMLElement)) return [];
+    return targets.map((target) => {
+      const frameId = Number(target.split(":")[1]);
+      const sourceRecord = getFrameRecord(frameId);
+      const element = findVariantTarget(root, target);
+      return sourceRecord && element instanceof HTMLElement
+        ? { ...sourceRecord, element, isVariantInstance: true }
+        : null;
+    }).filter(Boolean);
+  }
+  if (selectionState.kind === "layers") {
+    return getSelectedLayerKeys()
+      .filter((key) => key.startsWith("frame:"))
+      .map((key) => getFrameRecord(Number(key.split(":")[1])))
+      .filter(Boolean);
+  }
+  const record = getSelectedFrameRecord();
+  return record ? [record] : [];
+}
+
 function getSelectedVectorRecord() {
   if (selectedVariantInstanceId !== null && selectedVariantLayerTarget?.startsWith("vector:")) {
     const vectorId = Number(selectedVariantLayerTarget.split(":")[1]);
     const sourceRecord = vectorRecords.find((record) => record.id === vectorId);
     const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
     const element = preview?.querySelector(`[data-vector-id="${CSS.escape(String(vectorId))}"]`);
-    if (sourceRecord && element instanceof HTMLElement) return { ...sourceRecord, element, isVariantInstance: true };
+    if (sourceRecord && element instanceof HTMLElement) {
+      return {
+        ...sourceRecord,
+        element,
+        isVariantInstance: true,
+        variantInstanceId: selectedVariantInstanceId,
+      };
+    }
   }
   return selectedCanvasVector
     ? vectorRecords.find((record) => record.element === selectedCanvasVector)
     : undefined;
+}
+
+function getSelectedVectorRecords() {
+  if (selectionState.kind === "variant") {
+    const preview = componentSet?.querySelector(
+      `.variant-preview[data-variant-instance-id="${CSS.escape(String(selectionState.instanceId))}"]`,
+    );
+    const root = preview?.querySelector(".canvas-root-stack");
+    if (!(root instanceof HTMLElement)) return [];
+    return getSelectedVariantLayerTargets()
+      .filter((target) => target.startsWith("vector:"))
+      .map((target) => {
+        const vectorId = Number(target.split(":")[1]);
+        const sourceRecord = getVectorRecord(vectorId);
+        const element = findVariantTarget(root, target);
+        return sourceRecord && element instanceof HTMLElement
+          ? {
+              ...sourceRecord,
+              element,
+              isVariantInstance: true,
+              variantInstanceId: selectionState.instanceId,
+            }
+          : null;
+      })
+      .filter(Boolean);
+  }
+  if (selectionState.kind === "layers") {
+    return getSelectedLayerKeys()
+      .filter((key) => key.startsWith("vector:"))
+      .map((key) => getVectorRecord(Number(key.split(":")[1])))
+      .filter(Boolean);
+  }
+  const record = getSelectedVectorRecord();
+  return record ? [record] : [];
 }

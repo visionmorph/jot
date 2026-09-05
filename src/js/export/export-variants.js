@@ -3,7 +3,7 @@
 function getVariantExportStyle(exportContext, target) {
   const operations = exportContext?.operationsByTarget.get(target) ?? [];
   return Object.fromEntries(operations.flatMap((operation) => {
-    if (["textContent", "disabled", "fill", "stroke"].includes(operation.property)) return [];
+    if (["textContent", "richTextHtml", "disabled", "fill", "stroke"].includes(operation.property)) return [];
     if (operation.property === "visibility") {
       return [["visibility", variantBoolean(operation.value) ? "visible" : "hidden"]];
     }

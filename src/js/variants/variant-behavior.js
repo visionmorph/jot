@@ -31,6 +31,10 @@ function applyVariantOperation(root, operation) {
     target.textContent = String(value ?? "");
     return;
   }
+  if (property === "richTextHtml") {
+    target.innerHTML = String(value ?? "");
+    return;
+  }
   if (property === "visibility") {
     target.style.visibility = variantBoolean(value) ? "visible" : "hidden";
     return;

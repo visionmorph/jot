@@ -108,6 +108,22 @@ let pickerOpacity = 100;
 let isApplyingPickerColor = false;
 let colorPickerDrag = null;
 let hasCustomColorPickerPosition = false;
+let colorPickerTextRangeSelection = null;
+let colorPickerPointerValueGesture = false;
+let colorPickerFieldEditing = false;
+
+function captureColorPickerTextRange(control) {
+  captureTextColorControlRange(control);
+  const selectedTextRecord = getSelectedTextRecord();
+  const textRangeSelection = getActiveTextRangeSelection(selectedTextRecord);
+  colorPickerTextRangeSelection = textRangeSelection ? { ...textRangeSelection } : null;
+}
+
+function syncColorPickerTextRangeHighlight() {
+  const isChangingValue = colorPickerPointerValueGesture || colorPickerFieldEditing;
+  if (colorPickerPopup.hidden || isChangingValue) clearTextColorPickerRangeHighlight();
+  else showTextColorPickerRangeHighlight(colorPickerTextRangeSelection);
+}
 
 function renderColorPicker() {
   const currentColor = hsvToHex(pickerHue, pickerSaturation, pickerValue);
@@ -155,6 +171,7 @@ function positionColorPicker() {
 }
 
 function openColorPicker(control) {
+  captureColorPickerTextRange(control);
   const state = getCustomColorState(control);
   if (!state || !normalizeHexColor(state.color)) return;
   activeColorControl = control;
@@ -165,23 +182,49 @@ function openColorPicker(control) {
   pickerOpacity = state.opacity;
   hasCustomColorPickerPosition = false;
   colorPickerPopup.hidden = false;
+  syncColorPickerTextRangeHighlight();
   syncOpenColorPicker(control, state.color, state.opacity);
   positionColorPicker();
 }
 
 function closeColorPicker() {
-  if (activeColorControl) endHistoryGesture(activeColorControl);
+  const closingControl = activeColorControl;
+  if (closingControl) endHistoryGesture(closingControl);
   colorPickerPopup.hidden = true;
   colorPickerPopup.style.removeProperty("left");
   colorPickerPopup.style.removeProperty("top");
   hasCustomColorPickerPosition = false;
   colorPickerDrag = null;
+  colorPickerPointerValueGesture = false;
+  colorPickerFieldEditing = false;
+  colorPickerTextRangeSelection = null;
+  clearTextColorPickerRangeHighlight();
   activeColorControl = null;
+  scheduleSelectionColorControlsRefresh(closingControl, { refreshWhileFocused: true });
 }
 
 function isColorPickerContent(target) {
   return target instanceof Node && [colorPickerSv, colorPickerSliders, colorPickerFields].some((content) => content?.contains(target));
 }
+
+function beginColorPickerValueChange() {
+  if (document.activeElement === colorPickerHex || document.activeElement === colorPickerOpacityInput) {
+    colorPickerFieldEditing = true;
+  } else {
+    colorPickerPointerValueGesture = true;
+  }
+  syncColorPickerTextRangeHighlight();
+}
+
+function finishColorPickerValueGesture() {
+  if (!colorPickerPointerValueGesture) return;
+  colorPickerPointerValueGesture = false;
+  syncColorPickerTextRangeHighlight();
+}
+
+colorPickerPopup.addEventListener("pointerup", finishColorPickerValueGesture);
+colorPickerPopup.addEventListener("pointercancel", finishColorPickerValueGesture);
+colorPickerPopup.addEventListener("lostpointercapture", finishColorPickerValueGesture);
 
 colorPickerPopup.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 || colorPickerPopup.hidden || isColorPickerContent(event.target)) return;
@@ -219,8 +262,14 @@ colorPickerPopup.addEventListener("pointercancel", finishColorPickerDrag);
 
 function applyPickerColor() {
   if (!(activeColorControl instanceof HTMLElement)) return;
+  const nextColor = hsvToHex(pickerHue, pickerSaturation, pickerValue);
+  const state = getCustomColorState(activeColorControl);
+  if (state && (
+    normalizeHexColor(state.color) !== nextColor
+    || normalizeColorOpacity(state.opacity) !== normalizeColorOpacity(pickerOpacity)
+  )) beginColorPickerValueChange();
   isApplyingPickerColor = true;
-  applyCustomColorValue(activeColorControl, hsvToHex(pickerHue, pickerSaturation, pickerValue), pickerOpacity);
+  applyCustomColorValue(activeColorControl, nextColor, pickerOpacity);
   isApplyingPickerColor = false;
   renderColorPicker();
 }
@@ -241,7 +290,8 @@ function bindColorPickerPointer(surface, update) {
     move(event);
   });
   surface.addEventListener("pointermove", (event) => {
-    if (surface.hasPointerCapture(event.pointerId)) move(event);
+    if (!surface.hasPointerCapture(event.pointerId)) return;
+    move(event);
   });
   const endPointerGesture = () => {
     if (activeColorControl) endHistoryGesture(activeColorControl);
@@ -273,7 +323,14 @@ colorPickerHex?.addEventListener("input", () => {
 colorPickerHex?.addEventListener("focus", () => {
   if (activeColorControl) beginHistoryGesture(activeColorControl);
 });
+colorPickerHex?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  colorPickerFieldEditing = false;
+  syncColorPickerTextRangeHighlight();
+});
 colorPickerHex?.addEventListener("blur", () => {
+  colorPickerFieldEditing = false;
+  requestAnimationFrame(syncColorPickerTextRangeHighlight);
   if (activeColorControl) endHistoryGesture(activeColorControl);
 });
 
@@ -285,7 +342,14 @@ colorPickerOpacityInput?.addEventListener("input", () => {
 colorPickerOpacityInput?.addEventListener("focus", () => {
   if (activeColorControl) beginHistoryGesture(activeColorControl);
 });
+colorPickerOpacityInput?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  colorPickerFieldEditing = false;
+  syncColorPickerTextRangeHighlight();
+});
 colorPickerOpacityInput?.addEventListener("blur", () => {
+  colorPickerFieldEditing = false;
+  requestAnimationFrame(syncColorPickerTextRangeHighlight);
   if (activeColorControl) endHistoryGesture(activeColorControl);
 });
 bindNumberSuffixScrubber(
@@ -311,8 +375,10 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("resize", positionColorPicker);
 document.addEventListener("scroll", positionColorPicker, true);
 
-colorControls.forEach((control) => {
+function bindCustomColorControl(control) {
   if (!(control instanceof HTMLElement)) return;
+  if (control.dataset.colorControlBound === "true") return;
+  control.dataset.colorControlBound = "true";
   const picker = control.querySelector("input[type='color']");
   const hexInput = control.querySelector("[data-color-hex]");
   const opacityInput = control.querySelector("[data-color-opacity]");
@@ -321,10 +387,37 @@ colorControls.forEach((control) => {
   const actionButton = section?.querySelector("[data-color-action]");
   const removeButton = control.querySelector("[data-color-remove-action]");
   const swatch = control.querySelector(".custom-color-swatch");
+  let directSelectionColorRange = null;
+  let isDirectSelectionColorEditing = false;
+
+  const captureDirectSelectionColorRange = () => {
+    if (control.dataset.colorControl !== "selection" || !colorPickerPopup.hidden) return;
+    const record = getSelectedTextRecord();
+    const rangeSelection = getActiveTextRangeSelection(record);
+    directSelectionColorRange = rangeSelection ? { ...rangeSelection } : null;
+    if (!isDirectSelectionColorEditing) showTextColorPickerRangeHighlight(directSelectionColorRange);
+  };
+  const beginDirectSelectionColorEdit = (state, color, opacity) => {
+    if (!directSelectionColorRange || !state) return;
+    if (normalizeHexColor(state.color) === normalizeHexColor(color)
+      && normalizeColorOpacity(state.opacity) === normalizeColorOpacity(opacity)) return;
+    isDirectSelectionColorEditing = true;
+    clearTextColorPickerRangeHighlight();
+  };
+  const finishDirectSelectionColorEdit = () => {
+    if (!directSelectionColorRange) return;
+    isDirectSelectionColorEditing = false;
+    showTextColorPickerRangeHighlight(directSelectionColorRange);
+  };
 
   if (swatch instanceof HTMLElement) {
     swatch.tabIndex = 0;
     swatch.setAttribute("role", "button");
+    swatch.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || (activeColorControl === control && !colorPickerPopup.hidden)) return;
+      captureColorPickerTextRange(control);
+      showTextColorPickerRangeHighlight(colorPickerTextRangeSelection);
+    });
     swatch.addEventListener("click", (event) => {
       event.preventDefault();
       if (activeColorControl === control && !colorPickerPopup.hidden) closeColorPicker();
@@ -344,10 +437,15 @@ colorControls.forEach((control) => {
     applyCustomColorValue(control, picker.value, state.opacity);
   });
   picker?.addEventListener("focus", () => beginHistoryGesture(control));
-  picker?.addEventListener("change", () => endHistoryGesture(control));
+  picker?.addEventListener("change", () => {
+    endHistoryGesture(control);
+    scheduleSelectionColorControlsRefresh(control, { refreshWhileFocused: true });
+  });
   picker?.addEventListener("blur", () => endHistoryGesture(control));
 
   hexInput?.addEventListener("focus", () => {
+    captureTextColorControlRange(control);
+    captureDirectSelectionColorRange();
     beginHistoryGesture(control);
     if (hexInput instanceof HTMLInputElement) hexInput.select();
   });
@@ -367,20 +465,31 @@ colorControls.forEach((control) => {
     if (!/^[\da-f]{6}$/i.test(hexInput.value.trim())) return;
     const color = normalizeHexColor(hexInput.value);
     const state = getCustomColorState(control);
-    if (color && state) applyCustomColorValue(control, color, state.opacity);
+    if (color && state) {
+      beginDirectSelectionColorEdit(state, color, state.opacity);
+      applyCustomColorValue(control, color, state.opacity);
+    }
   });
   hexInput?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
     commitHexInput();
+    finishDirectSelectionColorEdit();
     if (hexInput instanceof HTMLInputElement) hexInput.select();
+    endHistoryGesture(control);
+    scheduleSelectionColorControlsRefresh(control, { refreshWhileFocused: true });
   });
   hexInput?.addEventListener("blur", () => {
     commitHexInput();
     endHistoryGesture(control);
+    finishDirectSelectionColorEdit();
+    releaseTextColorControlRange(control);
+    scheduleSelectionColorControlsRefresh(control);
   });
 
   opacityInput?.addEventListener("focus", () => {
+    captureTextColorControlRange(control);
+    captureDirectSelectionColorRange();
     beginHistoryGesture(control);
     if (opacityInput instanceof HTMLInputElement) opacityInput.select();
   });
@@ -388,6 +497,7 @@ colorControls.forEach((control) => {
     if (!(opacityInput instanceof HTMLInputElement) || opacityInput.value.trim() === "") return;
     const state = getCustomColorState(control);
     if (!state || !Number.isFinite(Number(opacityInput.value))) return;
+    beginDirectSelectionColorEdit(state, state.color, opacityInput.value);
     applyCustomColorValue(control, state.color, opacityInput.value);
   });
   opacityInput?.addEventListener("keydown", (event) => {
@@ -396,6 +506,7 @@ colorControls.forEach((control) => {
     const state = getCustomColorState(control);
     if (!state) return;
     const direction = event.key === "ArrowUp" ? 1 : -1;
+    beginDirectSelectionColorEdit(state, state.color, state.opacity + direction);
     applyCustomColorValue(control, state.color, state.opacity + direction);
   });
   opacityInput?.addEventListener("blur", () => {
@@ -404,6 +515,9 @@ colorControls.forEach((control) => {
       syncCustomColorControl(state.picker, state.color, state.opacity);
     }
     endHistoryGesture(control);
+    finishDirectSelectionColorEdit();
+    releaseTextColorControlRange(control);
+    scheduleSelectionColorControlsRefresh(control);
   });
   bindNumberSuffixScrubber(
     opacitySuffix,
@@ -411,6 +525,25 @@ colorControls.forEach((control) => {
     control,
     () => control,
   );
+
+  const captureTextRangeBeforePointerFocus = () => {
+    captureTextColorControlRange(control);
+    captureDirectSelectionColorRange();
+  };
+  hexInput?.addEventListener("pointerdown", captureTextRangeBeforePointerFocus);
+  opacityInput?.addEventListener("pointerdown", captureTextRangeBeforePointerFocus);
+  opacitySuffix?.addEventListener("pointerdown", captureTextRangeBeforePointerFocus, true);
+  const releaseScrubbedTextRange = () => releaseTextColorControlRange(control);
+  opacitySuffix?.addEventListener("pointerup", releaseScrubbedTextRange);
+  opacitySuffix?.addEventListener("pointercancel", releaseScrubbedTextRange);
+  opacitySuffix?.addEventListener("lostpointercapture", releaseScrubbedTextRange);
+  control.addEventListener("focusout", () => {
+    requestAnimationFrame(() => {
+      if (selectionColorSection?.contains(document.activeElement)) return;
+      if (activeColorControl === control && !colorPickerPopup.hidden) return;
+      scheduleSelectionColorControlsRefresh(control);
+    });
+  });
 
   actionButton?.addEventListener("click", () => {
     const state = getCustomColorState(control);
@@ -422,12 +555,16 @@ colorControls.forEach((control) => {
       text: "#000000",
       vector: "#000000",
     };
-    const nextColor = normalizeHexColor(control.dataset.lastColor)
+    const mixedSelectionPaint = getMixedSelectionPaintState(control.dataset.colorControl);
+    const firstPaint = mixedSelectionPaint?.firstPaint ?? null;
+    const nextColor = normalizeHexColor(firstPaint?.color)
+      || (mixedSelectionPaint?.allEmpty ? fallbackColors[control.dataset.colorControl] : null)
+      || normalizeHexColor(control.dataset.lastColor)
       || fallbackColors[control.dataset.colorControl]
       || "#000000";
-    const nextOpacity = control.dataset.colorControl === "text" && !normalizeHexColor(state.color)
-      ? 100
-      : state.opacity;
+    const nextOpacity = firstPaint?.color
+      ? normalizeColorOpacity(firstPaint.opacity)
+      : control.dataset.colorControl === "text" && !normalizeHexColor(state.color) ? 100 : state.opacity;
     beginHistoryGesture(control);
     applyCustomColorValue(control, nextColor, nextOpacity);
     endHistoryGesture(control);
@@ -442,7 +579,29 @@ colorControls.forEach((control) => {
       if (activeColorControl === control) closeColorPicker();
     }
   });
-});
+}
+
+let selectionColorRefreshFrame = null;
+let selectionColorRefreshWhileFocused = false;
+
+function scheduleSelectionColorControlsRefresh(control, { refreshWhileFocused = false } = {}) {
+  if (!(control instanceof HTMLElement)
+    || control.dataset.colorControl !== "selection") return;
+  selectionColorRefreshWhileFocused ||= refreshWhileFocused;
+  if (selectionColorRefreshFrame !== null) return;
+  selectionColorRefreshFrame = requestAnimationFrame(() => {
+    selectionColorRefreshFrame = null;
+    const shouldRefreshWhileFocused = selectionColorRefreshWhileFocused;
+    selectionColorRefreshWhileFocused = false;
+    const focusIsInsideSelectionColors = selectionColorSection?.contains(document.activeElement);
+    const selectionColorPickerIsOpen = activeColorControl?.dataset.colorControl === "selection"
+      && !colorPickerPopup.hidden;
+    if (!shouldRefreshWhileFocused && (focusIsInsideSelectionColors || selectionColorPickerIsOpen)) return;
+    updateInspector();
+  });
+}
+
+colorControls.forEach(bindCustomColorControl);
 
 if (colorPicker instanceof HTMLInputElement) {
   syncCustomColorControl(colorPicker, canvasColorValue, canvasColorOpacity);

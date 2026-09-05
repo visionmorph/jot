@@ -4,7 +4,10 @@ let variantRenderFrame = null;
 
 function syncVariantTextPreviewContent(textId, editingElement = null) {
   const target = `text:${textId}`;
-  const fallbackValue = getTextRecord(textId)?.element.textContent ?? "";
+  const sourceElement = getTextRecord(textId)?.element;
+  const fallbackRunData = getCurrentTextRunData(sourceElement);
+  const fallbackValue = fallbackRunData.textContent;
+  const fallbackHtml = fallbackRunData.html;
   componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
     const instance = getVariantInstance(Number(preview.dataset.variantInstanceId));
     const root = preview.querySelector(".canvas-root-stack");
@@ -13,7 +16,12 @@ function syncVariantTextPreviewContent(textId, editingElement = null) {
     const textOperation = resolveVariantOperations(instance)
       .filter((operation) => operation.target === target && operation.property === "textContent")
       .pop();
-    text.textContent = String(textOperation?.value ?? fallbackValue);
+    const richTextOperation = resolveVariantOperations(instance)
+      .filter((operation) => operation.target === target && operation.property === "richTextHtml")
+      .pop();
+    if (richTextOperation) text.innerHTML = String(richTextOperation.value ?? "");
+    else if (textOperation) text.textContent = String(textOperation.value ?? "");
+    else text.innerHTML = fallbackHtml || fallbackValue;
   });
 }
 
@@ -239,11 +247,18 @@ function renderVariantInstances() {
         beginEditing(event);
       });
       text.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && !text.isContentEditable) beginEditing(event);
+        if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey
+          && !text.isContentEditable && getSelectedVariantInstanceIds().length <= 1
+          && getSelectedVariantLayerTargets().length <= 1) beginEditing(event);
       });
       text.addEventListener("input", () => {
         recordHistoryForGesture(text);
-        setVariantTextOverride(instance, textId, text.textContent ?? "", { render: false });
+        const runData = getCurrentTextRunData(text);
+        if (runData.hasRuns) {
+          upsertLocalVariantOverride(instance, target, "richTextHtml", runData.html);
+        } else {
+          setVariantTextOverride(instance, textId, text.textContent ?? "", { render: false });
+        }
         syncVariantTextPreviewContent(textId, text);
       });
       text.addEventListener("blur", () => {
@@ -266,7 +281,7 @@ function renderVariantInstances() {
         reorderVariantInstance(instance.id, variantModel.getInstances().indexOf(instance) + move);
         return;
       }
-      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.key !== " ") return;
       event.preventDefault();
       selectVariantInstance(instance.id);
     });

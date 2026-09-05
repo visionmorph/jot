@@ -119,15 +119,28 @@ function selectVariantLayerTarget(instanceId, target, additive = false, componen
 }
 
 function getSelectedVariantLayerTargets() {
+  if (selectionState.kind === "variants") return selectionState.targets ?? [];
   if (selectionState.kind !== "variant") return [];
   if (Array.isArray(selectionState.targets)) return selectionState.targets;
   return selectionState.target === null ? [] : [selectionState.target];
 }
 
 function isVariantLayerTargetSelected(instanceId, target) {
-  return selectionState.kind === "variant"
-    && selectionState.instanceId === instanceId
+  return isVariantInstanceSelected(instanceId)
     && getSelectedVariantLayerTargets().includes(target);
+}
+
+function selectVariantInstancesLayerTargetsState(instanceIds, targets, primaryInstanceId = null, componentId = currentComponent?.id) {
+  const keys = [...new Set(targets)].filter((key) => getElementForLayerKey(key) instanceof HTMLElement);
+  const normalized = { keys, primaryKey: getShallowestPrimaryLayerKey(keys) };
+  if (!selectVariantInstancesState(instanceIds, primaryInstanceId, componentId)) return false;
+  selectionState = {
+    ...selectionState,
+    targets: normalized.keys,
+    anchorTarget: normalized.primaryKey,
+    target: normalized.primaryKey,
+  };
+  return true;
 }
 
 function getSelectedVariantInstanceIds() {
@@ -211,7 +224,7 @@ function captureSelectionState() {
     return { ...selectionState, targets: [...getSelectedVariantLayerTargets()] };
   }
   if (selectionState.kind === "variants") {
-    return { ...selectionState, instanceIds: [...selectionState.instanceIds] };
+    return { ...selectionState, instanceIds: [...selectionState.instanceIds], targets: [...getSelectedVariantLayerTargets()] };
   }
   return { ...selectionState };
 }
@@ -241,8 +254,9 @@ function restoreSelectionState(snapshot) {
     return;
   }
   if (savedSelection?.kind === "variants" && savedSelection.componentId === currentComponent?.id) {
-    if (selectVariantInstancesState(
+    if (selectVariantInstancesLayerTargetsState(
       savedSelection.instanceIds ?? [],
+      savedSelection.targets ?? [],
       savedSelection.primaryInstanceId ?? null,
       savedSelection.componentId,
     )) return;
@@ -315,7 +329,7 @@ Object.defineProperties(globalThis, {
   },
   selectedVariantLayerTarget: {
     configurable: true,
-    get: () => selectionState.kind === "variant" ? selectionState.target : null,
+    get: () => ["variant", "variants"].includes(selectionState.kind) ? selectionState.target ?? null : null,
   },
   selectedVariantInstanceIds: {
     configurable: true,

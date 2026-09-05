@@ -27,6 +27,7 @@ function captureWorkspaceState() {
       dataset: { ...record.element.dataset },
       style: record.element.getAttribute("style"),
       textContent: record.element.textContent ?? "",
+      richTextHtml: record.element.innerHTML,
       contentEditable: record.element.contentEditable,
     })),
     vectors: vectorRecords.map((record) => ({
@@ -236,7 +237,8 @@ function applyWorkspaceSnapshot(snapshot, preparedVectorSvgs) {
     entry.record.isNew = entry.isNew;
     restoreElementState(entry.record.element, entry.dataset, entry.style);
     syncLayerVisibility(entry.record.element);
-    entry.record.element.textContent = entry.textContent;
+    if (typeof entry.richTextHtml === "string") entry.record.element.innerHTML = entry.richTextHtml;
+    else entry.record.element.textContent = entry.textContent;
     entry.record.element.contentEditable = entry.contentEditable;
     return entry.record;
   });

@@ -153,6 +153,18 @@ canvas?.addEventListener("pointerdown", (event) => {
   // Variant child selection and dragging are handled by the shared canvas
   // layer gesture. This branch owns only whole-variant selection.
   if (target.kind === "variant-layer") return;
+  const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+  if (additive) {
+    const selectedIds = getSelectedVariantInstanceIds();
+    const nextIds = selectedIds.includes(target.instanceId)
+      ? selectedIds.filter((instanceId) => instanceId !== target.instanceId)
+      : [...selectedIds, target.instanceId];
+    const primaryInstanceId = nextIds.includes(target.instanceId)
+      ? target.instanceId
+      : nextIds[nextIds.length - 1] ?? null;
+    selectVariantInstances(nextIds, primaryInstanceId, { render: false });
+    return;
+  }
   if (isVariantInstanceSelected(target.instanceId)
     && getSelectedVariantInstanceIds().length > 1) {
     clearMasterSelectionForVariant();
@@ -209,6 +221,49 @@ function clearMasterSelectionForVariant() {
   clearElementSelection();
 }
 
+function syncVariantInstanceSelectionUI() {
+  const selectedIds = new Set(getSelectedVariantInstanceIds());
+  const selectsWholeVariants = selectionState.kind === "variants"
+    || (selectionState.kind === "variant" && getSelectedVariantLayerTargets().length === 0);
+  document.querySelectorAll(".variant-preview").forEach((preview) => {
+    const instanceId = Number(preview.dataset.variantInstanceId);
+    const isSelectedInstance = selectedIds.has(instanceId);
+    preview.classList.toggle("is-selected", isSelectedInstance);
+    preview.setAttribute("aria-selected", String(isSelectedInstance));
+    const root = preview.querySelector(".canvas-root-stack");
+    if (root instanceof HTMLElement) {
+      const isSelectedRoot = isSelectedInstance && selectsWholeVariants;
+      root.classList.toggle("is-selected", isSelectedRoot);
+      root.setAttribute("aria-selected", String(isSelectedRoot));
+    }
+    preview.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((layerElement) => {
+      const type = layerElement.classList.contains("canvas-frame")
+        ? "frame"
+        : layerElement.classList.contains("canvas-text") ? "text" : "vector";
+      const id = Number(layerElement.dataset[`${type}Id`]);
+      const isSelectedLayer = selectionState.kind === "variant"
+        && selectionState.instanceId === instanceId
+        && Number.isFinite(id)
+        && selectedVariantLayerTargets.has(`${type}:${id}`);
+      layerElement.classList.toggle("is-selected", isSelectedLayer);
+      layerElement.setAttribute("aria-selected", String(isSelectedLayer));
+    });
+  });
+  syncLayerTreeSelectionStyles();
+  updateInspector();
+  syncResizeOverlay();
+}
+
+function selectVariantInstances(instanceIds, primaryInstanceId = null, options = {}) {
+  selectVariantInstancesState(instanceIds, primaryInstanceId);
+  clearMasterSelectionForVariant();
+  if (options.render !== false) renderTree();
+  else syncVariantInstanceSelectionUI();
+  if (options.updateProps !== false) renderComponentProps();
+  requestAnimationFrame(syncResizeOverlay);
+  return getSelectedVariantInstanceIds().length > 0;
+}
+
 function selectVariantInstance(instanceId, options = {}) {
   if (!getVariantInstance(instanceId)) return false;
   const hasLayerTargets = Object.prototype.hasOwnProperty.call(options, "layerTargets");
@@ -234,51 +289,64 @@ function selectVariantInstance(instanceId, options = {}) {
   }
   clearMasterSelectionForVariant();
   if (options.render !== false) renderTree();
-  else {
-    document.querySelectorAll(".variant-preview").forEach((preview) => {
-      const isSelectedInstance = Number(preview.dataset.variantInstanceId) === instanceId;
-      preview.classList.toggle("is-selected", isSelectedInstance);
-      preview.setAttribute("aria-selected", String(isSelectedInstance));
-      const root = preview.querySelector(".canvas-root-stack");
-      if (root instanceof HTMLElement) {
-        const isSelectedRoot = isSelectedInstance && selectedVariantLayerTarget === null;
-        root.classList.toggle("is-selected", isSelectedRoot);
-        root.setAttribute("aria-selected", String(isSelectedRoot));
-      }
-      preview.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((layerElement) => {
-        const type = layerElement.classList.contains("canvas-frame")
-          ? "frame"
-          : layerElement.classList.contains("canvas-text") ? "text" : "vector";
-        const id = Number(layerElement.dataset[`${type}Id`]);
-        const isSelectedLayer = isSelectedInstance
-          && Number.isFinite(id)
-          && selectedVariantLayerTargets.has(`${type}:${id}`);
-        layerElement.classList.toggle("is-selected", isSelectedLayer);
-        layerElement.setAttribute("aria-selected", String(isSelectedLayer));
-      });
-    });
-    syncLayerTreeSelectionStyles();
-    updateInspector();
-    syncResizeOverlay();
-  }
+  else syncVariantInstanceSelectionUI();
   requestAnimationFrame(syncResizeOverlay);
+  return true;
+}
+
+function getInitialVariantData() {
+  return {
+    name: "Variant 1",
+    componentId: currentComponent.id,
+    parentVariantId: null,
+    propValues: Object.fromEntries(variantModel.getProps()
+      .filter((prop) => prop.type !== "action")
+      .map((prop) => [prop.id, getVariantPropDefaultValue(prop)])),
+    overrides: [],
+  };
+}
+
+function ensureInitialVariantInstance() {
+  if (variantModel.getInstances().length === 0) {
+    variantModel.addInstance(getInitialVariantData());
+  }
+}
+
+function captureSelectedVariantCopies() {
+  if (!currentComponent || getSelectedVariantLayerTargets().length > 0) return [];
+  const ids = new Set(getSelectedVariantInstanceIds());
+  const instances = variantModel.getInstances().filter((instance) => ids.has(instance.id));
+  if (selectedComponentId === currentComponent.id && variantModel.getInstances().length === 0) {
+    instances.push(getInitialVariantData());
+  }
+  return instances.map((instance) => ({
+    name: instance.name,
+    propValues: structuredClone(instance.propValues ?? {}),
+    overrides: structuredClone([...new Map(getCascadedVariantOverrides(instance)
+      .map((override) => [JSON.stringify([override.target, override.property]), override])).values()]),
+  }));
+}
+
+function insertVariantCopies(instances) {
+  if (!currentComponent || instances.length === 0) return false;
+  recordHistory();
+  ensureInitialVariantInstance();
+  const copies = instances.map((instance) => variantModel.addInstance({
+    ...structuredClone(instance),
+    name: `${instance.name} copy`,
+    componentId: currentComponent.id,
+    parentVariantId: null,
+  }));
+  selectVariantInstancesState(copies.map((instance) => instance.id));
+  clearMasterSelectionForVariant();
+  renderTree();
   return true;
 }
 
 function addVariantInstance({ render = true } = {}) {
   if (!currentComponent) return null;
   recordHistory();
-  if (variantModel.getInstances().length === 0) {
-    variantModel.addInstance({
-      name: "Variant 1",
-      componentId: currentComponent.id,
-      parentVariantId: null,
-      propValues: Object.fromEntries(variantModel.getProps()
-        .filter((prop) => prop.type !== "action")
-        .map((prop) => [prop.id, getVariantPropDefaultValue(prop)])),
-      overrides: [],
-    });
-  }
+  ensureInitialVariantInstance();
   const sourceInstance = getVariantInstance() ?? getDefaultVariantInstance();
   const index = variantModel.getInstances().length;
   const instance = variantModel.addInstance({

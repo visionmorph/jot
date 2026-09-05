@@ -178,6 +178,9 @@ function selectCanvasFrame(frameElement, additive = false) {
 }
 
 function selectCanvasText(textElement, additive = false) {
+  if (!textElement.isContentEditable && typeof clearActiveTextRangeSelection === "function") {
+    clearActiveTextRangeSelection();
+  }
   const record = textRecords.find((textRecord) => textRecord.element === textElement);
   if (record) expandFramePath(record.parentFrameId);
   if (!record) return;

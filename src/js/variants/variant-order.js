@@ -116,10 +116,11 @@ function bindVariantReorderPointer(preview, instance) {
     if (event.button !== 0 || activeTool !== "select") return;
     if (event.target instanceof HTMLElement && event.target.isContentEditable) return;
     const selectedIds = getSelectedVariantInstanceIds();
+    const additive = event.shiftKey || event.ctrlKey || event.metaKey;
     const instanceIds = selectedIds.includes(instance.id) ? selectedIds : [instance.id];
     const clickTarget = resolveVariantCanvasSelectionTarget(event.target);
     if (clickTarget?.kind === "variant-layer") return;
-    if (!selectedIds.includes(instance.id)) selectVariantInstance(instance.id, { render: false });
+    if (!additive && !selectedIds.includes(instance.id)) selectVariantInstance(instance.id, { render: false });
     variantPointerDrag = {
       pointerId: event.pointerId,
       instanceId: instance.id,
@@ -128,7 +129,7 @@ function bindVariantReorderPointer(preview, instance) {
         .map((candidate) => candidate.id),
       startX: event.clientX,
       startY: event.clientY,
-      selectOnClick: selectedIds.length > 1 && selectedIds.includes(instance.id),
+      selectOnClick: !additive && selectedIds.length > 1 && selectedIds.includes(instance.id),
       clickLayerTarget: clickTarget?.instanceId === instance.id ? clickTarget.target : null,
       hasStarted: false,
       drop: null,

@@ -5,11 +5,23 @@ function getSizeInputContext(input) {
   const textDimension = input.dataset.textLayerSize;
   if (frameDimension === "width" || frameDimension === "height") {
     const record = getSelectedFrameRecord();
-    return record ? { type: "frame", record, dimension: frameDimension } : null;
+    return record ? {
+      type: "frame",
+      record,
+      records: typeof getSelectedFrameLayoutRecords === "function"
+        ? getSelectedFrameLayoutRecords()
+        : getSelectedFrameRecords(),
+      dimension: frameDimension,
+    } : null;
   }
   if (textDimension === "width" || textDimension === "height") {
     const record = getSelectedTextRecord();
-    return record ? { type: "text", record, dimension: textDimension } : null;
+    return record ? {
+      type: "text",
+      record,
+      records: getSelectedTextRecords(),
+      dimension: textDimension,
+    } : null;
   }
   return null;
 }
@@ -57,7 +69,7 @@ function getRenderedSizeValue(element, dimension, fallback = 100) {
 function applySizeInputValue(input, rawValue = input.value, normalize = true) {
   const context = getSizeInputContext(input);
   if (!context) return false;
-  const { type, record, dimension } = context;
+  const { type, record, records = [record], dimension } = context;
   const element = record.element;
   const trimmedValue = rawValue.trim();
   const requestedMode = /^hug$/i.test(trimmedValue)
@@ -74,63 +86,146 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
     : null;
 
   if (selectedVariantInstanceId !== null && type === "frame" && record.isVariantInstance) {
-    const preservedFixedValue = fixedNumber ?? (
+    const primaryFixedValue = fixedNumber ?? (
       Number(element.dataset[dimension])
       || Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(element.getBoundingClientRect()[dimension]))
     );
-    const value = numberMatch
-      ? `${fixedNumber}px`
-      : requestedMode === "fill" ? "100%" : requestedMode === "fixed" ? `${preservedFixedValue}px` : "auto";
-    recordHistoryForGesture(input);
-    setSelectedVariantFrameStyleOverride(dimension, value, { record: false });
+    const edits = records.map((candidate) => {
+      const candidateElement = candidate.element;
+      const preservedFixedValue = fixedNumber ?? (
+        Number(candidateElement.dataset[dimension])
+        || Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(candidateElement.getBoundingClientRect()[dimension]))
+      );
+      const value = numberMatch
+        ? `${fixedNumber}px`
+        : requestedMode === "fill" ? "100%" : requestedMode === "fixed" ? `${preservedFixedValue}px` : "auto";
+      const target = getFrameRecordTarget(candidate);
+      const instance = getVariantInstance(candidate.variantInstanceId ?? selectedVariantInstanceId);
+      const current = instance ? getEffectiveVariantOverride(instance, target, dimension) : null;
+      return { candidate, instance, preservedFixedValue, value, target, changed: String(current?.value ?? "") !== value };
+    });
+    const editedInstanceIds = new Set(edits.map(({ instance }) => instance?.id).filter(Number.isFinite));
+    if (edits.some((edit) => edit.changed)) recordHistoryForGesture(input);
+    edits.forEach(({ candidate, instance, preservedFixedValue, value, target }) => {
+      const candidateElement = candidate.element;
+      candidateElement.style[dimension] = value;
+      candidateElement.dataset[`${dimension}Mode`] = numberMatch ? "fixed" : requestedMode;
+      if (numberMatch || requestedMode === "fixed") candidateElement.dataset[dimension] = String(preservedFixedValue);
+      if (instance) upsertVariantOverrideForEditedInstances(
+        instance, target, dimension, value, editedInstanceIds,
+      );
+      syncVariantLayerStylePreviews(target, dimension, candidateElement);
+    });
     if (normalize) input.value = numberMatch || requestedMode === "fixed"
-      ? String(preservedFixedValue)
+      ? String(primaryFixedValue)
       : getRenderedSizeValue(element, dimension);
     const wrapper = input.closest("[data-size-combobox]");
     if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, numberMatch ? "fixed" : requestedMode);
+    if (normalize && records.length > 1) syncInspectorToSelectedFrame();
+    requestAnimationFrame(syncResizeOverlay);
     return true;
   }
   if (selectedVariantInstanceId !== null && type === "text" && record.isVariantInstance) {
-    const preservedFixedValue = fixedNumber ?? (
+    const primaryFixedValue = fixedNumber ?? (
       Number(element.dataset[dimension])
       || Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(element.getBoundingClientRect()[dimension]))
     );
-    const value = numberMatch
-      ? `${fixedNumber}px`
-      : requestedMode === "fill" ? "100%" : requestedMode === "fixed" ? `${preservedFixedValue}px` : "auto";
-    recordHistoryForGesture(input);
-    element.style[dimension] = value;
-    element.dataset[`${dimension}Mode`] = numberMatch ? "fixed" : requestedMode;
-    if (numberMatch || requestedMode === "fixed") element.dataset[dimension] = String(preservedFixedValue);
-    setSelectedVariantLayerOverride(dimension, value);
+    const instance = getVariantInstance();
+    const edits = records.map((candidate) => {
+      const candidateElement = candidate.element;
+      const preservedFixedValue = fixedNumber ?? (
+        Number(candidateElement.dataset[dimension])
+        || Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(candidateElement.getBoundingClientRect()[dimension]))
+      );
+      const value = numberMatch
+        ? `${fixedNumber}px`
+        : requestedMode === "fill" ? "100%" : requestedMode === "fixed" ? `${preservedFixedValue}px` : "auto";
+      const target = `text:${candidate.id}`;
+      const current = instance ? getEffectiveVariantOverride(instance, target, dimension) : null;
+      return { candidate, preservedFixedValue, value, target, changed: String(current?.value ?? "") !== value };
+    });
+    if (edits.some((edit) => edit.changed)) recordHistoryForGesture(input);
+    edits.forEach(({ candidate, preservedFixedValue, value, target }) => {
+      const candidateElement = candidate.element;
+      candidateElement.style[dimension] = value;
+      candidateElement.dataset[`${dimension}Mode`] = numberMatch ? "fixed" : requestedMode;
+      if (numberMatch || requestedMode === "fixed") candidateElement.dataset[dimension] = String(preservedFixedValue);
+      if (instance) upsertLocalVariantOverride(instance, target, dimension, value);
+      syncVariantLayerStylePreviews(target, dimension, candidateElement);
+    });
     if (normalize) input.value = numberMatch || requestedMode === "fixed"
-      ? String(preservedFixedValue)
+      ? String(primaryFixedValue)
       : getRenderedSizeValue(element, dimension);
     const wrapper = input.closest("[data-size-combobox]");
     if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, numberMatch ? "fixed" : requestedMode);
+    if (normalize && records.length > 1) syncSelectedTextSizeInputs();
     requestAnimationFrame(syncResizeOverlay);
     return true;
   }
 
-  const currentMode = getLayerDimensionMode(element, dimension, type === "text" ? "hug" : "fixed");
-  const mode = numberMatch ? "fixed" : requestedMode;
-  let fixedValue = Number(element.dataset[dimension]);
-  if (numberMatch) fixedValue = fixedNumber;
-  if (mode === "fixed" && !Number.isFinite(fixedValue)) {
-    fixedValue = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(element.getBoundingClientRect()[dimension]));
+  if (type === "text") {
+    const mode = numberMatch ? "fixed" : requestedMode;
+    const hasChange = records.some((candidate) => {
+      const candidateMode = getLayerDimensionMode(candidate.element, dimension, "hug");
+      return candidateMode !== mode
+        || (mode === "fixed" && numberMatch && Number(candidate.element.dataset[dimension]) !== fixedNumber);
+    });
+    if (hasChange) recordHistoryForGesture(input);
+    records.forEach((candidate) => {
+      let candidateFixedValue = fixedNumber ?? Number(candidate.element.dataset[dimension]);
+      if (mode === "fixed" && !Number.isFinite(candidateFixedValue)) {
+        candidateFixedValue = Math.max(
+          MIN_INTERACTIVE_LAYER_SIZE,
+          Math.round(candidate.element.getBoundingClientRect()[dimension]),
+        );
+      }
+      candidate.element.dataset[`${dimension}Mode`] = mode;
+      if (mode === "fixed") candidate.element.dataset[dimension] = String(candidateFixedValue);
+      applyLayerSizing("text", candidate);
+    });
+    if (hasChange && variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    if (normalize) input.value = mode === "fixed"
+      ? String(fixedNumber ?? Number(element.dataset[dimension]))
+      : getRenderedSizeValue(element, dimension);
+    const wrapper = input.closest("[data-size-combobox]");
+    if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
+    if (normalize && records.length > 1) syncSelectedTextSizeInputs();
+    requestAnimationFrame(syncResizeOverlay);
+    return true;
   }
-  const hasChange = currentMode !== mode
-    || (mode === "fixed" && Number(element.dataset[dimension]) !== fixedValue);
-  if (hasChange) recordHistoryForGesture(input);
 
-  element.dataset[`${dimension}Mode`] = mode;
-  if (mode === "fixed") element.dataset[dimension] = String(fixedValue);
-  applyLayerSizing(type, record);
+  const mode = numberMatch ? "fixed" : requestedMode;
+  const edits = records.map((candidate) => {
+    let candidateFixedValue = fixedNumber ?? Number(candidate.element.dataset[dimension]);
+    if (mode === "fixed" && !Number.isFinite(candidateFixedValue)) {
+      candidateFixedValue = Math.max(
+        MIN_INTERACTIVE_LAYER_SIZE,
+        Math.round(candidate.element.getBoundingClientRect()[dimension]),
+      );
+    }
+    const currentMode = getLayerDimensionMode(candidate.element, dimension, "fixed");
+    return {
+      candidate,
+      candidateFixedValue,
+      changed: currentMode !== mode
+        || (mode === "fixed" && Number(candidate.element.dataset[dimension]) !== candidateFixedValue),
+    };
+  });
+  const hasChange = edits.some((edit) => edit.changed);
+  if (hasChange) recordHistoryForGesture(input);
+  edits.forEach(({ candidate, candidateFixedValue }) => {
+    candidate.element.dataset[`${dimension}Mode`] = mode;
+    if (mode === "fixed") candidate.element.dataset[dimension] = String(candidateFixedValue);
+    applyLayerSizing(type, candidate);
+  });
+  if (hasChange) scheduleSelectedFramePreviewRender(records);
+  const primaryFixedValue = fixedNumber ?? Number(element.dataset[dimension]);
   if (normalize) input.value = mode === "fixed"
-    ? String(fixedValue)
+    ? String(primaryFixedValue)
     : getRenderedSizeValue(element, dimension);
   const wrapper = input.closest("[data-size-combobox]");
   if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
+  if (normalize && records.length > 1) syncInspectorToSelectedFrame();
   requestAnimationFrame(syncResizeOverlay);
   return true;
 }

@@ -154,6 +154,24 @@ function getExportComponentProps({
   });
 }
 
+function renderExportRichTextNode(node) {
+  if (node.nodeType === Node.TEXT_NODE) return `{${JSON.stringify(node.textContent ?? "")}}`;
+  if (!(node instanceof HTMLElement)) return "";
+  const content = Array.from(node.childNodes).map(renderExportRichTextNode).join("");
+  const color = node.style.color;
+  return color
+    ? `<span style={{ color: ${JSON.stringify(color)} }}>${content}</span>`
+    : content;
+}
+
+function renderExportTextContent(element, stringProp) {
+  if (stringProp) return `{${stringProp.exportName}}`;
+  if (!element.querySelector("[data-rich-text-color]")) {
+    return `{${JSON.stringify(element.textContent || "")}}`;
+  }
+  return Array.from(element.childNodes).map(renderExportRichTextNode).join("");
+}
+
 function renderExportLayer(layer, depth, exportProps, exportContext = null, exportClasses = null) {
   const indent = "  ".repeat(depth);
   const record = getVariantExportRecord(layer.type, layer.record, exportContext);
@@ -166,13 +184,12 @@ function renderExportLayer(layer, depth, exportProps, exportContext = null, expo
     return renderExportVector(record, depth, exportProps, variantStyle, className);
   }
   if (layer.type === "text") {
-    const value = record.element.textContent || "";
     const stringProp = exportProps.find((prop) => prop.targetTextId === record.id && prop.property === "textContent");
-    const content = stringProp ? stringProp.exportName : JSON.stringify(value);
+    const content = renderExportTextContent(record.element, stringProp);
     const textVisibilityProp = findVisibilityProp(exportProps, "text", record.id);
     const variantStyle = getVariantExportStyle(exportContext, target);
     const { style: textStyleObject, rawProperties: textRawProperties } = withVisibilityStyle({ ...getExportTextStyle(record), ...variantStyle }, textVisibilityProp);
-    return `${indent}<span${className ? ` className=${JSON.stringify(className)}` : ""} style={${formatReactStyle(textStyleObject, textRawProperties)}}>{${content}}</span>`;
+    return `${indent}<span${className ? ` className=${JSON.stringify(className)}` : ""} style={${formatReactStyle(textStyleObject, textRawProperties)}}>${content}</span>`;
   }
 
   const children = record.isComponent

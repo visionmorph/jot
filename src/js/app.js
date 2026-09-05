@@ -1,5 +1,35 @@
 /* Application initialization, global shortcuts, and startup rendering. */
 
+let copiedVariantSelection = null;
+
+function isClipboardTextEditing(target) {
+  return target instanceof HTMLElement && (target.isContentEditable
+    || Boolean(target.closest("input, textarea, select, .props-panel")));
+}
+
+document.addEventListener("copy", (event) => {
+  if (isClipboardTextEditing(event.target) || !event.clipboardData
+    || getSelectedVariantLayerTargets().length > 0) return;
+  const instances = captureSelectedVariantCopies();
+  if (instances.length === 0) return;
+  const token = `Jot variants ${crypto.randomUUID()}`;
+  copiedVariantSelection = {
+    token,
+    component: currentComponent,
+    instances,
+  };
+  event.clipboardData.setData("text/plain", token);
+  event.preventDefault();
+});
+
+document.addEventListener("paste", (event) => {
+  if (isClipboardTextEditing(event.target) || !copiedVariantSelection
+    || copiedVariantSelection.component !== currentComponent
+    || event.clipboardData?.getData("text/plain") !== copiedVariantSelection.token) return;
+  event.preventDefault();
+  insertVariantCopies(copiedVariantSelection.instances);
+});
+
 document.addEventListener("keydown", (event) => {
   const shortcutTarget = event.target;
   const isContentEditing = shortcutTarget instanceof HTMLElement && shortcutTarget.isContentEditable;
@@ -53,7 +83,7 @@ document.addEventListener("keydown", (event) => {
   }
 
   if (!isTyping && event.key === "Tab" && !isCommandShortcut && !event.altKey) {
-    if (getPrimaryLayerDescriptor()) {
+    if (getPrimaryLayerDescriptor() || (!event.shiftKey && getSelectedVariantInstanceIds().length > 1)) {
       event.preventDefault();
       selectSiblingLayer(event.shiftKey ? -1 : 1);
       return;
@@ -62,7 +92,9 @@ document.addEventListener("keydown", (event) => {
 
   if (!isTyping && event.key === "Enter" && !isCommandShortcut && !event.altKey) {
     const selectedLayer = getPrimaryLayerDescriptor();
-    if (!event.shiftKey && selectedLayer?.type === "text") {
+    if (!event.shiftKey && selectedLayer?.type === "text"
+      && getSelectedVariantInstanceIds().length <= 1
+      && getSelectedVariantLayerTargets().length <= 1 && selectedLayerKeys.size <= 1) {
       event.preventDefault();
       startEditingText(selectedLayer.record.element);
       return;

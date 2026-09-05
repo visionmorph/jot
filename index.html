@@ -53,12 +53,14 @@
     <script src="src/js/layers/layer-controls.js" defer></script>
     <script src="src/js/layers/layer-view.js" defer></script>
     <script src="src/js/inspectors/color-values.js" defer></script>
+    <script src="src/js/inspectors/rich-text-colors.js" defer></script>
     <script src="src/js/inspectors/color-controls.js" defer></script>
     <script src="src/js/inspectors/color-picker.js" defer></script>
     <script src="src/js/inspectors/size-controls.js" defer></script>
     <script src="src/js/inspectors/frame-inspector.js" defer></script>
     <script src="src/js/inspectors/vector-inspector.js" defer></script>
     <script src="src/js/inspectors/text-inspector.js" defer></script>
+    <script src="src/js/inspectors/selection-color-controls.js" defer></script>
     <script src="src/js/components/property-targets.js" defer></script>
     <script src="src/js/components/property-options.js" defer></script>
     <script src="src/js/components/property-values.js" defer></script>
@@ -293,8 +295,9 @@
             <div class="divider" aria-hidden="true"></div>
             <div class="section-title-row">
               <h3 class="inspector-heading">Fill</h3>
-              <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
+              <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add fill</span></span>
             </div>
+            <div class="mixed-color-message" data-mixed-color-message hidden>Click + to combine colors</div>
             <div class="color-input is-empty" data-color-control="frame-background" hidden>
             <div class="custom-color-value">
               <label class="custom-color-swatch" aria-label="Choose frame background color">
@@ -317,8 +320,9 @@
             <div class="divider" aria-hidden="true"></div>
             <div class="section-title-row">
               <h3 class="inspector-heading">Border</h3>
-              <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame border" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
+              <span class="tooltip tooltip--top tooltip--align-center"><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add frame border" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add border</span></span>
             </div>
+            <div class="mixed-color-message" data-mixed-color-message hidden>Click + to combine colors</div>
             <div class="color-input is-empty" data-color-control="frame-outline" hidden>
             <div class="custom-color-value">
               <label class="custom-color-swatch" aria-label="Choose frame outline color">
@@ -371,6 +375,13 @@
                   <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="button">button</button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div class="section-wrapper" data-selection-colors hidden>
+            <div class="divider" aria-hidden="true"></div>
+            <div class="section-title-row">
+              <h3 class="inspector-heading">Selection colors</h3>
             </div>
           </div>
         </section>
@@ -505,8 +516,9 @@
             <div class="divider" aria-hidden="true"></div>
             <div class="section-title-row">
               <h3 class="inspector-heading">Fill</h3>
-              <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add text fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add</span></span>
+              <span class="tooltip tooltip--top tooltip--align-center" hidden><button class="icon-button icon-button--size-24 icon-button--rounded" type="button" aria-label="Add text fill" data-color-action><span class="plus-icon" aria-hidden="true"></span></button><span class="tooltip__content" role="tooltip" data-tooltip-content>Add fill</span></span>
             </div>
+            <div class="mixed-color-message" data-mixed-color-message hidden>Click + to combine colors</div>
             <div class="color-input" data-color-control="text">
             <div class="custom-color-value">
               <label class="custom-color-swatch" aria-label="Choose text color">

@@ -109,9 +109,243 @@ function setFramePaddingControlMode(isIndividual) {
   if (framePaddingAxes instanceof HTMLElement) framePaddingAxes.hidden = isIndividual;
 }
 
+function getSelectedFrameLayoutRecords() {
+  if (selectionState.kind !== "variants") return getSelectedFrameRecords();
+  const selectedTargets = getSelectedVariantLayerTargets();
+  const targets = selectedTargets.length > 0
+    ? selectedTargets.filter((target) => target.startsWith("frame:"))
+    : ["component:0"];
+  return getSelectedVariantInstanceIds().flatMap((instanceId) => {
+    const preview = componentSet?.querySelector(
+      `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
+    );
+    const root = preview?.querySelector(".canvas-root-stack");
+    return targets.map((target) => {
+      const record = target === "component:0"
+        ? currentComponent?.frameRecord : getFrameRecord(Number(target.split(":")[1]));
+      const element = findVariantTarget(root, target);
+      return record && element instanceof HTMLElement
+        ? { ...record, element, isVariantInstance: true, variantInstanceId: instanceId }
+        : null;
+    }).filter(Boolean);
+  });
+}
+
+function getFrameAlignmentFromFlexValues(element, direction, alignItems, justifyContent) {
+  const alignments = [
+    "top-left", "top-center", "top-right",
+    "center-left", "center", "center-right",
+    "bottom-left", "bottom-center", "bottom-right",
+  ];
+  return alignments.find((alignment) => {
+    const values = getFrameAlignmentValues({ dataset: { alignment, direction } });
+    return values.alignItems === alignItems && values.justifyContent === justifyContent;
+  }) ?? normalizeFrameAlignment(element.dataset.alignment || "top-left");
+}
+
+function getFrameInspectorValues(record) {
+  const { element } = record;
+  const bounds = element.getBoundingClientRect();
+  const instance = record.isVariantInstance
+    ? getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId)
+    : null;
+  const target = record.isComponent ? "component:0" : `frame:${record.id}`;
+  const getValue = (property, fallback) => {
+    const override = instance ? getEffectiveVariantOverride(instance, target, property) : null;
+    return override ? String(override.value ?? "") : fallback;
+  };
+  const direction = getValue(
+    "flexDirection",
+    element.dataset.direction === "vertical" ? "column" : "row",
+  ) === "column" ? "vertical" : "horizontal";
+  const padding = Object.fromEntries(["left", "top", "right", "bottom"].map((side) => {
+    const property = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+    const value = getValue(property, `${element.dataset[property] || "10"}px`);
+    return [side, String(value).replace(/px$/i, "")];
+  }));
+  const backgroundValue = getValue("backgroundColor", element.dataset.frameColor || "");
+  const backgroundAlpha = String(backgroundValue).match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+  const outlineValue = getValue("outlineColor", element.dataset.outlineColor || "");
+  const outlineAlpha = String(outlineValue).match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
+  const gapValue = getValue(
+    "gap",
+    element.dataset.gapMode === "auto" ? "auto" : `${element.dataset.gap || "10"}px`,
+  );
+  const fallbackAlignment = getFrameAlignmentValues({
+    dataset: {
+      alignment: element.dataset.alignment,
+      direction,
+    },
+  });
+  const alignItems = getValue("alignItems", element.style.alignItems || fallbackAlignment.alignItems);
+  const justifyContent = getValue(
+    "justifyContent",
+    element.style.justifyContent || fallbackAlignment.justifyContent,
+  );
+
+  const values = {
+    direction,
+    alignment: getFrameAlignmentFromFlexValues(element, direction, alignItems, justifyContent),
+    gap: String(gapValue).toLowerCase() === "auto"
+      || (!record.isVariantInstance && element.dataset.gapMode === "auto")
+      ? "auto"
+      : String(gapValue).replace(/px$/i, ""),
+    radius: String(getValue("borderRadius", `${element.dataset.radius || "0"}px`)).replace(/px$/i, ""),
+    paddingLeft: padding.left,
+    paddingTop: padding.top,
+    paddingRight: padding.right,
+    paddingBottom: padding.bottom,
+    paddingX: padding.left === padding.right ? padding.left : `${padding.left}, ${padding.right}`,
+    paddingY: padding.top === padding.bottom ? padding.top : `${padding.top}, ${padding.bottom}`,
+    fillColor: normalizeHexColor(backgroundValue) || cssColorToHex(backgroundValue) || "",
+    fillOpacity: String(normalizeColorOpacity(
+      backgroundAlpha ? Number(backgroundAlpha[1]) * 100 : element.dataset.frameColorOpacity || "100",
+    )),
+    outlineColor: normalizeHexColor(outlineValue) || cssColorToHex(outlineValue) || "",
+    outlineOpacity: String(normalizeColorOpacity(
+      outlineAlpha ? Number(outlineAlpha[1]) * 100 : element.dataset.outlineColorOpacity || "100",
+    )),
+    outlinePosition: getValue(
+      "outlinePosition",
+      ["inside", "outside", "center"].includes(element.dataset.outlinePosition)
+        ? element.dataset.outlinePosition
+        : "inside",
+    ),
+    outlineWeight: String(getValue("outlineWeight", element.dataset.outlineWeight || "1")),
+    htmlTag: normalizeFrameHtmlTag(element.dataset.htmlTag || "div"),
+  };
+
+  ["width", "height"].forEach((dimension) => {
+    const override = getValue(dimension, "");
+    const mode = record.isVariantInstance && override
+      ? override === "100%" ? "fill" : override === "auto" ? "hug" : "fixed"
+      : getLayerDimensionMode(element, dimension);
+    const overriddenNumber = Number.parseFloat(override);
+    values[`${dimension}Mode`] = mode;
+    values[dimension] = mode === "fixed"
+      ? String(Number.isFinite(overriddenNumber)
+        ? overriddenNumber
+        : element.dataset[dimension] || Math.round(bounds[dimension]))
+      : String(Math.round(bounds[dimension]));
+  });
+  return values;
+}
+
+function getSharedFrameInspectorValue(values, property) {
+  const value = values[0]?.[property] ?? "";
+  return {
+    value,
+    mixed: values.some((candidate) => candidate[property] !== value),
+  };
+}
+
+function syncFrameInspectorInput(input, state, { dropdown = false } = {}) {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.placeholder = state.mixed ? "Mixed" : "";
+  if (!state.mixed) {
+    if (dropdown) setDropdownValue(input, state.value);
+    else input.value = state.value;
+    return;
+  }
+  input.value = "";
+  if (!dropdown) return;
+  delete input.dataset.value;
+  input.closest("[data-dropdown]")?.querySelectorAll(".dropdown__option").forEach((option) => {
+    option.setAttribute("aria-selected", "false");
+  });
+}
+
+function syncFrameSizeMode(wrapper, state) {
+  if (!(wrapper instanceof HTMLElement)) return;
+  if (!state.mixed) {
+    updateSizeOptionSelection(wrapper, state.value);
+    return;
+  }
+  wrapper.querySelectorAll("[data-size-option]").forEach((option) => {
+    option.setAttribute("aria-selected", "false");
+  });
+  const toggleLabel = wrapper.querySelector("[data-size-toggle-label]");
+  if (toggleLabel instanceof HTMLElement) toggleLabel.textContent = "";
+  delete wrapper.dataset.sizeMode;
+}
+
+function syncBulkInspectorToSelectedFrames(records) {
+  const values = records.map(getFrameInspectorValues);
+  const primaryValues = getFrameInspectorValues(getSelectedFrameRecord() ?? records[0]);
+  const shared = (property) => getSharedFrameInspectorValue(values, property);
+  if (frameInspectorHeading instanceof HTMLElement) frameInspectorHeading.textContent = "Frames";
+  if (addVariantAction instanceof HTMLElement) addVariantAction.hidden = true;
+
+  const direction = shared("direction");
+  frameDirectionOptions.forEach((option) => {
+    const isSelected = !direction.mixed
+      && option.getAttribute("data-frame-direction") === direction.value;
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-pressed", String(isSelected));
+  });
+
+  const alignment = shared("alignment");
+  if (frameAlignmentGrid instanceof HTMLElement) {
+    frameAlignmentGrid.dataset.direction = direction.mixed ? "horizontal" : direction.value;
+    frameAlignmentGrid.dataset.spaceBetween = String(!shared("gap").mixed && shared("gap").value === "auto");
+  }
+  frameAlignmentOptions.forEach((option) => {
+    const isSelected = !alignment.mixed && !direction.mixed
+      && normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left") === alignment.value;
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-pressed", String(isSelected));
+  });
+
+  if (frameGapInput instanceof HTMLInputElement) {
+    const gap = shared("gap");
+    syncFrameInspectorInput(frameGapInput, gap, { dropdown: true });
+  }
+  if (frameRadiusInput instanceof HTMLInputElement) syncFrameInspectorInput(frameRadiusInput, shared("radius"));
+
+  frameSizeInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const dimension = input.dataset.frameSize;
+    if (dimension !== "width" && dimension !== "height") return;
+    syncFrameInspectorInput(input, shared(dimension));
+    syncFrameSizeMode(input.closest("[data-size-combobox]"), shared(`${dimension}Mode`));
+  });
+
+  framePaddingInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    const side = input.dataset.framePadding;
+    if (!side) return;
+    syncFrameInspectorInput(input, shared(`padding${side[0].toUpperCase()}${side.slice(1)}`));
+  });
+  framePaddingAxisInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    syncFrameInspectorInput(input, shared(input.dataset.framePaddingAxis === "y" ? "paddingY" : "paddingX"));
+  });
+
+  if (frameColorPicker instanceof HTMLInputElement) {
+    syncCustomColorControl(frameColorPicker, primaryValues.fillColor, primaryValues.fillOpacity);
+  }
+  if (frameOutlineColorPicker instanceof HTMLInputElement) {
+    syncCustomColorControl(frameOutlineColorPicker, primaryValues.outlineColor, primaryValues.outlineOpacity);
+  }
+  if (frameOutlinePositionSelect instanceof HTMLInputElement) {
+    syncFrameInspectorInput(frameOutlinePositionSelect, shared("outlinePosition"), { dropdown: true });
+  }
+  if (frameOutlineWeightInput instanceof HTMLInputElement) {
+    syncFrameInspectorInput(frameOutlineWeightInput, shared("outlineWeight"));
+  }
+  if (frameHtmlTagInput instanceof HTMLInputElement) {
+    syncFrameInspectorInput(frameHtmlTagInput, shared("htmlTag"), { dropdown: true });
+  }
+}
+
 function syncInspectorToSelectedFrame() {
   const record = getSelectedFrameRecord();
-  if (!record) return;
+  const records = getSelectedFrameLayoutRecords();
+  if (!record || records.length === 0) return;
+  if (records.length > 1) {
+    syncBulkInspectorToSelectedFrames(records);
+    return;
+  }
   const { element } = record;
   const bounds = element.getBoundingClientRect();
   const isVariantSelected = selectedVariantInstanceId !== null;
@@ -198,25 +432,76 @@ function syncInspectorToSelectedFrame() {
     setDropdownValue(frameHtmlTagInput, normalizeFrameHtmlTag(element.dataset.htmlTag || "div"));
   }
 }
+
+function getFrameRecordTarget(record) {
+  return record.isComponent ? "component:0" : `frame:${record.id}`;
+}
+
+function getFrameRecordVariantValue(record, property, fallback = "") {
+  if (!record?.isVariantInstance) return fallback;
+  const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
+  const override = instance
+    ? getEffectiveVariantOverride(instance, getFrameRecordTarget(record), property)
+    : null;
+  return override ? String(override.value ?? "") : fallback;
+}
+
+function setVariantFrameRecordsProperty(records, property, value) {
+  const edits = records.map((record) => ({
+    instance: getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId),
+    target: getFrameRecordTarget(record),
+  })).filter(({ instance }) => instance);
+  if (edits.length === 0) return false;
+  const editedInstanceIds = new Set(edits.map(({ instance }) => instance.id));
+  edits.forEach(({ instance, target }) => {
+    upsertVariantOverrideForEditedInstances(
+      instance,
+      target,
+      property,
+      String(value ?? ""),
+      editedInstanceIds,
+    );
+  });
+  const targets = [...new Set(edits.map(({ target }) => target))];
+  targets.forEach((target) => syncVariantLayerStylePreviews(target, property));
+  return true;
+}
+
+function scheduleSelectedFramePreviewRender(records) {
+  if (records.some((record) => !record.isVariantInstance) && variantModel.getInstances().length > 0) {
+    scheduleVariantInstanceRender();
+  }
+}
+
 framePaddingInputs.forEach((input) => {
   if (!(input instanceof HTMLInputElement)) return;
   input.addEventListener("input", () => {
-    const record = getSelectedFrameRecord();
+    const records = getSelectedFrameLayoutRecords();
     const side = input.dataset.framePadding;
     const value = Number(input.value);
-    if (!record || !side || !Number.isFinite(value) || value < 0) return;
+    if (records.length === 0 || !side || !Number.isFinite(value) || value < 0) return;
     const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
     if (selectedVariantInstanceId !== null) {
-      if (getSelectedVariantTargetStyleOverride(propertyName, `${record.element.dataset[propertyName] || "10"}px`) === `${value}px`) return;
+      const hasChange = records.some((record) => getFrameRecordVariantValue(
+        record,
+        propertyName,
+        `${record.element.dataset[propertyName] || "10"}px`,
+      ) !== `${value}px`);
+      if (!hasChange) return;
       recordHistoryForGesture(input);
-      setSelectedVariantFrameStyleOverride(propertyName, `${value}px`, { record: false });
-      syncFramePaddingAxisInputs(record.element);
+      setVariantFrameRecordsProperty(records, propertyName, `${value}px`);
+      syncInspectorToSelectedFrame();
       return;
     }
-    if (Number(record.element.dataset[propertyName] || "10") !== value) recordHistoryForGesture(input);
-    record.element.dataset[propertyName] = String(value);
-    record.element.style[propertyName] = `${value}px`;
-    syncFramePaddingAxisInputs(record.element);
+    if (records.some((record) => Number(record.element.dataset[propertyName] || "10") !== value)) {
+      recordHistoryForGesture(input);
+    }
+    records.forEach((record) => {
+      record.element.dataset[propertyName] = String(value);
+      record.element.style[propertyName] = `${value}px`;
+    });
+    scheduleSelectedFramePreviewRender(records);
+    syncInspectorToSelectedFrame();
     requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", syncInspectorToSelectedFrame);
@@ -230,34 +515,48 @@ framePaddingAxisInputs.forEach((input) => {
     wrapper?.classList.add("is-selection-focused");
   });
   input.addEventListener("input", () => {
-    const record = getSelectedFrameRecord();
+    const records = getSelectedFrameLayoutRecords();
     const axis = input.dataset.framePaddingAxis;
     const values = parseFramePaddingAxisValue(input.value);
-    if (!record || (axis !== "x" && axis !== "y") || !values) return;
+    if (records.length === 0 || (axis !== "x" && axis !== "y") || !values) return;
     const sides = axis === "x" ? ["left", "right"] : ["top", "bottom"];
     if (selectedVariantInstanceId !== null) {
-      const hasVariantChange = sides.some((side, index) => {
+      const hasVariantChange = records.some((record) => sides.some((side, index) => {
         const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
-        return getSelectedVariantTargetStyleOverride(propertyName, `${record.element.dataset[propertyName] || "10"}px`) !== `${values[index]}px`;
-      });
+        return getFrameRecordVariantValue(
+          record,
+          propertyName,
+          `${record.element.dataset[propertyName] || "10"}px`,
+        ) !== `${values[index]}px`;
+      }));
       if (!hasVariantChange) return;
       recordHistoryForGesture(input);
-      sides.forEach((side, index) => setSelectedVariantFrameStyleOverride(`padding${side[0].toUpperCase()}${side.slice(1)}`, `${values[index]}px`, { record: false }));
-      syncFramePaddingAxisInputs(record.element);
+      sides.forEach((side, index) => setVariantFrameRecordsProperty(
+        records,
+        `padding${side[0].toUpperCase()}${side.slice(1)}`,
+        `${values[index]}px`,
+      ));
+      syncInspectorToSelectedFrame();
       return;
     }
-    const hasChange = sides.some((side, index) => {
+    const hasChange = records.some((record) => sides.some((side, index) => {
       const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
       return Number(record.element.dataset[propertyName] || "10") !== values[index];
-    });
+    }));
     if (hasChange) recordHistoryForGesture(input);
+    records.forEach((record) => {
+      sides.forEach((side, index) => {
+        const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+        record.element.dataset[propertyName] = String(values[index]);
+        record.element.style[propertyName] = `${values[index]}px`;
+      });
+    });
     sides.forEach((side, index) => {
-      const propertyName = `padding${side[0].toUpperCase()}${side.slice(1)}`;
-      record.element.dataset[propertyName] = String(values[index]);
-      record.element.style[propertyName] = `${values[index]}px`;
       const sideInput = framePaddingInputs.find((candidate) => candidate.dataset.framePadding === side);
       if (sideInput instanceof HTMLInputElement) sideInput.value = String(values[index]);
     });
+    scheduleSelectedFramePreviewRender(records);
+    syncInspectorToSelectedFrame();
     requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", () => {
@@ -277,19 +576,29 @@ framePaddingModeToggle?.addEventListener("click", () => {
 });
 
 frameRadiusInput?.addEventListener("input", () => {
-  const record = getSelectedFrameRecord();
-  if (!record || !(frameRadiusInput instanceof HTMLInputElement)) return;
+  const records = getSelectedFrameLayoutRecords();
+  if (records.length === 0 || !(frameRadiusInput instanceof HTMLInputElement)) return;
   const value = Number(frameRadiusInput.value);
   if (!Number.isFinite(value) || value < 0) return;
   if (selectedVariantInstanceId !== null) {
-    if (getSelectedVariantTargetStyleOverride("borderRadius", `${record.element.dataset.radius || "0"}px`) === `${value}px`) return;
+    const hasChange = records.some((record) => getFrameRecordVariantValue(
+      record,
+      "borderRadius",
+      `${record.element.dataset.radius || "0"}px`,
+    ) !== `${value}px`);
+    if (!hasChange) return;
     recordHistoryForGesture(frameRadiusInput);
-    setSelectedVariantFrameStyleOverride("borderRadius", `${value}px`, { record: false });
+    setVariantFrameRecordsProperty(records, "borderRadius", `${value}px`);
     return;
   }
-  if (Number(record.element.dataset.radius || "0") !== value) recordHistoryForGesture(frameRadiusInput);
-  record.element.dataset.radius = String(value);
-  record.element.style.borderRadius = `${value}px`;
+  if (records.some((record) => Number(record.element.dataset.radius || "0") !== value)) {
+    recordHistoryForGesture(frameRadiusInput);
+  }
+  records.forEach((record) => {
+    record.element.dataset.radius = String(value);
+    record.element.style.borderRadius = `${value}px`;
+  });
+  scheduleSelectedFramePreviewRender(records);
 });
 
 frameRadiusInput?.addEventListener("blur", syncInspectorToSelectedFrame);
@@ -298,19 +607,33 @@ if (frameRadiusInput instanceof HTMLElement) bindHistoryGesture(frameRadiusInput
 frameDirectionOptions.forEach((option) => {
   option.addEventListener("click", () => {
     option.focus();
-    const record = getSelectedFrameRecord();
+    const records = getSelectedFrameLayoutRecords();
     const direction = option.getAttribute("data-frame-direction") === "vertical" ? "vertical" : "horizontal";
     if (selectedVariantInstanceId !== null) {
-      setSelectedVariantFrameStyleOverride("flexDirection", direction === "vertical" ? "column" : "row");
+      const value = direction === "vertical" ? "column" : "row";
+      const hasChange = records.some((record) => getFrameRecordVariantValue(
+        record,
+        "flexDirection",
+        record.element.dataset.direction === "vertical" ? "column" : "row",
+      ) !== value);
+      if (hasChange) {
+        recordHistory();
+        setVariantFrameRecordsProperty(records, "flexDirection", value);
+      }
       syncInspectorToSelectedFrame();
       return;
     }
-    if (!record || (record.element.dataset.direction || "horizontal") === direction) return;
+    if (records.length === 0 || records.every((record) => (
+      record.element.dataset.direction || "horizontal"
+    ) === direction)) return;
     recordHistory();
-    record.element.dataset.direction = direction;
-    record.element.style.flexDirection = direction === "vertical" ? "column" : "row";
-    applyFrameAlignment(record.element);
+    records.forEach((record) => {
+      record.element.dataset.direction = direction;
+      record.element.style.flexDirection = direction === "vertical" ? "column" : "row";
+      applyFrameAlignment(record.element);
+    });
     applyAllLayerSizing();
+    scheduleSelectedFramePreviewRender(records);
     syncInspectorToSelectedFrame();
     renderTree();
   });
@@ -320,85 +643,177 @@ frameAlignmentOptions.forEach((option) => {
   let variantWasSpaceBetweenAtFirstClick = false;
   option.addEventListener("click", (event) => {
     option.focus();
-    const record = getSelectedFrameRecord();
+    const records = getSelectedFrameLayoutRecords();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
     if (selectedVariantInstanceId !== null) {
-      const values = getFrameAlignmentValues({ dataset: { alignment, direction: getSelectedVariantTargetStyleOverride("flexDirection", record?.element.dataset.direction === "vertical" ? "column" : "row") === "column" ? "vertical" : "horizontal" } });
-      const isSpaceBetween = getSelectedVariantTargetStyleOverride("justifyContent", record?.element.style.justifyContent || "flex-start") === "space-between";
-      if (event.detail === 1) variantWasSpaceBetweenAtFirstClick = isSpaceBetween;
+      const edits = records.map((record) => {
+        const direction = getFrameRecordVariantValue(
+          record,
+          "flexDirection",
+          record.element.dataset.direction === "vertical" ? "column" : "row",
+        ) === "column" ? "vertical" : "horizontal";
+        const values = getFrameAlignmentValues({ dataset: { alignment, direction } });
+        return { record, values };
+      });
+      const allSpaceBetween = edits.every(({ record }) => getFrameRecordVariantValue(
+        record,
+        "justifyContent",
+        record.element.style.justifyContent || "flex-start",
+      ) === "space-between");
+      if (event.detail === 1) variantWasSpaceBetweenAtFirstClick = allSpaceBetween;
       if (event.detail === 2 && variantWasSpaceBetweenAtFirstClick) return;
-      if (
-        getSelectedVariantTargetStyleOverride("alignItems", record?.element.style.alignItems || "flex-start") === values.alignItems
-        && getSelectedVariantTargetStyleOverride("justifyContent", record?.element.style.justifyContent || "flex-start") === values.justifyContent
-      ) return;
+      const hasChange = edits.some(({ record, values }) => (
+        getFrameRecordVariantValue(record, "alignItems", record.element.style.alignItems || "flex-start") !== values.alignItems
+        || getFrameRecordVariantValue(record, "justifyContent", record.element.style.justifyContent || "flex-start") !== values.justifyContent
+      ));
+      if (!hasChange) return;
       recordHistory();
-      setSelectedVariantFrameStyleOverride("alignItems", values.alignItems, { record: false });
-      setSelectedVariantFrameStyleOverride("justifyContent", values.justifyContent, { record: false });
+      const editedInstanceIds = new Set(edits.map(({ record }) => (
+        record.variantInstanceId ?? selectedVariantInstanceId
+      )));
+      edits.forEach(({ record, values }) => {
+        const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
+        if (!instance) return;
+        const target = getFrameRecordTarget(record);
+        upsertVariantOverrideForEditedInstances(
+          instance, target, "alignItems", values.alignItems, editedInstanceIds,
+        );
+        upsertVariantOverrideForEditedInstances(
+          instance, target, "justifyContent", values.justifyContent, editedInstanceIds,
+        );
+      });
+      [...new Set(edits.map(({ record }) => getFrameRecordTarget(record)))].forEach((target) => {
+        syncVariantLayerStylePreviews(target, "alignItems");
+        syncVariantLayerStylePreviews(target, "justifyContent");
+      });
       syncInspectorToSelectedFrame();
       return;
     }
-    if (!record || isFrameAlignmentOptionSelected(record.element, alignment)) return;
+    if (records.length === 0 || records.every((record) => isFrameAlignmentOptionSelected(record.element, alignment))) return;
     recordHistory();
-    record.element.dataset.alignment = alignment;
-    applyFrameAlignment(record.element);
+    records.forEach((record) => {
+      record.element.dataset.alignment = alignment;
+      applyFrameAlignment(record.element);
+    });
+    scheduleSelectedFramePreviewRender(records);
     syncInspectorToSelectedFrame();
     renderTree();
   });
   option.addEventListener("dblclick", (event) => {
-    const record = getSelectedFrameRecord();
+    const records = getSelectedFrameLayoutRecords();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-frame-alignment") || "top-left");
     event.preventDefault();
-    if (!record) return;
+    if (records.length === 0) return;
     if (selectedVariantInstanceId !== null) {
-      const values = getFrameAlignmentValues({ dataset: { alignment, direction: getSelectedVariantTargetStyleOverride("flexDirection", record.element.dataset.direction === "vertical" ? "column" : "row") === "column" ? "vertical" : "horizontal" } });
+      const edits = records.map((record) => {
+        const direction = getFrameRecordVariantValue(
+          record,
+          "flexDirection",
+          record.element.dataset.direction === "vertical" ? "column" : "row",
+        ) === "column" ? "vertical" : "horizontal";
+        return { record, values: getFrameAlignmentValues({ dataset: { alignment, direction } }) };
+      });
+      const targets = [...new Set(edits.map(({ record }) => getFrameRecordTarget(record)))];
+      const editedInstanceIds = new Set(edits.map(({ record }) => (
+        record.variantInstanceId ?? selectedVariantInstanceId
+      )));
       if (variantWasSpaceBetweenAtFirstClick) {
-        setSelectedVariantFrameStyleOverride("justifyContent", values.justifyContent, { record: false });
-      } else if (getSelectedVariantTargetStyleOverride("justifyContent", record.element.style.justifyContent || "flex-start") !== "space-between") {
         recordHistory();
-        setSelectedVariantFrameStyleOverride("justifyContent", "space-between", { record: false });
+        edits.forEach(({ record, values }) => {
+          const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
+          if (instance) upsertVariantOverrideForEditedInstances(
+            instance,
+            getFrameRecordTarget(record),
+            "justifyContent",
+            values.justifyContent,
+            editedInstanceIds,
+          );
+        });
+      } else if (edits.some(({ record }) => getFrameRecordVariantValue(
+        record,
+        "justifyContent",
+        record.element.style.justifyContent || "flex-start",
+      ) !== "space-between")) {
+        recordHistory();
+        edits.forEach(({ record }) => {
+          const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
+          if (instance) upsertVariantOverrideForEditedInstances(
+            instance,
+            getFrameRecordTarget(record),
+            "justifyContent",
+            "space-between",
+            editedInstanceIds,
+          );
+        });
       }
+      targets.forEach((target) => syncVariantLayerStylePreviews(target, "justifyContent"));
       variantWasSpaceBetweenAtFirstClick = false;
       syncInspectorToSelectedFrame();
       return;
     }
     recordHistory();
-    const enableSpaceBetween = record.element.dataset.gapMode !== "auto";
-    record.element.dataset.gapMode = enableSpaceBetween ? "auto" : "fixed";
-    record.element.style.gap = enableSpaceBetween ? "0px" : `${record.element.dataset.gap || "10"}px`;
-    applyFrameAlignment(record.element);
+    const enableSpaceBetween = records.some((record) => record.element.dataset.gapMode !== "auto");
+    records.forEach((record) => {
+      record.element.dataset.gapMode = enableSpaceBetween ? "auto" : "fixed";
+      record.element.style.gap = enableSpaceBetween ? "0px" : `${record.element.dataset.gap || "10"}px`;
+      applyFrameAlignment(record.element);
+    });
+    scheduleSelectedFramePreviewRender(records);
     syncInspectorToSelectedFrame();
   });
 });
 
 frameOutlinePositionSelect?.addEventListener("change", () => {
-  const record = getSelectedFrameRecord();
-  if (!record || !(frameOutlinePositionSelect instanceof HTMLInputElement)) return;
+  const records = getSelectedFrameLayoutRecords();
+  if (records.length === 0 || !(frameOutlinePositionSelect instanceof HTMLInputElement)) return;
   const selectedPosition = getDropdownValue(frameOutlinePositionSelect);
   const position = ["outside", "center"].includes(selectedPosition)
     ? selectedPosition
     : "inside";
-  if ((record.element.dataset.outlinePosition || "inside") === position) return;
-  if (selectedVariantInstanceId !== null && record.isVariantInstance) {
-    setSelectedVariantFrameStyleOverride("outlinePosition", position);
+  if (selectedVariantInstanceId !== null) {
+    const hasChange = records.some((record) => getFrameRecordVariantValue(
+      record,
+      "outlinePosition",
+      record.element.dataset.outlinePosition || "inside",
+    ) !== position);
+    if (!hasChange) return;
+    recordHistory();
+    setVariantFrameRecordsProperty(records, "outlinePosition", position);
     return;
   }
+  if (records.every((record) => (record.element.dataset.outlinePosition || "inside") === position)) return;
   recordHistory();
-  record.element.dataset.outlinePosition = position;
-  applyFrameOutline(record.element);
+  records.forEach((record) => {
+    record.element.dataset.outlinePosition = position;
+    applyFrameOutline(record.element);
+  });
+  scheduleSelectedFramePreviewRender(records);
 });
 
 frameOutlineWeightInput?.addEventListener("input", () => {
-  const record = getSelectedFrameRecord();
-  if (!record || !(frameOutlineWeightInput instanceof HTMLInputElement)) return;
+  const records = getSelectedFrameLayoutRecords();
+  if (records.length === 0 || !(frameOutlineWeightInput instanceof HTMLInputElement)) return;
   const weight = Number(frameOutlineWeightInput.value);
   if (!Number.isFinite(weight) || weight < 0) return;
-  if (Number(record.element.dataset.outlineWeight || "1") !== weight) recordHistoryForGesture(frameOutlineWeightInput);
-  if (selectedVariantInstanceId !== null && record.isVariantInstance) {
-    setSelectedVariantFrameStyleOverride("outlineWeight", String(weight), { record: false, render: false });
+  if (selectedVariantInstanceId !== null) {
+    const hasChange = records.some((record) => Number(getFrameRecordVariantValue(
+      record,
+      "outlineWeight",
+      record.element.dataset.outlineWeight || "1",
+    )) !== weight);
+    if (!hasChange) return;
+    recordHistoryForGesture(frameOutlineWeightInput);
+    setVariantFrameRecordsProperty(records, "outlineWeight", String(weight));
     return;
   }
-  record.element.dataset.outlineWeight = String(weight);
-  applyFrameOutline(record.element);
+  if (records.some((record) => Number(record.element.dataset.outlineWeight || "1") !== weight)) {
+    recordHistoryForGesture(frameOutlineWeightInput);
+  }
+  records.forEach((record) => {
+    record.element.dataset.outlineWeight = String(weight);
+    applyFrameOutline(record.element);
+  });
+  scheduleSelectedFramePreviewRender(records);
 });
 
 frameOutlineWeightInput?.addEventListener("blur", syncInspectorToSelectedFrame);
@@ -418,20 +833,35 @@ function syncFrameGapOptions(fixedValue = "10") {
 }
 
 function applyFrameGapValue(normalize = true) {
-  const record = getSelectedFrameRecord();
-  if (!record || !(frameGapInput instanceof HTMLInputElement)) return false;
+  const records = getSelectedFrameLayoutRecords();
+  if (records.length === 0 || !(frameGapInput instanceof HTMLInputElement)) return false;
   const value = frameGapInput.value.trim();
 
   if (selectedVariantInstanceId !== null) {
     if (/^auto$/i.test(value)) {
-      recordHistoryForGesture(frameGapInput);
-      return setSelectedVariantFrameStyleOverride("gap", "0px", { record: false });
+      const hasChange = records.some((record) => getFrameRecordVariantValue(
+        record,
+        "gap",
+        record.element.dataset.gapMode === "auto" ? "0px" : `${record.element.dataset.gap || "10"}px`,
+      ) !== "0px");
+      if (hasChange) {
+        recordHistoryForGesture(frameGapInput);
+        setVariantFrameRecordsProperty(records, "gap", "0px");
+      }
+      return true;
     }
     const variantMatch = value.match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
     if (!variantMatch) return false;
     const gap = `${Math.max(0, Number(variantMatch[1]))}px`;
-    recordHistoryForGesture(frameGapInput);
-    setSelectedVariantFrameStyleOverride("gap", gap, { record: false });
+    const hasChange = records.some((record) => getFrameRecordVariantValue(
+      record,
+      "gap",
+      record.element.dataset.gapMode === "auto" ? "0px" : `${record.element.dataset.gap || "10"}px`,
+    ) !== gap);
+    if (hasChange) {
+      recordHistoryForGesture(frameGapInput);
+      setVariantFrameRecordsProperty(records, "gap", gap);
+    }
     const normalizedGap = String(Math.max(0, Number(variantMatch[1])));
     syncFrameGapOptions(normalizedGap);
     if (normalize) setDropdownValue(frameGapInput, normalizedGap);
@@ -439,11 +869,16 @@ function applyFrameGapValue(normalize = true) {
   }
 
   if (/^auto$/i.test(value)) {
-    if (record.element.dataset.gapMode !== "auto") recordHistoryForGesture(frameGapInput);
-    record.element.dataset.gapMode = "auto";
-    record.element.style.gap = "0px";
-    applyFrameAlignment(record.element);
-    syncFrameAlignmentDistribution(record.element);
+    if (records.some((record) => record.element.dataset.gapMode !== "auto")) {
+      recordHistoryForGesture(frameGapInput);
+    }
+    records.forEach((record) => {
+      record.element.dataset.gapMode = "auto";
+      record.element.style.gap = "0px";
+      applyFrameAlignment(record.element);
+    });
+    scheduleSelectedFramePreviewRender(records);
+    syncInspectorToSelectedFrame();
     if (normalize) frameGapInput.value = "Auto";
     return true;
   }
@@ -451,15 +886,20 @@ function applyFrameGapValue(normalize = true) {
   const match = value.match(/^(\d+(?:\.\d+)?)(?:px)?$/i);
   if (!match) return false;
   const gap = Math.max(0, Number(match[1]));
-  if (record.element.dataset.gapMode !== "fixed" || Number(record.element.dataset.gap || "10") !== gap) {
+  if (records.some((record) => (
+    record.element.dataset.gapMode !== "fixed"
+    || Number(record.element.dataset.gap || "10") !== gap
+  ))) {
     recordHistoryForGesture(frameGapInput);
   }
-  record.element.dataset.gapMode = "fixed";
-  record.element.dataset.gap = String(gap);
-  record.element.style.gap = `${gap}px`;
+  records.forEach((record) => {
+    record.element.dataset.gapMode = "fixed";
+    record.element.dataset.gap = String(gap);
+    record.element.style.gap = `${gap}px`;
+    applyFrameAlignment(record.element);
+  });
   syncFrameGapOptions(gap);
-  applyFrameAlignment(record.element);
-  syncFrameAlignmentDistribution(record.element);
+  scheduleSelectedFramePreviewRender(records);
   if (normalize) setDropdownValue(frameGapInput, gap);
   return true;
 }
@@ -498,17 +938,18 @@ if (frameGapInput instanceof HTMLElement) bindHistoryGesture(frameGapInput);
 frameGapInput?.addEventListener("change", () => applyFrameGapValue());
 
 frameHtmlTagInput?.addEventListener("change", () => {
-  const record = getSelectedFrameRecord();
-  if (!record || !(frameHtmlTagInput instanceof HTMLInputElement)) return;
+  const records = getSelectedFrameRecords();
+  if (records.length === 0 || !(frameHtmlTagInput instanceof HTMLInputElement)) return;
   const htmlTag = normalizeFrameHtmlTag(getDropdownValue(frameHtmlTagInput));
-  const sourceRecord = record.isVariantInstance
-    ? selectedVariantLayerTarget?.startsWith("frame:")
-      ? getFrameRecord(record.id)
-      : currentComponent?.frameRecord
-    : record;
-  if (!sourceRecord) return;
-  if ((sourceRecord.element.dataset.htmlTag || "div") !== htmlTag) recordHistory();
-  sourceRecord.element.dataset.htmlTag = htmlTag;
-  if (record.isVariantInstance) renderVariantInstances();
+  const sourceRecords = records.map((record) => record.isVariantInstance
+    ? record.isComponent ? currentComponent?.frameRecord : getFrameRecord(record.id)
+    : record).filter(Boolean);
+  if (sourceRecords.length === 0) return;
+  if (sourceRecords.some((record) => (record.element.dataset.htmlTag || "div") !== htmlTag)) recordHistory();
+  sourceRecords.forEach((record) => {
+    record.element.dataset.htmlTag = htmlTag;
+  });
+  if (records.some((record) => record.isVariantInstance)) renderVariantInstances();
+  else scheduleSelectedFramePreviewRender(records);
   renderComponentProps();
 });

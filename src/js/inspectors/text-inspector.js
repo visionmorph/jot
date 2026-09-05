@@ -88,74 +88,164 @@ async function loadFontCatalog() {
 
   populateFontOptions();
   populateWeightOptions(getDropdownValue(fontSelect) || DEFAULT_FONT_FAMILY);
+  if (getSelectedTextRecords().length > 0) syncInspectorToSelectedText();
 }
 
 function syncSelectedTextSizeInputs() {
   const record = getSelectedTextRecord();
-  if (!record) return;
-  const { element } = record;
-  const bounds = element.getBoundingClientRect();
+  const records = getSelectedTextRecords();
+  if (!record || records.length === 0) return;
   textLayerSizeInputs.forEach((input) => {
     if (!(input instanceof HTMLInputElement)) return;
     const dimension = input.dataset.textLayerSize;
     if (dimension !== "width" && dimension !== "height") return;
-    const mode = getLayerDimensionMode(element, dimension, "hug");
-    input.value = mode === "fixed"
-      ? element.dataset[dimension] || String(Math.round(bounds[dimension]))
-      : String(Math.round(bounds[dimension]));
+    const values = records.map((candidate) => {
+      const { element } = candidate;
+      const bounds = element.getBoundingClientRect();
+      const instance = candidate.isVariantInstance ? getVariantInstance() : null;
+      const override = instance
+        ? getEffectiveVariantOverride(instance, `text:${candidate.id}`, dimension)
+        : null;
+      const overrideValue = override ? String(override.value ?? "") : "";
+      const mode = overrideValue
+        ? overrideValue === "100%" ? "fill" : overrideValue === "auto" ? "hug" : "fixed"
+        : getLayerDimensionMode(element, dimension, "hug");
+      const fixedValue = Number.parseFloat(overrideValue);
+      return {
+        mode,
+        value: mode === "fixed"
+          ? String(Number.isFinite(fixedValue)
+            ? fixedValue
+            : element.dataset[dimension] || Math.round(bounds[dimension]))
+          : String(Math.round(bounds[dimension])),
+      };
+    });
+    const value = values[0].value;
+    const mode = values[0].mode;
+    const valueIsMixed = values.some((candidate) => candidate.value !== value);
+    const modeIsMixed = values.some((candidate) => candidate.mode !== mode);
+    input.placeholder = valueIsMixed ? "Mixed" : "";
+    input.value = valueIsMixed ? "" : value;
     const wrapper = input.closest("[data-size-combobox]");
-    if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, mode);
+    if (!(wrapper instanceof HTMLElement)) return;
+    if (!modeIsMixed) {
+      updateSizeOptionSelection(wrapper, mode);
+      return;
+    }
+    wrapper.querySelectorAll("[data-size-option]").forEach((option) => {
+      option.setAttribute("aria-selected", "false");
+    });
+    const toggleLabel = wrapper.querySelector("[data-size-toggle-label]");
+    if (toggleLabel instanceof HTMLElement) toggleLabel.textContent = "";
+    delete wrapper.dataset.sizeMode;
+  });
+}
+
+function getTextInspectorValues(record) {
+  const { element } = record;
+  const styles = record.isVariantInstance ? getComputedStyle(element) : null;
+  const renderedFamily = styles?.fontFamily.split(",")[0].replace(/^['"]|['"]$/g, "").trim();
+  const renderedLineHeight = styles?.lineHeight;
+  const renderedLetterSpacing = styles?.letterSpacing;
+  const renderedVerticalAlignment = styles?.alignContent === "center"
+    ? "center"
+    : styles?.alignContent === "end" ? "bottom" : "top";
+  const renderedHorizontalAlignment = styles?.textAlign === "center"
+    ? "center"
+    : styles?.textAlign === "right" ? "right" : "left";
+  return {
+    styles,
+    family: record.isVariantInstance
+      ? renderedFamily || DEFAULT_FONT_FAMILY
+      : element.dataset.fontFamily || DEFAULT_FONT_FAMILY,
+    weight: String(Number(record.isVariantInstance
+      ? styles.fontWeight
+      : element.dataset.fontWeight || DEFAULT_FONT_WEIGHT)),
+    size: record.isVariantInstance
+      ? String(Number.parseFloat(styles.fontSize) || 14)
+      : element.dataset.fontSize || "14",
+    lineHeight: record.isVariantInstance
+      ? renderedLineHeight === "normal" ? "Auto" : String(Number.parseFloat(renderedLineHeight))
+      : element.dataset.lineHeight || "Auto",
+    letterSpacing: record.isVariantInstance
+      ? renderedLetterSpacing === "normal" ? "0%" : renderedLetterSpacing
+      : element.dataset.letterSpacing || "0%",
+    alignment: record.isVariantInstance
+      ? renderedVerticalAlignment === "center" && renderedHorizontalAlignment === "center"
+        ? "center"
+        : `${renderedVerticalAlignment}-${renderedHorizontalAlignment}`
+      : normalizeFrameAlignment(element.dataset.alignment || "top-left"),
+  };
+}
+
+function getSharedTextInspectorValue(values, property) {
+  const value = values[0]?.[property] ?? "";
+  return {
+    value,
+    mixed: values.some((candidate) => candidate[property] !== value),
+  };
+}
+
+function syncTextInspectorInput(input, state, { dropdown = false } = {}) {
+  if (!(input instanceof HTMLInputElement)) return;
+  input.placeholder = state.mixed ? "Mixed" : "";
+  if (!state.mixed) {
+    if (dropdown) setDropdownValue(input, state.value);
+    else input.value = state.value;
+    return;
+  }
+
+  input.value = "";
+  if (!dropdown) return;
+  delete input.dataset.value;
+  input.closest("[data-dropdown]")?.querySelectorAll(".dropdown__option").forEach((option) => {
+    option.setAttribute("aria-selected", "false");
   });
 }
 
 function syncInspectorToSelectedText() {
   const record = getSelectedTextRecord();
-  if (!record) return;
+  const records = getSelectedTextRecords();
+  if (!record || records.length === 0) return;
 
   const { element } = record;
-  const styles = record.isVariantInstance ? getComputedStyle(element) : null;
-  const family = record.isVariantInstance
-    ? styles.fontFamily.split(",")[0].replace(/^['"]|['"]$/g, "").trim() || DEFAULT_FONT_FAMILY
-    : element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
-  const weight = Number(record.isVariantInstance ? styles.fontWeight : element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
-  if (fontSelect instanceof HTMLInputElement) setDropdownValue(fontSelect, family);
-  populateWeightOptions(family, weight);
-  if (sizeSelect instanceof HTMLInputElement) {
-    sizeSelect.value = record.isVariantInstance ? String(Number.parseFloat(styles.fontSize) || 14) : element.dataset.fontSize || "14";
-    syncTextSizeCombobox(sizeSelect.value);
-  }
-  if (lineHeightInput instanceof HTMLInputElement) {
-    lineHeightInput.value = record.isVariantInstance
-      ? styles.lineHeight === "normal" ? "Auto" : String(Number.parseFloat(styles.lineHeight))
-      : element.dataset.lineHeight || "Auto";
-  }
-  if (letterSpacingInput instanceof HTMLInputElement) {
-    const renderedSpacing = record.isVariantInstance ? styles.letterSpacing : "";
-    letterSpacingInput.value = record.isVariantInstance
-      ? renderedSpacing === "normal" ? "0%" : renderedSpacing
-      : element.dataset.letterSpacing || "0%";
-  }
+  const values = records.map(getTextInspectorValues);
+  const primaryValues = getTextInspectorValues(record);
+  const family = getSharedTextInspectorValue(values, "family");
+  const weight = getSharedTextInspectorValue(values, "weight");
+  const size = getSharedTextInspectorValue(values, "size");
+  const lineHeight = getSharedTextInspectorValue(values, "lineHeight");
+  const letterSpacing = getSharedTextInspectorValue(values, "letterSpacing");
+  const alignment = getSharedTextInspectorValue(values, "alignment");
+  const styles = primaryValues.styles;
+
+  syncTextInspectorInput(fontSelect, family, { dropdown: true });
+  populateWeightOptions(primaryValues.family, primaryValues.weight);
+  syncTextInspectorInput(weightSelect, weight, { dropdown: true });
+  syncTextInspectorInput(sizeSelect, size);
+  syncTextSizeCombobox(size.mixed ? "" : size.value);
+  syncTextInspectorInput(lineHeightInput, lineHeight);
+  syncTextInspectorInput(letterSpacingInput, letterSpacing);
   if (textColorPicker instanceof HTMLInputElement) {
+    const rangeSelection = records.length === 1 ? getActiveTextRangeSelection(record) : null;
+    const rangeValue = rangeSelection ? getActiveTextRangeColorValues(record)[0] : null;
+    const uniformRunColor = getUniformTextRunColor(record);
     const renderedColor = record.isVariantInstance ? styles.color : "";
     const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
     const isTransparent = renderedColor === "transparent" || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
-    const color = record.isVariantInstance
+    const layerColor = record.isVariantInstance
       ? isTransparent ? "" : cssColorToHex(renderedColor) || "#000000"
       : Object.prototype.hasOwnProperty.call(element.dataset, "textColor") ? element.dataset.textColor : "#000000";
-    const opacity = record.isVariantInstance ? rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : 100 : element.dataset.textColorOpacity || "100";
-    syncCustomColorControl(textColorPicker, color, opacity);
+    const layerOpacity = record.isVariantInstance ? rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : 100 : element.dataset.textColorOpacity || "100";
+    syncCustomColorControl(
+      textColorPicker,
+      rangeValue?.color ?? uniformRunColor?.color ?? layerColor,
+      rangeValue?.opacity ?? uniformRunColor?.opacity ?? layerOpacity,
+    );
   }
   textAlignmentOptions.forEach((option) => {
-    const vertical = record.isVariantInstance
-      ? styles.alignContent === "center" ? "center" : styles.alignContent === "end" ? "bottom" : "top"
-      : null;
-    const horizontal = record.isVariantInstance
-      ? styles.textAlign === "center" ? "center" : styles.textAlign === "right" ? "right" : "left"
-      : null;
-    const alignment = record.isVariantInstance
-      ? vertical === "center" && horizontal === "center" ? "center" : `${vertical}-${horizontal}`
-      : normalizeFrameAlignment(element.dataset.alignment || "top-left");
-    const isSelected = option.getAttribute("data-text-alignment") === alignment;
+    const isSelected = !alignment.mixed
+      && option.getAttribute("data-text-alignment") === alignment.value;
     option.classList.toggle("is-selected", isSelected);
     option.setAttribute("aria-pressed", String(isSelected));
   });
@@ -163,12 +253,23 @@ function syncInspectorToSelectedText() {
 }
 function persistVariantTextStyle(record, property, value) {
   if (!record?.isVariantInstance) return;
-  setSelectedVariantLayerOverride(property, value);
+  const instance = getVariantInstance();
+  const target = `text:${record.id}`;
+  if (!instance) return;
+  upsertLocalVariantOverride(instance, target, property, value);
+  syncVariantLayerStylePreviews(target, property, record.element);
+}
+
+function scheduleSelectedTextPreviewRender(records) {
+  if (records.some((record) => !record.isVariantInstance) && variantModel.getInstances().length > 0) {
+    scheduleVariantInstanceRender();
+  }
 }
 
 fontSelect?.addEventListener("change", () => {
   const record = getSelectedTextRecord();
-  if (!record || !(fontSelect instanceof HTMLInputElement)) return;
+  const records = getSelectedTextRecords();
+  if (!record || records.length === 0 || !(fontSelect instanceof HTMLInputElement)) return;
   const family = getDropdownValue(fontSelect);
   const font = getFontRecord(family);
   const previousWeight = Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
@@ -176,27 +277,38 @@ fontSelect?.addEventListener("change", () => {
   const weight = weightSelect instanceof HTMLInputElement
     ? Number(getDropdownValue(weightSelect))
     : DEFAULT_FONT_WEIGHT;
-  if (record.element.dataset.fontFamily !== family || previousWeight !== weight) recordHistory();
-  record.element.dataset.fontFamily = family;
-  record.element.dataset.fontWeight = String(weight);
-  record.element.style.fontFamily = `${JSON.stringify(family)}, ${getFontFallback(font?.category || "Sans Serif")}`;
-  record.element.style.fontWeight = String(weight);
-  persistVariantTextStyle(record, "fontFamily", record.element.style.fontFamily);
-  persistVariantTextStyle(record, "fontWeight", String(weight));
+  if (records.some((candidate) => (
+    candidate.element.dataset.fontFamily !== family
+    || Number(candidate.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT) !== weight
+  ))) recordHistory();
+  records.forEach((candidate) => {
+    candidate.element.dataset.fontFamily = family;
+    candidate.element.dataset.fontWeight = String(weight);
+    candidate.element.style.fontFamily = `${JSON.stringify(family)}, ${getFontFallback(font?.category || "Sans Serif")}`;
+    candidate.element.style.fontWeight = String(weight);
+    persistVariantTextStyle(candidate, "fontFamily", candidate.element.style.fontFamily);
+    persistVariantTextStyle(candidate, "fontWeight", String(weight));
+  });
   loadGoogleFont(family, weight);
+  scheduleSelectedTextPreviewRender(records);
   requestAnimationFrame(syncSelectedTextSizeInputs);
 });
 
 weightSelect?.addEventListener("change", () => {
   const record = getSelectedTextRecord();
-  if (!record || !(weightSelect instanceof HTMLInputElement)) return;
-  const family = record.element.dataset.fontFamily || DEFAULT_FONT_FAMILY;
+  const records = getSelectedTextRecords();
+  if (!record || records.length === 0 || !(weightSelect instanceof HTMLInputElement)) return;
   const weight = Number(getDropdownValue(weightSelect));
-  if (Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT) !== weight) recordHistory();
-  record.element.dataset.fontWeight = String(weight);
-  record.element.style.fontWeight = String(weight);
-  persistVariantTextStyle(record, "fontWeight", String(weight));
-  loadGoogleFont(family, weight);
+  if (records.some((candidate) => Number(candidate.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT) !== weight)) {
+    recordHistory();
+  }
+  records.forEach((candidate) => {
+    candidate.element.dataset.fontWeight = String(weight);
+    candidate.element.style.fontWeight = String(weight);
+    persistVariantTextStyle(candidate, "fontWeight", String(weight));
+    loadGoogleFont(candidate.element.dataset.fontFamily || DEFAULT_FONT_FAMILY, weight);
+  });
+  scheduleSelectedTextPreviewRender(records);
   requestAnimationFrame(syncSelectedTextSizeInputs);
 });
 
@@ -211,16 +323,21 @@ function setTextSizeComboboxOpen(isOpen) {
 }
 
 function applyTextSizeValue(rawValue = sizeSelect?.value, normalize = true) {
-  const record = getSelectedTextRecord();
-  if (!record || !(sizeSelect instanceof HTMLInputElement)) return false;
+  const records = getSelectedTextRecords();
+  if (records.length === 0 || !(sizeSelect instanceof HTMLInputElement)) return false;
   const value = String(rawValue || "").trim();
   if (!/^\d+(?:\.\d+)?$/.test(value)) return false;
   const numberValue = Math.max(0, Number(value));
   const normalizedValue = String(numberValue);
-  if ((record.element.dataset.fontSize || "14") !== normalizedValue) recordHistoryForGesture(sizeSelect);
-  record.element.dataset.fontSize = normalizedValue;
-  record.element.style.fontSize = `${normalizedValue}px`;
-  persistVariantTextStyle(record, "fontSize", `${normalizedValue}px`);
+  if (records.some((record) => (record.element.dataset.fontSize || "14") !== normalizedValue)) {
+    recordHistoryForGesture(sizeSelect);
+  }
+  records.forEach((record) => {
+    record.element.dataset.fontSize = normalizedValue;
+    record.element.style.fontSize = `${normalizedValue}px`;
+    persistVariantTextStyle(record, "fontSize", `${normalizedValue}px`);
+  });
+  scheduleSelectedTextPreviewRender(records);
   if (normalize) sizeSelect.value = normalizedValue;
   syncTextSizeCombobox(normalizedValue);
   requestAnimationFrame(syncSelectedTextSizeInputs);
@@ -270,26 +387,36 @@ if (sizeSelect instanceof HTMLElement) bindHistoryGesture(sizeSelect);
 sizeSelect?.addEventListener("change", () => applyTextSizeValue());
 
 function applyLineHeightValue() {
-  const record = getSelectedTextRecord();
-  if (!record || !(lineHeightInput instanceof HTMLInputElement)) return false;
+  const records = getSelectedTextRecords();
+  if (records.length === 0 || !(lineHeightInput instanceof HTMLInputElement)) return false;
   const value = lineHeightInput.value.trim();
   if (/^(?:a|auto)$/i.test(value)) {
-    if ((record.element.dataset.lineHeight || "Auto") !== "Auto") recordHistoryForGesture(lineHeightInput);
+    if (records.some((record) => (record.element.dataset.lineHeight || "Auto") !== "Auto")) {
+      recordHistoryForGesture(lineHeightInput);
+    }
     lineHeightInput.value = "Auto";
-    record.element.dataset.lineHeight = "Auto";
-    record.element.style.lineHeight = "normal";
-    persistVariantTextStyle(record, "lineHeight", "normal");
+    records.forEach((record) => {
+      record.element.dataset.lineHeight = "Auto";
+      record.element.style.lineHeight = "normal";
+      persistVariantTextStyle(record, "lineHeight", "normal");
+    });
+    scheduleSelectedTextPreviewRender(records);
     requestAnimationFrame(syncSelectedTextSizeInputs);
     return true;
   }
 
   if (!/^\d+(?:\.\d+)?$/.test(value)) return false;
   const numberValue = Math.max(0, Number(value));
-  if ((record.element.dataset.lineHeight || "Auto") !== String(numberValue)) recordHistoryForGesture(lineHeightInput);
+  if (records.some((record) => (record.element.dataset.lineHeight || "Auto") !== String(numberValue))) {
+    recordHistoryForGesture(lineHeightInput);
+  }
   lineHeightInput.value = String(numberValue);
-  record.element.dataset.lineHeight = String(numberValue);
-  record.element.style.lineHeight = `${numberValue}px`;
-  persistVariantTextStyle(record, "lineHeight", `${numberValue}px`);
+  records.forEach((record) => {
+    record.element.dataset.lineHeight = String(numberValue);
+    record.element.style.lineHeight = `${numberValue}px`;
+    persistVariantTextStyle(record, "lineHeight", `${numberValue}px`);
+  });
+  scheduleSelectedTextPreviewRender(records);
   requestAnimationFrame(syncSelectedTextSizeInputs);
   return true;
 }
@@ -331,19 +458,24 @@ lineHeightInput?.addEventListener("keydown", (event) => {
 if (lineHeightInput instanceof HTMLElement) bindHistoryGesture(lineHeightInput);
 
 function applyLetterSpacingValue(normalizeDisplay = true) {
-  const record = getSelectedTextRecord();
-  if (!record || !(letterSpacingInput instanceof HTMLInputElement)) return false;
+  const records = getSelectedTextRecords();
+  if (records.length === 0 || !(letterSpacingInput instanceof HTMLInputElement)) return false;
   const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)?$/i);
   if (!match) return false;
   const unit = match[2]?.toLowerCase() || "%";
   const value = `${Number(match[1])}${unit}`;
-  if ((record.element.dataset.letterSpacing || "0%") !== value) recordHistoryForGesture(letterSpacingInput);
+  if (records.some((record) => (record.element.dataset.letterSpacing || "0%") !== value)) {
+    recordHistoryForGesture(letterSpacingInput);
+  }
   if (normalizeDisplay) letterSpacingInput.value = value;
-  record.element.dataset.letterSpacing = value;
-  record.element.style.letterSpacing = unit === "%"
-    ? `${Number(match[1]) / 100}em`
-    : value;
-  persistVariantTextStyle(record, "letterSpacing", record.element.style.letterSpacing);
+  records.forEach((record) => {
+    record.element.dataset.letterSpacing = value;
+    record.element.style.letterSpacing = unit === "%"
+      ? `${Number(match[1]) / 100}em`
+      : value;
+    persistVariantTextStyle(record, "letterSpacing", record.element.style.letterSpacing);
+  });
+  scheduleSelectedTextPreviewRender(records);
   requestAnimationFrame(syncSelectedTextSizeInputs);
   return true;
 }
@@ -378,17 +510,20 @@ if (letterSpacingInput instanceof HTMLElement) bindHistoryGesture(letterSpacingI
 
 textAlignmentOptions.forEach((option) => {
   option.addEventListener("click", () => {
-    const record = getSelectedTextRecord();
+    const records = getSelectedTextRecords();
     const alignment = normalizeFrameAlignment(option.getAttribute("data-text-alignment") || "top-left");
-    if (!record || (!record.isVariantInstance && normalizeFrameAlignment(record.element.dataset.alignment || "top-left") === alignment)) return;
+    if (records.length === 0
+      || records.every((record) => getTextInspectorValues(record).alignment === alignment)) return;
     recordHistory();
-    record.element.dataset.alignment = alignment;
-    applyTextAlignment(record.element);
-    persistVariantTextStyle(record, "display", record.element.style.display);
-    persistVariantTextStyle(record, "alignContent", record.element.style.alignContent);
-    persistVariantTextStyle(record, "textAlign", record.element.style.textAlign);
+    records.forEach((record) => {
+      record.element.dataset.alignment = alignment;
+      applyTextAlignment(record.element);
+      persistVariantTextStyle(record, "display", record.element.style.display);
+      persistVariantTextStyle(record, "alignContent", record.element.style.alignContent);
+      persistVariantTextStyle(record, "textAlign", record.element.style.textAlign);
+    });
+    scheduleSelectedTextPreviewRender(records);
     syncInspectorToSelectedText();
     requestAnimationFrame(syncResizeOverlay);
   });
 });
-

@@ -118,6 +118,38 @@ test("duplicates a selected frame and supports undo and redo", async ({ page }) 
   await expect(duplicateTreeItem).toHaveAttribute("aria-selected", "true");
 });
 
+test("duplicates a text layer with independent color runs", async ({ page }) => {
+  await openApp(page);
+
+  await page.evaluate(() => {
+    const record = createCanvasText(currentComponent.frameRecord, 0, 0, {
+      beginEditing: false,
+      isNew: false,
+      textContent: "Red black",
+    });
+    record.element.innerHTML = '<span data-rich-text-color="#FF0000" data-rich-text-color-opacity="100" style="color: #FF0000">Red</span> black';
+    selectCanvasText(record.element);
+    renderTree();
+  });
+
+  const texts = page.locator("[data-canvas-root-stack] > [data-text-id]");
+  const original = texts.nth(0);
+  const duplicate = texts.nth(1);
+  await page.keyboard.press("ControlOrMeta+d");
+
+  await expect(texts).toHaveCount(2);
+  await expect(duplicate).toHaveText("Red black");
+  await expect(duplicate.locator('[data-rich-text-color="#FF0000"]')).toHaveText("Red");
+  await expect(duplicate.locator('[data-rich-text-color="#FF0000"]')).toHaveCSS("color", "rgb(255, 0, 0)");
+  await expect(original.locator('[data-rich-text-color="#FF0000"]')).toHaveText("Red");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(texts).toHaveCount(1);
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(texts).toHaveCount(2);
+  await expect(duplicate.locator('[data-rich-text-color="#FF0000"]')).toHaveText("Red");
+});
+
 test("wraps selected frames and supports undo and redo", async ({ page }) => {
   await openApp(page);
 

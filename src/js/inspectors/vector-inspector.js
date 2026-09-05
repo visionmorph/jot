@@ -87,44 +87,92 @@ function removeVectorColor(record) {
   record.element.dataset.vectorColor = "";
 }
 
+function getVectorInspectorValues(record) {
+  const bounds = record.element.getBoundingClientRect();
+  const instance = record.isVariantInstance
+    ? getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId)
+    : null;
+  const target = `vector:${record.id}`;
+  const getDimension = (dimension) => {
+    const override = instance ? getEffectiveVariantOverride(instance, target, dimension) : null;
+    const value = override?.value ?? record.element.dataset[dimension] ?? bounds[dimension];
+    const number = Number.parseFloat(value);
+    return String(Number.isFinite(number) ? number : Math.round(bounds[dimension]));
+  };
+  const hasStoredColor = Object.prototype.hasOwnProperty.call(record.element.dataset, "vectorColor");
+  const color = hasStoredColor ? record.element.dataset.vectorColor : getVectorRenderedColor(record);
+  if (!hasStoredColor) record.element.dataset.vectorColor = color;
+  return {
+    width: getDimension("width"),
+    height: getDimension("height"),
+    color,
+    opacity: getVectorRenderedOpacity(record),
+  };
+}
+
+function getSharedVectorInspectorValue(values, property) {
+  const value = values[0]?.[property] ?? "";
+  return {
+    value,
+    mixed: values.some((candidate) => candidate[property] !== value),
+  };
+}
+
 function syncInspectorToSelectedVector() {
   const record = getSelectedVectorRecord();
-  if (!record) return;
-  const bounds = record.element.getBoundingClientRect();
+  const records = getSelectedVectorRecords();
+  if (!record || records.length === 0) return;
+  const values = records.map(getVectorInspectorValues);
+  const primaryValues = getVectorInspectorValues(record);
+  const heading = vectorInspector?.querySelector("#vector-heading");
+  if (heading instanceof HTMLElement) heading.textContent = records.length > 1 ? "Vectors" : "Vector";
   vectorSizeInputs.forEach((input) => {
     if (!(input instanceof HTMLInputElement)) return;
     const dimension = input.dataset.vectorSize;
     if (dimension !== "width" && dimension !== "height") return;
-    input.value = record.element.dataset[dimension] || String(Math.round(bounds[dimension]));
+    const state = getSharedVectorInspectorValue(values, dimension);
+    input.value = state.mixed ? "" : state.value;
+    input.placeholder = state.mixed ? "Mixed" : "";
   });
   if (vectorColorPicker instanceof HTMLInputElement) {
-    const hasStoredColor = Object.prototype.hasOwnProperty.call(record.element.dataset, "vectorColor");
-    const color = hasStoredColor ? record.element.dataset.vectorColor : getVectorRenderedColor(record);
-    if (!hasStoredColor) record.element.dataset.vectorColor = color;
-    syncCustomColorControl(vectorColorPicker, color, record.element.dataset.vectorColorOpacity || "100");
+    syncCustomColorControl(vectorColorPicker, primaryValues.color, primaryValues.opacity);
   }
 }
 vectorSizeInputs.forEach((input) => {
   if (!(input instanceof HTMLInputElement)) return;
   input.addEventListener("input", () => {
-    const record = getSelectedVectorRecord();
+    const records = getSelectedVectorRecords();
     const dimension = input.dataset.vectorSize;
     const value = Number(input.value);
-    if (!record || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value)) return;
+    if (records.length === 0 || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value)) return;
     const fixedValue = Math.max(MIN_INTERACTIVE_LAYER_SIZE, value);
-    if (record.isVariantInstance) {
-      recordHistoryForGesture(input);
-      record.element.dataset[`${dimension}Mode`] = "fixed";
-      record.element.dataset[dimension] = String(fixedValue);
-      record.element.style[dimension] = `${fixedValue}px`;
-      setSelectedVariantLayerOverride(dimension, `${fixedValue}px`);
+    if (records[0].isVariantInstance) {
+      const edits = records.map((record) => {
+        const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
+        const target = `vector:${record.id}`;
+        const current = instance ? getEffectiveVariantOverride(instance, target, dimension) : null;
+        return { record, instance, target, changed: String(current?.value ?? "") !== `${fixedValue}px` };
+      });
+      if (edits.some(({ changed }) => changed)) recordHistoryForGesture(input);
+      edits.forEach(({ record, instance, target }) => {
+        record.element.dataset[`${dimension}Mode`] = "fixed";
+        record.element.dataset[dimension] = String(fixedValue);
+        record.element.style[dimension] = `${fixedValue}px`;
+        if (instance) upsertLocalVariantOverride(instance, target, dimension, `${fixedValue}px`);
+        syncVariantLayerStylePreviews(target, dimension, record.element);
+      });
       requestAnimationFrame(syncResizeOverlay);
       return;
     }
-    if (Number(record.element.dataset[dimension] || "24") !== fixedValue) recordHistoryForGesture(input);
-    record.element.dataset[`${dimension}Mode`] = "fixed";
-    record.element.dataset[dimension] = String(fixedValue);
-    applyLayerSizing("vector", record);
+    if (records.some((record) => Number(record.element.dataset[dimension] || "24") !== fixedValue)) {
+      recordHistoryForGesture(input);
+    }
+    records.forEach((record) => {
+      record.element.dataset[`${dimension}Mode`] = "fixed";
+      record.element.dataset[dimension] = String(fixedValue);
+      applyLayerSizing("vector", record);
+    });
+    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
     requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", syncInspectorToSelectedVector);

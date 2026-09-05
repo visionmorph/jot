@@ -184,6 +184,46 @@ function upsertLocalVariantOverride(instance, target, property, value) {
   return { changed: true, override: nextOverride };
 }
 
+function getLocalVariantOverride(instance, target, property) {
+  return (instance?.overrides ?? []).find((override) => (
+    override.target === target && override.property === property
+  )) ?? null;
+}
+
+function shouldWriteVariantOverrideForEditedInstances(instance, target, property, editedInstanceIds) {
+  if (!instance || getLocalVariantOverride(instance, target, property)) return Boolean(instance);
+  const editedIds = editedInstanceIds instanceof Set
+    ? editedInstanceIds
+    : new Set(editedInstanceIds ?? []);
+  if (editedIds.size < 2) return true;
+  const visited = new Set([instance.id]);
+  let parent = instance.parentVariantId == null ? null : getVariantInstance(instance.parentVariantId);
+  while (parent && !visited.has(parent.id)) {
+    if (editedIds.has(parent.id)) return false;
+    visited.add(parent.id);
+    parent = parent.parentVariantId == null ? null : getVariantInstance(parent.parentVariantId);
+  }
+  return true;
+}
+
+function upsertVariantOverrideForEditedInstances(
+  instance,
+  target,
+  property,
+  value,
+  editedInstanceIds,
+) {
+  if (!shouldWriteVariantOverrideForEditedInstances(
+    instance,
+    target,
+    property,
+    editedInstanceIds,
+  )) {
+    return { changed: false, override: null, inherited: true };
+  }
+  return { ...upsertLocalVariantOverride(instance, target, property, value), inherited: false };
+}
+
 function getVariantInstance(instanceId = selectedVariantInstanceId) {
   return variantModel.getInstances().find((instance) => instance.id === instanceId) ?? null;
 }

@@ -40,6 +40,7 @@ function updateInspector() {
   if (isTextSelected) syncInspectorToSelectedText();
   if (isFrameSelected) syncInspectorToSelectedFrame();
   if (isVectorSelected) syncInspectorToSelectedVector();
+  syncSelectionColorControls(isFrameSelected, isTextSelected, isVectorSelected);
   if (!isVariantSelected && !isTextSelected && !isFrameSelected && !isVectorSelected && colorPicker instanceof HTMLInputElement) {
     syncCustomColorControl(colorPicker, canvasColorValue, canvasColorOpacity);
   }
