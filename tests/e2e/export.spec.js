@@ -28,6 +28,22 @@ test("converts an SVG into React-compatible JSX", async ({ page }) => {
   expect(source).toContain('strokeLinecap: "round"');
 });
 
+test("removes unsupported important priorities from SVG React styles", async ({ page }) => {
+  await openApp(page);
+
+  const source = await page.evaluate(() => {
+    const svg = new DOMParser().parseFromString(
+      '<svg style="fill: red !important"><path style="stroke: blue !important" /></svg>',
+      "image/svg+xml",
+    ).documentElement;
+    return serializeSvgElementToJsx(svg, 0);
+  });
+
+  expect(source).toContain('fill: "red"');
+  expect(source).toContain('stroke: "blue"');
+  expect(source).not.toContain("!important");
+});
+
 test("generates React output for authored variants", async ({ page }) => {
   await openApp(page);
   await page.getByRole("button", { name: "Add variant preview" }).click();
@@ -104,4 +120,71 @@ test("exports lower-camel variant args that select each authored style", async (
   expect(componentSource).toContain('fontWeight: "700"');
   expect(storySource).toContain('kind2: { control: "select", options: ["primary","secondary","tertiary"] }');
   expect(storySource).not.toContain("Kind2");
+});
+
+test("does not render the default variant for an unauthored combination", async ({ page }) => {
+  await openApp(page);
+
+  const source = await page.evaluate(() => {
+    const kindProp = {
+      id: nextComponentPropId,
+      name: "Kind",
+      type: "enum",
+      options: ["primary", "secondary"],
+      defaultValue: "primary",
+      targetFrameId: null,
+      targetTextId: null,
+      targetVectorId: null,
+      property: "kind",
+    };
+    nextComponentPropId += 1;
+    componentProps.push(kindProp);
+    syncComponentPropVariantDefinition(kindProp, { render: false });
+    addVariantInstance({ render: false });
+    return createReactComponentSource("Button");
+  });
+
+  expect(source).toContain("return null;");
+  expect(source).toContain("return variants[selectedVariant];");
+  expect(source).not.toContain("?? variants[");
+});
+
+test("exports action and disabled props for a nested button", async ({ page }) => {
+  await openApp(page);
+
+  const { compatibleTargetIds, source } = await page.evaluate(() => {
+    const nestedButton = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    nestedButton.element.dataset.htmlTag = "button";
+    const actionProp = {
+      id: nextComponentPropId,
+      name: "onClick",
+      type: "action",
+      defaultValue: "",
+      targetFrameId: nestedButton.id,
+      targetTextId: null,
+      targetVectorId: null,
+      property: "onClick",
+    };
+    nextComponentPropId += 1;
+    const disabledProp = {
+      id: nextComponentPropId,
+      name: "Disabled",
+      type: "boolean",
+      defaultValue: false,
+      targetFrameId: nestedButton.id,
+      targetTextId: null,
+      targetVectorId: null,
+      property: "disabled",
+    };
+    nextComponentPropId += 1;
+    componentProps.push(actionProp, disabledProp);
+    return {
+      compatibleTargetIds: getCompatibleDisabledTargets().map((record) => record.id),
+      source: createReactComponentSource("NestedButton"),
+    };
+  });
+
+  expect(compatibleTargetIds).toEqual([1]);
+  expect(source).toContain("function NestedButton({ onClick, disabled = false })");
+  expect(source).toContain('<button type="button" disabled={disabled} onClick={onClick}');
 });

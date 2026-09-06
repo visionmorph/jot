@@ -34,9 +34,7 @@ function parseSvgStyle(styleValue) {
     const value = parsedStyle.getPropertyValue(property).trim();
     if (!value) return style;
     const reactProperty = property.startsWith("--") ? property : toReactStyleProperty(property);
-    style[reactProperty] = parsedStyle.getPropertyPriority(property) === "important"
-      ? `${value} !important`
-      : value;
+    style[reactProperty] = value;
     return style;
   }, {});
 }

@@ -140,7 +140,6 @@ function getExportComponentProps({
     const targetVector = getVectorRecord(prop.targetVectorId);
     const hasCompatibleButtonTarget = Boolean(
       targetFrame
-      && targetFrame.parentId === null
       && normalizeFrameHtmlTag(targetFrame.element.dataset.htmlTag || "div") === "button",
     );
     const isValid = prop.type === "boolean"
@@ -263,7 +262,7 @@ function createReactComponentSource(
     ].join(", ");
     const axisValues = variantAxes.map((axis) => axis.exportName).join(", ");
     const stateStyleImport = stateAxes.length > 0 ? `import "./${componentName}.css";\n` : "";
-    return `import React from "react";\n${stateStyleImport}\nexport default function ${componentName}({ ${parameters} }) {\n  const variants = {\n${variantMarkup}\n  };\n  const authoredCombinations = {\n${combinationRows}\n  };\n  const combinationKey = JSON.stringify([${axisValues}]);\n  const selectedVariant = variant ?? authoredCombinations[combinationKey];\n  if (!selectedVariant || !variants[selectedVariant]) {\n    console.warn(${JSON.stringify(`${componentName}: no authored variant matches the supplied variant properties.`)}, { ${axisValues} });\n  }\n  return variants[selectedVariant] ?? variants[${JSON.stringify(defaultExportVariant.key)}];\n}\n`;
+    return `import React from "react";\n${stateStyleImport}\nexport default function ${componentName}({ ${parameters} }) {\n  const variants = {\n${variantMarkup}\n  };\n  const authoredCombinations = {\n${combinationRows}\n  };\n  const combinationKey = JSON.stringify([${axisValues}]);\n  const selectedVariant = variant ?? authoredCombinations[combinationKey];\n  if (!selectedVariant || !variants[selectedVariant]) {\n    console.warn(${JSON.stringify(`${componentName}: no authored variant matches the supplied variant properties.`)}, { ${axisValues} });\n    return null;\n  }\n  return variants[selectedVariant];\n}\n`;
   }
   const componentMarkup = currentComponent?.frameRecord
     ? renderExportLayer({ type: "frame", record: currentComponent.frameRecord }, 2, exportProps)

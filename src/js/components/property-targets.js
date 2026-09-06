@@ -4,7 +4,6 @@ function getCompatibleDisabledTargets() {
   const componentFrame = currentComponent?.frameRecord;
   return [componentFrame, ...frameRecords].filter((record) =>
     record
-    && record.parentId === null
     && normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div") === "button");
 }
 
