@@ -63,6 +63,11 @@ function applyVariantOperation(root, operation) {
   }
   if (property === "backgroundColor") {
     target.style.backgroundColor = String(value ?? "");
+    if (isTransparentColorValue(value)) {
+      target.dataset.frameColor = "";
+      target.dataset.frameColorOpacity = "100";
+      return;
+    }
     const color = typeof cssColorToHex === "function" ? cssColorToHex(String(value)) : null;
     if (color) target.dataset.frameColor = color;
     const alpha = String(value).match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);

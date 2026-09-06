@@ -63,8 +63,11 @@ function createExportIdentifierAllocator(reservedNames = []) {
   const usedNames = new Set(reservedNames);
   return (value, fallback) => {
     const sanitizedName = String(value ?? "").trim().replace(/[^a-zA-Z0-9_$]/g, "");
-    let exportName = /^[a-zA-Z_$]/.test(sanitizedName) && !JAVASCRIPT_RESERVED_WORDS.has(sanitizedName)
-      ? sanitizedName
+    const camelCaseName = sanitizedName
+      ? `${sanitizedName[0].toLowerCase()}${sanitizedName.slice(1)}`
+      : "";
+    let exportName = /^[a-zA-Z_$]/.test(camelCaseName) && !JAVASCRIPT_RESERVED_WORDS.has(camelCaseName)
+      ? camelCaseName
       : fallback;
     const baseName = exportName;
     let suffix = 2;
@@ -286,9 +289,9 @@ function createStorySource(componentName) {
   });
   const exportVariants = getBaseExportVariantEntries(variantAxes, stateAxes);
   const actionProps = exportProps.filter((prop) => prop.type === "action");
-  const actionImport = actionProps.length > 0 ? `import { action } from "storybook/actions";\n` : "";
-  const actionDeclarations = actionProps.length > 0
-    ? `${actionProps.map((prop) => `const ${prop.exportName}Action = action("${prop.property === "onClick" ? "clicked" : prop.exportName}");`).join("\n")}\n\n`
+  const actionImport = actionProps.length > 0 ? `import { fn } from "storybook/test";\n` : "";
+  const metaArgs = actionProps.length > 0
+    ? `\n  args: {\n${actionProps.map((prop) => `    ${prop.exportName}: fn(),`).join("\n")}\n  },`
     : "";
   const variantAxisArgTypes = variantAxes.map((axis) => axis.type === "boolean"
     ? `    ${axis.exportName}: { control: "boolean" },`
@@ -306,9 +309,9 @@ function createStorySource(componentName) {
   const defaultExportVariant = exportVariants.find(({ instance }) => instance === defaultVariant) ?? exportVariants[0];
   const defaultArgRows = [
     ...variantAxes.map((axis) => `    ${axis.exportName}: ${JSON.stringify(getExportVariantAxisDefaultValue(axis))},`),
-    ...exportProps.map((prop) => prop.type === "action"
-      ? `    ${prop.exportName}: ${prop.exportName}Action,`
-      : `    ${prop.exportName}: ${JSON.stringify(prop.defaultValue)},`),
+    ...exportProps
+      .filter((prop) => prop.type !== "action")
+      .map((prop) => `    ${prop.exportName}: ${JSON.stringify(prop.defaultValue)},`),
   ];
   const defaultArgs = defaultArgRows.length > 0
     ? `{\n  args: {\n${defaultArgRows.join("\n")}\n  },\n}`
@@ -337,7 +340,7 @@ function createStorySource(componentName) {
       const escapeRow = needsNamedEscape ? [`    variant: ${JSON.stringify(key)},`] : [];
       return `\nexport const ${storyName} = {\n  args: {\n    ...Default.args,\n${[...axisRows, ...escapeRow].join("\n")}\n  },\n};`;
     }).join("\n");
-  return `${actionImport}import ${componentName} from "./${componentName}";\n\n${actionDeclarations}const meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${argTypes}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};${variantStories}\n`;
+  return `${actionImport}import ${componentName} from "./${componentName}";\n\nconst meta = {\n  title: "Components/${componentName}",\n  component: ${componentName},${metaArgs}${argTypes}\n};\n\nexport default meta;\n\nexport const Default = ${defaultArgs};${variantStories}\n`;
 }
 
 function downloadExportFile(fileName, source) {

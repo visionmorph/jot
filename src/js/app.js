@@ -1,6 +1,7 @@
 /* Application initialization, global shortcuts, and startup rendering. */
 
 let copiedVariantSelection = null;
+let copiedLayerSelection = null;
 
 function isClipboardTextEditing(target) {
   return target instanceof HTMLElement && (target.isContentEditable
@@ -8,8 +9,15 @@ function isClipboardTextEditing(target) {
 }
 
 document.addEventListener("copy", (event) => {
-  if (isClipboardTextEditing(event.target) || !event.clipboardData
-    || getSelectedVariantLayerTargets().length > 0) return;
+  if (isClipboardTextEditing(event.target) || !event.clipboardData) return;
+  const layerCopy = captureSelectedLayerCopies();
+  if (layerCopy.layers.length > 0) {
+    const token = `Jot layers ${crypto.randomUUID()}`;
+    copiedLayerSelection = { token, component: currentComponent, copy: layerCopy };
+    event.clipboardData.setData("text/plain", token);
+    event.preventDefault();
+    return;
+  }
   const instances = captureSelectedVariantCopies();
   if (instances.length === 0) return;
   const token = `Jot variants ${crypto.randomUUID()}`;
@@ -23,6 +31,13 @@ document.addEventListener("copy", (event) => {
 });
 
 document.addEventListener("paste", (event) => {
+  if (!isClipboardTextEditing(event.target) && copiedLayerSelection
+    && copiedLayerSelection.component === currentComponent
+    && event.clipboardData?.getData("text/plain") === copiedLayerSelection.token) {
+    event.preventDefault();
+    insertLayerCopies(copiedLayerSelection.copy);
+    return;
+  }
   if (isClipboardTextEditing(event.target) || !copiedVariantSelection
     || copiedVariantSelection.component !== currentComponent
     || event.clipboardData?.getData("text/plain") !== copiedVariantSelection.token) return;
@@ -83,6 +98,11 @@ document.addEventListener("keydown", (event) => {
   }
 
   if (!isTyping && event.key === "Tab" && !isCommandShortcut && !event.altKey) {
+    if (getSelectedVariantInstanceIds().length > 0 && getSelectedVariantLayerTargets().length === 0) {
+      event.preventDefault();
+      cycleSelectedVariant(event.shiftKey ? -1 : 1);
+      return;
+    }
     if (getPrimaryLayerDescriptor() || (!event.shiftKey && getSelectedVariantInstanceIds().length > 1)) {
       event.preventDefault();
       selectSiblingLayer(event.shiftKey ? -1 : 1);
@@ -196,7 +216,7 @@ document.addEventListener("keydown", (event) => {
 
   if (activeVariantInstanceId !== null && activeVariantLayerTarget === null) {
     event.preventDefault();
-    removeVariantInstance(activeVariantInstanceId);
+    removeSelectedVariantInstances();
     return;
   }
 

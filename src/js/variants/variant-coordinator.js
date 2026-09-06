@@ -320,10 +320,13 @@ function captureSelectedVariantCopies() {
     instances.push(getInitialVariantData());
   }
   return instances.map((instance) => ({
+    sourceId: instance.id ?? null,
     name: instance.name,
+    parentVariantId: instance.parentVariantId ?? null,
     propValues: structuredClone(instance.propValues ?? {}),
-    overrides: structuredClone([...new Map(getCascadedVariantOverrides(instance)
-      .map((override) => [JSON.stringify([override.target, override.property]), override])).values()]),
+    // Preserve the inheritance boundary. Flattening cascaded values here turns
+    // inherited styles into local overrides and disconnects future base edits.
+    overrides: structuredClone(instance.overrides ?? []),
   }));
 }
 
@@ -331,12 +334,27 @@ function insertVariantCopies(instances) {
   if (!currentComponent || instances.length === 0) return false;
   recordHistory();
   ensureInitialVariantInstance();
-  const copies = instances.map((instance) => variantModel.addInstance({
-    ...structuredClone(instance),
-    name: `${instance.name} copy`,
-    componentId: currentComponent.id,
-    parentVariantId: null,
-  }));
+  const initialVariantId = getDefaultVariantInstance()?.id ?? null;
+  const sourceToCopy = new Map();
+  const copies = instances.map((instance) => {
+    const { sourceId, ...copyData } = structuredClone(instance);
+    const copy = variantModel.addInstance({
+      ...copyData,
+      name: `${instance.name} copy`,
+      componentId: currentComponent.id,
+      parentVariantId: instance.parentVariantId ?? null,
+    });
+    if (sourceId != null) sourceToCopy.set(sourceId, copy.id);
+    return copy;
+  });
+  copies.forEach((copy, index) => {
+    if (instances[index].sourceId == null) {
+      copy.parentVariantId = initialVariantId;
+      return;
+    }
+    const sourceParentId = instances[index].parentVariantId ?? null;
+    copy.parentVariantId = sourceToCopy.get(sourceParentId) ?? sourceParentId;
+  });
   selectVariantInstancesState(copies.map((instance) => instance.id));
   clearMasterSelectionForVariant();
   renderTree();
@@ -421,6 +439,62 @@ function removeVariantInstance(instanceId) {
   if (nextInstanceId == null) selectComponentState(currentComponent?.id);
   else selectVariantState(nextInstanceId, null);
   renderTree();
+  return true;
+}
+
+function removeSelectedVariantInstances() {
+  const selectedIds = new Set(getSelectedVariantInstanceIds());
+  if (selectedIds.size === 0) return false;
+  const instances = variantModel.getInstances();
+  const removableIds = new Set(instances
+    .filter((instance) => selectedIds.has(instance.id) && canRemoveVariantInstance(instance))
+    .map((instance) => instance.id));
+  if (removableIds.size === 0) return false;
+
+  const originalById = new Map(instances.map((instance) => [instance.id, instance]));
+  recordHistory();
+  instances.forEach((instance) => {
+    if (removableIds.has(instance.id) || !removableIds.has(instance.parentVariantId)) return;
+    const removedChain = [];
+    const visited = new Set([instance.id]);
+    let parent = originalById.get(instance.parentVariantId);
+    while (parent && removableIds.has(parent.id) && !visited.has(parent.id)) {
+      visited.add(parent.id);
+      removedChain.unshift(parent);
+      parent = parent.parentVariantId == null ? null : originalById.get(parent.parentVariantId);
+    }
+    const localKeys = new Set((instance.overrides ?? [])
+      .map((override) => `${override.target}\u0000${override.property}`));
+    const inherited = new Map();
+    removedChain.flatMap((entry) => entry.overrides ?? []).forEach((override) => {
+      const key = `${override.target}\u0000${override.property}`;
+      if (!localKeys.has(key)) inherited.set(key, structuredClone(override));
+    });
+    instance.overrides = [...inherited.values(), ...(instance.overrides ?? [])];
+    instance.parentVariantId = parent?.id ?? null;
+  });
+
+  const firstRemovedIndex = instances.findIndex((instance) => removableIds.has(instance.id));
+  variantModel.replaceInstances(instances.filter((instance) => !removableIds.has(instance.id)));
+  normalizeDefaultVariantInstance();
+  const remaining = variantModel.getInstances();
+  const nextInstance = remaining[Math.min(Math.max(firstRemovedIndex, 0), remaining.length - 1)] ?? null;
+  if (nextInstance) selectVariantState(nextInstance.id, null);
+  else selectComponentState(currentComponent?.id);
+  renderTree();
+  return true;
+}
+
+function cycleSelectedVariant(direction) {
+  const instances = variantModel.getInstances();
+  if (instances.length === 0 || getSelectedVariantInstanceIds().length === 0) return false;
+  const currentIndex = instances.findIndex((instance) => instance.id === selectedVariantInstanceId);
+  const nextIndex = (Math.max(currentIndex, 0) + direction + instances.length) % instances.length;
+  selectVariantInstance(instances[nextIndex].id);
+  const preview = componentSet?.querySelector(
+    `.variant-preview[data-variant-instance-id="${CSS.escape(String(instances[nextIndex].id))}"]`,
+  );
+  if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
   return true;
 }
 

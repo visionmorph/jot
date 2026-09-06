@@ -184,7 +184,9 @@ function getCustomColorState(control) {
     const uniformRunColor = getUniformTextRunColor(record);
     const renderedColor = record.isVariantInstance ? getComputedStyle(record.element).color : "";
     const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
-    const isTransparent = renderedColor === "transparent" || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
+    const isTransparent = isTransparentColorValue(record.element.style.color)
+      || renderedColor === "transparent"
+      || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
     const layerColor = record.isVariantInstance
       ? isTransparent ? "" : cssColorToHex(renderedColor) || "#000000"
       : Object.prototype.hasOwnProperty.call(record.element.dataset, "textColor") ? record.element.dataset.textColor : "#000000";
@@ -360,7 +362,7 @@ function applyCustomColorValue(control, color, opacity) {
       record.element.dataset.textColor = normalizedColor;
       record.element.dataset.textColorOpacity = String(nextOpacity);
       record.element.style.color = renderedColor;
-      const instance = getVariantInstance();
+      const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
       if (instance) upsertLocalVariantOverride(instance, target, "color", renderedColor);
       syncVariantLayerStylePreviews(target, "color", record.element);
     });

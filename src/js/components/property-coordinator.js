@@ -22,7 +22,7 @@ function bindPropsActionTooltip(wrapper, button) {
   wrapper.addEventListener("focusin", positionTooltip);
 }
 
-function createPropSelect(options, value, ariaLabel, onChange, disabled = false) {
+function createPropSelect(options, value, ariaLabel, onChange, disabled = false, placeholder = "Choose an option") {
   const wrap = document.createElement("div");
   const trigger = document.createElement("button");
   const chevron = document.createElement("span");
@@ -93,7 +93,7 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false)
   });
   chevron.className = "chevron inspector-select-chevron";
   chevron.setAttribute("aria-hidden", "true");
-  trigger.textContent = selectedOptionRecord?.label ?? String(value);
+  trigger.textContent = selectedOptionRecord?.label ?? (String(value) || placeholder);
   trigger.addEventListener("click", () => setOpen(menu.hidden));
   trigger.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
@@ -178,7 +178,7 @@ function setComponentPropType(prop, value, compatibleTargets) {
     prop.targetVectorId = null;
     prop.property = "textContent";
   } else if (value === "action") {
-    const target = compatibleTargets[0];
+    const target = getCompatibleDisabledTargets()[0];
     prop.name = "onClick";
     prop.type = "action";
     prop.defaultValue = "";

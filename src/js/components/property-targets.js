@@ -41,7 +41,7 @@ function inferBooleanComponentPropDefault(prop) {
   return false;
 }
 
-function syncInferredBooleanComponentPropDefault(prop, defaultInstance = getDefaultVariantInstance()) {
+function syncInferredBooleanComponentPropDefault(prop) {
   if (prop?.type !== "boolean") return;
   const nextDefault = inferBooleanComponentPropDefault(prop);
   prop.defaultValue = nextDefault;
@@ -49,28 +49,28 @@ function syncInferredBooleanComponentPropDefault(prop, defaultInstance = getDefa
   const variantProp = variantModel.getProps().find((entry) => entry.id === prop.variantPropId);
   if (variantProp) {
     setInferredVariantBooleanDefault(variantProp, nextDefault);
-    if (defaultInstance) {
-      defaultInstance.propValues ??= {};
-      defaultInstance.propValues[variantProp.id] = nextDefault;
-    }
+    // A tree visibility change edits the shared layer schema, so every variant
+    // must receive the same value instead of leaving stale per-instance values.
+    variantModel.getInstances().forEach((instance) => {
+      instance.propValues ??= {};
+      instance.propValues[variantProp.id] = nextDefault;
+    });
   }
   renderVariantSystem();
 }
 
 function syncBooleanComponentPropDefaultsForTarget(type, recordId) {
   const targetKey = type === "text" ? "targetTextId" : type === "vector" ? "targetVectorId" : "targetFrameId";
-  const defaultInstance = getDefaultVariantInstance();
   const matchingProps = componentProps
     .filter((prop) => prop.type === "boolean" && prop.property === "visibility" && prop[targetKey] === recordId);
   if (matchingProps.length === 0) return;
-  matchingProps.forEach((prop) => syncInferredBooleanComponentPropDefault(prop, defaultInstance));
+  matchingProps.forEach((prop) => syncInferredBooleanComponentPropDefault(prop));
   renderComponentProps();
 }
 
 function setBooleanPropProperty(prop, property) {
   if (property === prop.property) return;
   recordHistory();
-  const defaultInstance = getDefaultVariantInstance();
   if (property === "visibility") {
     const target = getAllTargetableLayers()[0];
     prop.name = "visible";
@@ -86,7 +86,7 @@ function setBooleanPropProperty(prop, property) {
     prop.targetTextId = null;
     prop.targetVectorId = null;
   }
-  syncInferredBooleanComponentPropDefault(prop, defaultInstance);
+  syncInferredBooleanComponentPropDefault(prop);
   renderComponentProps();
 }
 
@@ -121,14 +121,11 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
       targetsEmpty,
       options: targetsEmpty
         ? [{ value: "", label: "No text target", disabled: true }]
-        : [
-            { value: "", label: "Select layer", disabled: true },
-            ...textRecords.map((record) => ({
+        : textRecords.map((record) => ({
               value: String(record.id),
               label: getTreeNodeName("text", record),
               iconType: "text",
             })),
-          ],
     };
   }
   if (isVisibilityProp) {
@@ -151,15 +148,12 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
       targetsEmpty,
       options: targetsEmpty
         ? [{ value: "", label: "No layer target", disabled: true }]
-        : [
-            { value: "", label: "Select layer", disabled: true },
-            ...allLayers.map((layer) => ({
+        : allLayers.map((layer) => ({
               value: `${layer.type}:${layer.record.id}`,
               label: getVisibilityTargetLabel(layer.type, layer.record),
               iconType: getTargetLayerIconType(layer.type, layer.record),
               iconRecord: layer.type === "component" ? null : layer.record,
             })),
-          ],
     };
   }
   const hasCurrentTarget = compatibleTargets.some((record) => record.id === prop.targetFrameId);
@@ -173,9 +167,7 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
     targetsEmpty,
     options: targetsEmpty
       ? [{ value: "", label: "No button target", disabled: true }]
-      : [
-          ...(prop.type === "action" ? [] : [{ value: "", label: "Select layer", disabled: true }]),
-          ...compatibleTargets.map((record) => ({
+      : compatibleTargets.map((record) => ({
             value: String(record.id),
             label: record.isComponent
               ? currentComponent?.name || "Component"
@@ -183,14 +175,12 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
             iconType: getTargetLayerIconType("frame", record),
             iconRecord: record.isComponent ? null : record,
           })),
-        ],
   };
 }
 
 function setComponentPropTarget(prop, value, config) {
   if (!value || value === config.currentValue || config.isOptionProp) return;
   recordHistory();
-  const defaultInstance = getDefaultVariantInstance();
   if (config.isStringProp) {
     const targetId = Number(value);
     const target = getTextRecord(targetId);
@@ -210,7 +200,7 @@ function setComponentPropTarget(prop, value, config) {
     prop.targetTextId = null;
     prop.targetVectorId = null;
   }
-  if (prop.type === "boolean") syncInferredBooleanComponentPropDefault(prop, defaultInstance);
+  if (prop.type === "boolean") syncInferredBooleanComponentPropDefault(prop);
   renderComponentProps();
 }
 

@@ -1,6 +1,41 @@
 const { test, expect } = require("playwright/test");
 const { openApp } = require("../support/open-app.cjs");
 
+test("shows and independently edits colors across drilled-down variants", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    const frame = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    frame.element.dataset.frameColor = "";
+    frame.element.style.backgroundColor = "";
+    createCanvasText(frame, 0, 0, { beginEditing: false, isNew: false, textContent: "Label" });
+    for (let index = 0; index < 2; index += 1) addVariantInstance();
+    variantModel.getInstances().forEach((instance, index) => {
+      upsertLocalVariantOverride(instance, "text:1", "color", ["#ff0000", "#0000ff", "#00ff00"][index]);
+    });
+    selectVariantInstancesState(variantModel.getInstances().slice(0, 2).map((instance) => instance.id));
+    renderTree();
+  });
+  await page.locator(".variant-preview").nth(1).focus();
+  const colors = page.locator('[data-selection-colors] [data-color-hex]');
+  for (const type of ["frame", "text"]) {
+    await page.keyboard.press("Enter");
+    await expect(page.locator(`.variant-preview .canvas-${type}.is-selected`)).toHaveCount(2);
+    await expect(colors).toHaveCount(2);
+    await expect.poll(() => colors.evaluateAll((inputs) => inputs.map((input) => input.value.toLowerCase()).sort()))
+      .toEqual(["0000ff", "ff0000"]);
+  }
+  const red = page.locator('[data-selection-colors] [data-color-hex]').filter({ visible: true });
+  const redIndex = await colors.evaluateAll((inputs) => inputs.findIndex((input) => input.value.toLowerCase() === "ff0000"));
+  await red.nth(redIndex).fill("ffaa00");
+  await red.nth(redIndex).press("Enter");
+  const texts = page.locator(".variant-preview .canvas-text");
+  await expect(texts.nth(0)).toHaveCSS("color", "rgb(255, 170, 0)");
+  await expect(texts.nth(1)).toHaveCSS("color", "rgb(0, 0, 255)");
+  await expect(texts.nth(2)).toHaveCSS("color", "rgb(0, 255, 0)");
+  await page.keyboard.press("Control+z");
+  await expect(texts.nth(0)).toHaveCSS("color", "rgb(255, 0, 0)");
+});
+
 test("duplicating four variant roots matches paste without nesting layers", async ({ page }) => {
   await openApp(page);
   await page.evaluate(() => {
@@ -63,6 +98,46 @@ for (const action of ["duplicate", "paste"]) {
     await expect.poll(() => page.evaluate(() => selectionState.kind)).toBe("component");
     await page.keyboard.press("Control+Shift+z");
     await expect(page.locator(".variant-preview")).toHaveCount(2);
+  });
+}
+
+for (const action of ["duplicate", "paste"]) {
+  test(`${action} from the original component preserves layout inheritance`, async ({ page }) => {
+    await openApp(page);
+    await page.locator("[data-selection-component-id]").first().focus();
+    if (action === "paste") {
+      await page.keyboard.press("ControlOrMeta+c");
+      await page.keyboard.press("ControlOrMeta+v");
+    } else {
+      await page.keyboard.press("ControlOrMeta+d");
+    }
+
+    const roots = page.locator(".variant-preview .canvas-root-stack");
+    await expect(roots).toHaveCount(2);
+    await expect.poll(() => page.evaluate(() => {
+      const [base, copy] = variantModel.getInstances();
+      return { baseId: base.id, copyParentId: copy.parentVariantId, copyOverrides: copy.overrides };
+    })).toEqual({ baseId: 1, copyParentId: 1, copyOverrides: [] });
+
+    await roots.nth(0).click();
+    await page.locator("#frame-gap").fill("18");
+    await page.locator("#frame-gap").press("Tab");
+    await page.getByRole("spinbutton", { name: "Radius" }).fill("9");
+    await page.getByRole("spinbutton", { name: "Radius" }).press("Tab");
+    await page.getByRole("textbox", { name: "Horizontal padding" }).fill("24");
+    await page.getByRole("textbox", { name: "Horizontal padding" }).press("Tab");
+    await page.getByRole("textbox", { name: "Vertical padding" }).fill("16");
+    await page.getByRole("textbox", { name: "Vertical padding" }).press("Tab");
+
+    for (const root of await roots.all()) {
+      await expect(root).toHaveCSS("gap", "18px");
+      await expect(root).toHaveCSS("border-radius", "9px");
+      await expect(root).toHaveCSS("padding-left", "24px");
+      await expect(root).toHaveCSS("padding-right", "24px");
+      await expect(root).toHaveCSS("padding-top", "16px");
+      await expect(root).toHaveCSS("padding-bottom", "16px");
+    }
+    await expect.poll(() => page.evaluate(() => variantModel.getInstances()[1].overrides)).toEqual([]);
   });
 }
 
@@ -278,6 +353,7 @@ test("drills every selected variant and frame branch from the layer tree", async
 test("applies variant component gap after wrapping text and duplicating its frame", async ({ page }) => {
   await openApp(page);
   await page.evaluate(() => {
+    canvasRootStack.style.padding = "20px";
     const text = createCanvasText(currentComponent.frameRecord, 0, 0, {
       beginEditing: false,
       isNew: false,
@@ -287,10 +363,13 @@ test("applies variant component gap after wrapping text and duplicating its fram
     wrapSelectedLayersInFrame();
     duplicateSelectedLayer();
   });
+  await page.locator("[data-selection-component-id]").first().click();
   await page.getByRole("button", { name: "Add variant preview" }).click();
   const roots = page.locator(".variant-preview .canvas-root-stack");
-  await roots.nth(0).click({ position: { x: 1, y: 1 } });
-  await roots.nth(1).click({ position: { x: 1, y: 1 }, modifiers: ["Shift"] });
+  await expect(roots).toHaveCount(2);
+  await roots.nth(0).click({ position: { x: 10, y: 10 } });
+  await roots.nth(1).click({ position: { x: 10, y: 10 }, modifiers: ["Shift"] });
+  await expect(page.locator(".variant-preview .canvas-root-stack.is-selected")).toHaveCount(2);
   await page.locator("#frame-gap").fill("32");
   await page.locator("#frame-gap").press("Tab");
   for (const root of await roots.all()) {
@@ -418,6 +497,154 @@ test("creates variant previews and supports undo and redo", async ({ page }) => 
   await expect(previews.nth(1)).toHaveAttribute("aria-selected", "true");
 });
 
+test("cycles whole variants with Tab and Shift+Tab", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  const previews = page.locator(".variant-preview");
+  await previews.nth(0).locator(".canvas-root-stack").click();
+  await previews.nth(0).focus();
+
+  await page.keyboard.press("Tab");
+  await expect(previews.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(previews.nth(1)).toBeFocused();
+
+  await page.keyboard.press("Shift+Tab");
+  await expect(previews.nth(0)).toHaveAttribute("aria-selected", "true");
+  await expect(previews.nth(0)).toBeFocused();
+});
+
+test("bulk deletes selected variants", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  const previews = page.locator(".variant-preview");
+  const roots = previews.locator(".canvas-root-stack");
+  await roots.nth(1).click();
+  await roots.nth(2).click({ modifiers: ["Shift"] });
+  await previews.nth(2).focus();
+  await page.keyboard.press("Delete");
+  await expect(previews).toHaveCount(1);
+});
+
+test("duplicate preserves inherited style sync", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  await page.evaluate(() => {
+    const [base, child] = variantModel.getInstances();
+    upsertLocalVariantOverride(base, "component:0", "backgroundColor", "#CC0000");
+    selectVariantState(child.id, null);
+    renderTree();
+  });
+  await page.locator(".variant-preview").nth(1).focus();
+  await page.keyboard.press("ControlOrMeta+d");
+  await expect(page.locator(".variant-preview")).toHaveCount(3);
+  await expect.poll(() => page.evaluate(() => {
+    const copy = variantModel.getInstances()[2];
+    return { parentVariantId: copy.parentVariantId, overrides: copy.overrides };
+  })).toEqual({ parentVariantId: 1, overrides: [] });
+
+  await page.evaluate(() => {
+    upsertLocalVariantOverride(variantModel.getInstances()[0], "component:0", "backgroundColor", "#336699");
+    renderVariantInstances();
+  });
+  await expect(page.locator(".variant-preview").nth(2).locator(".canvas-root-stack"))
+    .toHaveCSS("background-color", "rgb(51, 102, 153)");
+});
+
+test("duplicates a frame and its text from a variant", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    const frame = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    createCanvasText(frame, 0, 0, {
+      beginEditing: false, isNew: false, textContent: "Nested label",
+    });
+    addVariantInstance();
+    const selectedInstance = variantModel.getInstances()[1];
+    upsertLocalVariantOverride(selectedInstance, "text:1", "textContent", "Variant label");
+    upsertLocalVariantOverride(selectedInstance, "text:1", "color", "#CC0000");
+    selectVariantState(selectedInstance.id, `frame:${frame.id}`);
+    renderTree();
+  });
+  await page.locator('.variant-preview[data-variant-instance-id="2"] [data-frame-id="1"]').focus();
+  await page.keyboard.press("ControlOrMeta+d");
+
+  await expect(page.locator('.variant-preview [data-frame-id="2"]')).toHaveCount(2);
+  await expect(page.locator('.variant-preview [data-frame-id="2"] > [data-text-id="2"]')).toHaveCount(2);
+  await expect(page.locator('.variant-preview[data-variant-instance-id="1"] [data-frame-id="2"] > [data-text-id="2"]'))
+    .toHaveText("Nested label");
+  const selectedVariantText = page.locator(
+    '.variant-preview[data-variant-instance-id="2"] [data-frame-id="2"] > [data-text-id="2"]',
+  );
+  await expect(selectedVariantText).toHaveText("Variant label");
+  await expect(selectedVariantText).toHaveCSS("color", "rgb(204, 0, 0)");
+});
+
+test("keeps transparent paint empty across multiple variants and layer types", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    const frame = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    createCanvasText(frame, 0, 0, { beginEditing: false, isNew: false, textContent: "Label" });
+    addVariantInstance();
+    const instances = variantModel.getInstances();
+    instances.forEach((instance) => {
+      upsertLocalVariantOverride(instance, "component:0", "backgroundColor", "transparent");
+      upsertLocalVariantOverride(instance, "frame:1", "backgroundColor", "transparent");
+      upsertLocalVariantOverride(instance, "text:1", "color", "transparent");
+    });
+    selectVariantInstancesLayerTargetsState(instances.map((instance) => instance.id), ["text:1"]);
+    renderTree();
+  });
+
+  await expect(page.locator('[data-selection-colors] [data-color-control="selection"]')).toHaveCount(0);
+  await expect(page.locator('[data-color-control="text"]')).toBeHidden();
+
+  await page.evaluate(() => {
+    selectVariantInstancesLayerTargetsState(variantModel.getInstances().map((instance) => instance.id), ["frame:1"]);
+    renderTree();
+  });
+  await expect(page.locator('[data-selection-colors] [data-color-control="selection"]')).toHaveCount(0);
+  await expect(page.locator('[data-color-control="frame-background"]')).toBeHidden();
+
+  await page.evaluate(() => {
+    selectVariantInstancesState(variantModel.getInstances().map((instance) => instance.id));
+    renderTree();
+  });
+  await expect(page.locator('[data-selection-colors] [data-color-control="selection"]')).toHaveCount(0);
+  await expect(page.locator('[data-color-control="frame-background"]')).toBeHidden();
+});
+
+test("tree visibility changes propagate to every variant", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    const text = createCanvasText(currentComponent.frameRecord, 0, 0, {
+      beginEditing: false, isNew: false, textContent: "Label",
+    });
+    const variantProp = variantModel.addProp({ name: "visible", type: "boolean", defaultValue: true });
+    componentProps.push({
+      id: nextComponentPropId++,
+      name: "visible",
+      type: "boolean",
+      property: "visibility",
+      targetFrameId: null,
+      targetTextId: text.id,
+      targetVectorId: null,
+      defaultValue: true,
+      variantPropId: variantProp.id,
+    });
+    addVariantInstance();
+    variantModel.getInstances().forEach((instance) => { instance.propValues[variantProp.id] = true; });
+    selectComponentState(currentComponent.id);
+    renderTree();
+  });
+
+  await page.getByRole("button", { name: "Hide Label" }).click({ force: true });
+  const previewTexts = page.locator('.variant-preview [data-text-id="1"]');
+  await expect(previewTexts).toHaveCount(2);
+  await expect(previewTexts.nth(0)).toHaveCSS("visibility", "hidden");
+  await expect(previewTexts.nth(1)).toHaveCSS("visibility", "hidden");
+});
+
 test("shift-clicks variant component roots into and out of one selection", async ({ page }) => {
   await openApp(page);
   await page.getByRole("button", { name: "Add variant preview" }).click();
@@ -441,6 +668,79 @@ test("shift-clicks variant component roots into and out of one selection", async
   await expect(previews.nth(0)).toHaveAttribute("aria-selected", "false");
   await expect(previews.nth(1)).toHaveAttribute("aria-selected", "false");
   await expect(previews.nth(2)).toHaveAttribute("aria-selected", "true");
+});
+
+test("assigns a Boolean prop value to every shift-clicked variant", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Boolean" }).click();
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+
+  const roots = page.locator(".variant-preview .canvas-root-stack");
+  await roots.nth(0).click();
+  await roots.nth(1).click({ modifiers: ["Shift"] });
+  await page.getByRole("switch", { name: "visible value" }).click();
+
+  await expect.poll(() => page.evaluate(() => {
+    const propId = variantModel.getProps()[0].id;
+    return variantModel.getInstances().map((instance) => instance.propValues[propId]);
+  })).toEqual([false, false, true]);
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(() => page.evaluate(() => {
+    const propId = variantModel.getProps()[0].id;
+    return variantModel.getInstances().map((instance) => instance.propValues[propId]);
+  })).toEqual([true, true, true]);
+});
+
+test("assigns an enum prop value to every shift-clicked variant", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Variant" }).click();
+  const addValue = page.getByRole("textbox", { name: "Add Kind value" });
+  await addValue.fill("Primary");
+  await addValue.press("Enter");
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+
+  const roots = page.locator(".variant-preview .canvas-root-stack");
+  await roots.nth(0).click();
+  await roots.nth(1).click({ modifiers: ["Shift"] });
+  await page.getByRole("textbox", { name: "Kind value Primary" }).click();
+
+  await expect.poll(() => page.evaluate(() => {
+    const propId = variantModel.getProps()[0].id;
+    return variantModel.getInstances().map((instance) => instance.propValues[propId]);
+  })).toEqual(["Primary", "Primary", "Default"]);
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(() => page.evaluate(() => {
+    const propId = variantModel.getProps()[0].id;
+    return variantModel.getInstances().map((instance) => instance.propValues[propId]);
+  })).toEqual(["Default", "Default", "Default"]);
+});
+
+test("creates a new enum value without assigning it to the selected variant", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Variant" }).click();
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+
+  const selectedVariantId = await page.evaluate(() => selectedVariantInstanceId);
+  const addValue = page.getByRole("textbox", { name: "Add Kind value" });
+  await addValue.fill("Primary");
+  await addValue.press("Enter");
+
+  const newValueTag = page.getByRole("textbox", { name: "Kind value Primary" }).locator("..");
+  await expect(newValueTag).not.toHaveClass(/is-active/);
+  await expect.poll(() => page.evaluate((instanceId) => {
+    const propId = variantModel.getProps()[0].id;
+    return getVariantInstance(instanceId).propValues[propId];
+  }, selectedVariantId)).toBe("Default");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(page.getByRole("textbox", { name: "Kind value Primary" })).toHaveCount(0);
 });
 
 test("marquee-selects one or multiple variant component roots with the same interaction", async ({ page }) => {
@@ -493,6 +793,87 @@ test("marquee-selects one or multiple variant component roots with the same inte
   await expect(previews.nth(0)).toHaveAttribute("aria-selected", "true");
   await expect(previews.nth(1)).toHaveAttribute("aria-selected", "false");
   await expect(previews.nth(2)).toHaveAttribute("aria-selected", "false");
+});
+
+test("assigns a Boolean prop value to every marquee-selected variant", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Boolean" }).click();
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  await page.evaluate(() => {
+    selectCanvasState();
+    renderTree();
+  });
+
+  const canvas = page.getByRole("region", { name: "Canvas" });
+  const roots = page.locator(".variant-preview .canvas-root-stack");
+  const canvasBounds = await canvas.boundingBox();
+  const firstBounds = await roots.nth(0).boundingBox();
+  const secondBounds = await roots.nth(1).boundingBox();
+  expect(canvasBounds).not.toBeNull();
+  expect(firstBounds).not.toBeNull();
+  expect(secondBounds).not.toBeNull();
+
+  await page.mouse.move(
+    Math.max(canvasBounds.x + 1, firstBounds.x - 8),
+    Math.max(canvasBounds.y + 1, firstBounds.y - 8),
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    secondBounds.x + secondBounds.width + 2,
+    Math.max(firstBounds.y + firstBounds.height, secondBounds.y + secondBounds.height) + 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.getByRole("switch", { name: "visible value" }).click();
+
+  await expect.poll(() => page.evaluate(() => {
+    const propId = variantModel.getProps()[0].id;
+    return variantModel.getInstances().map((instance) => instance.propValues[propId]);
+  })).toEqual([false, false, true]);
+});
+
+test("assigns an enum prop value to every marquee-selected variant", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Variant" }).click();
+  const addValue = page.getByRole("textbox", { name: "Add Kind value" });
+  await addValue.fill("Primary");
+  await addValue.press("Enter");
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  await page.evaluate(() => {
+    selectCanvasState();
+    renderTree();
+  });
+
+  const canvas = page.getByRole("region", { name: "Canvas" });
+  const roots = page.locator(".variant-preview .canvas-root-stack");
+  const canvasBounds = await canvas.boundingBox();
+  const firstBounds = await roots.nth(0).boundingBox();
+  const secondBounds = await roots.nth(1).boundingBox();
+  expect(canvasBounds).not.toBeNull();
+  expect(firstBounds).not.toBeNull();
+  expect(secondBounds).not.toBeNull();
+
+  await page.mouse.move(
+    Math.max(canvasBounds.x + 1, firstBounds.x - 8),
+    Math.max(canvasBounds.y + 1, firstBounds.y - 8),
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    secondBounds.x + secondBounds.width + 2,
+    Math.max(firstBounds.y + firstBounds.height, secondBounds.y + secondBounds.height) + 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.getByRole("textbox", { name: "Kind value Primary" }).click();
+
+  await expect.poll(() => page.evaluate(() => {
+    const propId = variantModel.getProps()[0].id;
+    return variantModel.getInstances().map((instance) => instance.propValues[propId]);
+  })).toEqual(["Primary", "Primary", "Default"]);
 });
 
 test("changes only the selected variant fill and supports undo and redo", async ({ page }) => {

@@ -102,7 +102,9 @@ function syncSelectedTextSizeInputs() {
     const values = records.map((candidate) => {
       const { element } = candidate;
       const bounds = element.getBoundingClientRect();
-      const instance = candidate.isVariantInstance ? getVariantInstance() : null;
+      const instance = candidate.isVariantInstance
+        ? getVariantInstance(candidate.variantInstanceId ?? selectedVariantInstanceId)
+        : null;
       const override = instance
         ? getEffectiveVariantOverride(instance, `text:${candidate.id}`, dimension)
         : null;
@@ -232,7 +234,9 @@ function syncInspectorToSelectedText() {
     const uniformRunColor = getUniformTextRunColor(record);
     const renderedColor = record.isVariantInstance ? styles.color : "";
     const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
-    const isTransparent = renderedColor === "transparent" || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
+    const isTransparent = isTransparentColorValue(element.style.color)
+      || renderedColor === "transparent"
+      || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
     const layerColor = record.isVariantInstance
       ? isTransparent ? "" : cssColorToHex(renderedColor) || "#000000"
       : Object.prototype.hasOwnProperty.call(element.dataset, "textColor") ? element.dataset.textColor : "#000000";
@@ -253,7 +257,7 @@ function syncInspectorToSelectedText() {
 }
 function persistVariantTextStyle(record, property, value) {
   if (!record?.isVariantInstance) return;
-  const instance = getVariantInstance();
+  const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
   const target = `text:${record.id}`;
   if (!instance) return;
   upsertLocalVariantOverride(instance, target, property, value);

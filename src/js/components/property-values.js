@@ -10,6 +10,10 @@ function createComponentPropValueCell(prop) {
 
 function createVariantBooleanDefaultControl(prop) {
   const instance = getVariantInstance() ?? getDefaultVariantInstance();
+  const selectedInstanceIds = new Set(getSelectedVariantInstanceIds());
+  const targetInstances = selectedInstanceIds.size > 0
+    ? variantModel.getInstances().filter((candidate) => selectedInstanceIds.has(candidate.id))
+    : instance ? [instance] : [];
   const currentValue = instance
     ? normalizeVariantPropValue(
       variantModel.getProps().find((variantProp) => variantProp.id === prop.variantPropId),
@@ -43,9 +47,11 @@ function createVariantBooleanDefaultControl(prop) {
     toggle.setAttribute("aria-checked", String(nextValue));
     label.textContent = nextValue ? "True" : "False";
     recordHistory();
-    if (instance) {
+    if (targetInstances.length > 0) {
       const variantProp = variantModel.getProps().find((entry) => entry.id === prop.variantPropId);
-      setVariantBooleanValue(instance, variantProp, nextValue);
+      targetInstances.forEach((targetInstance) => {
+        setVariantBooleanValue(targetInstance, variantProp, nextValue);
+      });
       renderVariantInstances();
     } else {
       prop.defaultValue = nextValue;
@@ -81,7 +87,7 @@ function createStringDefaultControl(prop) {
       syncTextRecordContent(target, input.value);
       applyLayerSizing("text", target);
       requestAnimationFrame(syncResizeOverlay);
-      renderTree();
+      if (renderPanel) renderTree();
     }
     if (didChange) {
       if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();

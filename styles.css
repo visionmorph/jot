@@ -634,7 +634,7 @@ textarea:focus-visible {
 }
 
 .prop-empty-value {
-  color: var(--text-disabled);
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 400;
   line-height: 16px;
@@ -642,11 +642,11 @@ textarea:focus-visible {
 
 .prop-empty-value--action {
   width: 100%;
-  text-align: center;
+  text-align: left;
 }
 
 .props-property-row .props-table-value-cell {
-  align-content: flex-start;
+  align-content: center;
   align-items: flex-start;
   justify-content: flex-start;
   padding: 4px 8px;

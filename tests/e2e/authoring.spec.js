@@ -173,6 +173,11 @@ test("changes a String property value and supports undo and redo", async ({ page
 
   const valueInput = page.getByRole("textbox", { name: "Default label value" });
   await expect(valueInput).toHaveValue("Original label");
+  await valueInput.focus();
+  await valueInput.press("End");
+  await valueInput.press("X");
+  await expect(valueInput).toBeFocused();
+  await valueInput.press("Backspace");
   await valueInput.fill("Updated label");
   await valueInput.press("Tab");
   await expect(text).toHaveText("Updated label");

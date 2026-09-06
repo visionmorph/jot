@@ -97,6 +97,14 @@ test("duplicates a selected frame and supports undo and redo", async ({ page }) 
 
   await frameTool.click();
   await component.click({ position: { x: 50, y: 50 } });
+  await page.evaluate(() => {
+    createCanvasText(getFrameRecord(1), 0, 0, {
+      beginEditing: false,
+      isNew: false,
+      textContent: "Nested label",
+    });
+    selectCanvasFrame(getFrameRecord(1).element);
+  });
   await expect(originalFrame).toHaveAttribute("aria-selected", "true");
 
   await page.keyboard.press("ControlOrMeta+d");
@@ -106,6 +114,8 @@ test("duplicates a selected frame and supports undo and redo", async ({ page }) 
   await expect(duplicateFrame).toHaveAttribute("aria-selected", "true");
   await expect(duplicateFrame).toHaveCSS("width", "100px");
   await expect(duplicateFrame).toHaveCSS("height", "100px");
+  await expect(originalFrame.locator(':scope > [data-text-id="1"]')).toHaveText("Nested label");
+  await expect(duplicateFrame.locator(':scope > [data-text-id="2"]')).toHaveText("Nested label");
   await expect(duplicateTreeItem).toHaveAttribute("aria-selected", "true");
 
   await page.keyboard.press("ControlOrMeta+z");
@@ -116,6 +126,25 @@ test("duplicates a selected frame and supports undo and redo", async ({ page }) 
   await expect(frames).toHaveCount(2);
   await expect(duplicateFrame).toHaveAttribute("aria-selected", "true");
   await expect(duplicateTreeItem).toHaveAttribute("aria-selected", "true");
+});
+
+test("copies and pastes a frame with its nested text", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    const frame = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    createCanvasText(frame, 0, 0, {
+      beginEditing: false,
+      isNew: false,
+      textContent: "Nested label",
+    });
+    selectCanvasFrame(frame.element);
+  });
+  await page.locator('[data-frame-id="1"]').focus();
+  await page.keyboard.press("ControlOrMeta+c");
+  await page.keyboard.press("ControlOrMeta+v");
+
+  await expect(page.locator('[data-canvas-root-stack] > [data-frame-id="2"]')).toHaveCount(1);
+  await expect(page.locator('[data-frame-id="2"] > [data-text-id="2"]')).toHaveText("Nested label");
 });
 
 test("duplicates a text layer with independent color runs", async ({ page }) => {

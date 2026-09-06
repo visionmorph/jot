@@ -409,6 +409,24 @@ function getSelectedTextRecord() {
 }
 
 function getSelectedTextRecords() {
+  if (selectionState.kind === "variants") {
+    const targets = getSelectedVariantLayerTargets().filter((target) => target.startsWith("text:"));
+    return getSelectedVariantInstanceIds().flatMap((instanceId) => {
+      const preview = componentSet?.querySelector(
+        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
+      );
+      const root = preview?.querySelector(".canvas-root-stack");
+      if (!(root instanceof HTMLElement)) return [];
+      return targets.map((target) => {
+        const textId = Number(target.split(":")[1]);
+        const sourceRecord = getTextRecord(textId);
+        const element = findVariantTarget(root, target);
+        return sourceRecord && element instanceof HTMLElement
+          ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: instanceId }
+          : null;
+      }).filter(Boolean);
+    });
+  }
   if (selectionState.kind === "variant") {
     const preview = componentSet?.querySelector(
       `.variant-preview[data-variant-instance-id="${CSS.escape(String(selectionState.instanceId))}"]`,
@@ -422,7 +440,7 @@ function getSelectedTextRecords() {
         const sourceRecord = getTextRecord(textId);
         const element = findVariantTarget(root, target);
         return sourceRecord && element instanceof HTMLElement
-          ? { ...sourceRecord, element, isVariantInstance: true }
+          ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: selectionState.instanceId }
           : null;
       })
       .filter(Boolean);
@@ -464,6 +482,27 @@ function getSelectedFrameRecord() {
 }
 
 function getSelectedFrameRecords() {
+  if (selectionState.kind === "variants") {
+    const targets = getSelectedVariantLayerTargets().length > 0
+      ? getSelectedVariantLayerTargets().filter((target) => target.startsWith("frame:"))
+      : ["component:0"];
+    return getSelectedVariantInstanceIds().flatMap((instanceId) => {
+      const preview = componentSet?.querySelector(
+        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
+      );
+      const root = preview?.querySelector(".canvas-root-stack");
+      if (!(root instanceof HTMLElement)) return [];
+      return targets.map((target) => {
+        const sourceRecord = target === "component:0"
+          ? currentComponent?.frameRecord
+          : getFrameRecord(Number(target.split(":")[1]));
+        const element = findVariantTarget(root, target);
+        return sourceRecord && element instanceof HTMLElement
+          ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: instanceId }
+          : null;
+      }).filter(Boolean);
+    });
+  }
   if (selectionState.kind === "variant") {
     const targets = getSelectedVariantLayerTargets().filter((target) => target.startsWith("frame:"));
     if (targets.length === 0) {
@@ -480,7 +519,7 @@ function getSelectedFrameRecords() {
       const sourceRecord = getFrameRecord(frameId);
       const element = findVariantTarget(root, target);
       return sourceRecord && element instanceof HTMLElement
-        ? { ...sourceRecord, element, isVariantInstance: true }
+        ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: selectionState.instanceId }
         : null;
     }).filter(Boolean);
   }
@@ -515,6 +554,24 @@ function getSelectedVectorRecord() {
 }
 
 function getSelectedVectorRecords() {
+  if (selectionState.kind === "variants") {
+    const targets = getSelectedVariantLayerTargets().filter((target) => target.startsWith("vector:"));
+    return getSelectedVariantInstanceIds().flatMap((instanceId) => {
+      const preview = componentSet?.querySelector(
+        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
+      );
+      const root = preview?.querySelector(".canvas-root-stack");
+      if (!(root instanceof HTMLElement)) return [];
+      return targets.map((target) => {
+        const vectorId = Number(target.split(":")[1]);
+        const sourceRecord = getVectorRecord(vectorId);
+        const element = findVariantTarget(root, target);
+        return sourceRecord && element instanceof HTMLElement
+          ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: instanceId }
+          : null;
+      }).filter(Boolean);
+    });
+  }
   if (selectionState.kind === "variant") {
     const preview = componentSet?.querySelector(
       `.variant-preview[data-variant-instance-id="${CSS.escape(String(selectionState.instanceId))}"]`,

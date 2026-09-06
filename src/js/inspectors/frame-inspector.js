@@ -197,7 +197,9 @@ function getFrameInspectorValues(record) {
     paddingBottom: padding.bottom,
     paddingX: padding.left === padding.right ? padding.left : `${padding.left}, ${padding.right}`,
     paddingY: padding.top === padding.bottom ? padding.top : `${padding.top}, ${padding.bottom}`,
-    fillColor: normalizeHexColor(backgroundValue) || cssColorToHex(backgroundValue) || "",
+    fillColor: isTransparentColorValue(backgroundValue)
+      ? ""
+      : normalizeHexColor(backgroundValue) || cssColorToHex(backgroundValue) || "",
     fillOpacity: String(normalizeColorOpacity(
       backgroundAlpha ? Number(backgroundAlpha[1]) * 100 : element.dataset.frameColorOpacity || "100",
     )),
@@ -412,7 +414,9 @@ function syncInspectorToSelectedFrame() {
   if (frameColorPicker instanceof HTMLInputElement) {
     const colorValue = getValue("backgroundColor", element.dataset.frameColor || "");
     const rgbaAlpha = String(colorValue).match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
-    const color = normalizeHexColor(colorValue) || cssColorToHex(colorValue) || "";
+    const color = isTransparentColorValue(colorValue)
+      ? ""
+      : normalizeHexColor(colorValue) || cssColorToHex(colorValue) || "";
     const opacity = rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : element.dataset.frameColorOpacity || "100";
     syncCustomColorControl(frameColorPicker, color, opacity);
   }

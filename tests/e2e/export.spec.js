@@ -39,3 +39,69 @@ test("generates React output for authored variants", async ({ page }) => {
   expect(source).toContain("const authoredCombinations = {");
   expect(source).toContain("const selectedVariant =");
 });
+
+test("generates Storybook click actions with a shared fn spy", async ({ page }) => {
+  await openApp(page);
+  await page.getByRole("button", { name: "Open HTML tag options" }).click();
+  await page.getByRole("option", { name: "button", exact: true }).click();
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Action" }).click();
+
+  const source = await page.evaluate(() => createStorySource("Button"));
+
+  expect(source).toContain('import { fn } from "storybook/test";');
+  expect(source).toContain("args: {\n    onClick: fn(),\n  },");
+  expect(source).not.toContain("storybook/actions");
+  expect(source).not.toContain("onClickAction");
+});
+
+test("exports lower-camel variant args that select each authored style", async ({ page }) => {
+  await openApp(page);
+
+  const { componentSource, storySource } = await page.evaluate(() => {
+    const kindProp = {
+      id: nextComponentPropId,
+      name: "Kind 2",
+      type: "enum",
+      options: ["primary", "secondary", "tertiary"],
+      defaultValue: "primary",
+      targetFrameId: null,
+      targetTextId: null,
+      targetVectorId: null,
+      property: "kind",
+    };
+    nextComponentPropId += 1;
+    componentProps.push(kindProp);
+    syncComponentPropVariantDefinition(kindProp, { render: false });
+    addVariantInstance({ render: false });
+    addVariantInstance({ render: false });
+
+    const axis = variantModel.getProps().find((prop) => prop.id === kindProp.variantPropId);
+    const colors = ["#0060FF", "#555555", "transparent"];
+    const weights = ["400", "600", "700"];
+    variantModel.getInstances().forEach((instance, index) => {
+      setVariantInstancePropValue(instance, axis.id, axis.options[index]);
+      upsertLocalVariantOverride(instance, "component:0", "backgroundColor", colors[index]);
+      upsertLocalVariantOverride(instance, "component:0", "fontWeight", weights[index]);
+    });
+
+    return {
+      componentSource: createReactComponentSource("Button"),
+      storySource: createStorySource("Button"),
+    };
+  });
+
+  expect(componentSource).toContain('kind2 = "primary"');
+  expect(componentSource).toContain('JSON.stringify([kind2])');
+  expect(componentSource).toContain('"[\\"primary\\"]": "Variant 1"');
+  expect(componentSource).toContain('"[\\"secondary\\"]": "Variant 2"');
+  expect(componentSource).toContain('"[\\"tertiary\\"]": "Variant 3"');
+  expect(componentSource).toContain('backgroundColor: "#0060FF"');
+  expect(componentSource).toContain('backgroundColor: "#555555"');
+  expect(componentSource).toContain('backgroundColor: "transparent"');
+  expect(componentSource).toContain('fontWeight: "400"');
+  expect(componentSource).toContain('fontWeight: "600"');
+  expect(componentSource).toContain('fontWeight: "700"');
+  expect(storySource).toContain('kind2: { control: "select", options: ["primary","secondary","tertiary"] }');
+  expect(storySource).not.toContain("Kind2");
+});

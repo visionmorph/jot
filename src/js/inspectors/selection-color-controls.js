@@ -13,6 +13,7 @@ function getLayerTargetForElement(element) {
 
 function getResolvedColorValue(value, fallbackOpacity = 100) {
   const normalized = String(value || "").trim();
+  if (normalized.toLowerCase() === "transparent") return null;
   const channels = normalized.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/i);
   const color = normalizeHexColor(normalized) || normalizeHexColor(cssColorToHex(normalized));
   if (!color) return null;
@@ -20,6 +21,7 @@ function getResolvedColorValue(value, fallbackOpacity = 100) {
   const opacity = rawAlpha == null
     ? normalizeColorOpacity(fallbackOpacity)
     : normalizeColorOpacity(Number.parseFloat(rawAlpha) * (rawAlpha.includes("%") ? 1 : 100));
+  if (opacity === 0) return null;
   return {
     color,
     opacity,
@@ -35,7 +37,9 @@ function hasMaskImage(styles) {
 function getFrameColorMembers(element, target) {
   const members = [];
   const styles = getComputedStyle(element);
-  if (normalizeHexColor(element.dataset.frameColor) || String(element.style.backgroundColor).trim()) {
+  const inlineBackground = String(element.style.backgroundColor).trim();
+  if (!isTransparentColorValue(inlineBackground)
+    && (normalizeHexColor(element.dataset.frameColor) || inlineBackground)) {
     const value = getResolvedColorValue(styles.backgroundColor, element.dataset.frameColorOpacity || 100);
     if (value) members.push({ ...value, kind: "frame-background", target, element });
   }
@@ -79,7 +83,8 @@ function getTextColorMembers(element, target) {
   }
   const styles = getComputedStyle(element);
   const renderedColor = String(styles.color || "").trim().toLowerCase();
-  const isVariantWithoutPaint = record?.isVariantInstance && renderedColor === "transparent";
+  const isVariantWithoutPaint = record?.isVariantInstance
+    && (isTransparentColorValue(element.style.color) || renderedColor === "transparent");
   const isBaseWithoutPaint = record && !record.isVariantInstance
     && !normalizeHexColor(element.dataset.textColor);
   if (isVariantWithoutPaint || isBaseWithoutPaint) return [];
@@ -264,6 +269,24 @@ function collectActiveTextRangeColorGroups() {
   return groupSelectionColorMembers(members, rangeSelection.variantInstanceId);
 }
 
+function collectMultiVariantLayerColorGroups() {
+  const elements = new Set();
+  for (const instanceId of getSelectedVariantInstanceIds()) {
+    const root = componentSet?.querySelector(
+      `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"] .canvas-root-stack`,
+    );
+    if (!(root instanceof HTMLElement)) continue;
+    for (const target of getSelectedVariantLayerTargets()) {
+      const element = findVariantTarget(root, target);
+      if (!(element instanceof HTMLElement)) continue;
+      elements.add(element);
+      element.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector")
+        .forEach((descendant) => elements.add(descendant));
+    }
+  }
+  return groupSelectionColorMembers([...elements].flatMap(getElementColorMembers));
+}
+
 function createSelectionColorControl(group, index) {
   const control = document.createElement("div");
   control.className = "color-input";
@@ -287,16 +310,20 @@ function createSelectionColorControl(group, index) {
 
 function syncSelectionColorControls(isFrameSelected, isTextSelected, isVectorSelected = false) {
   if (!(selectionColorSection instanceof HTMLElement)) return;
+  const showMultiVariantColors = getSelectedVariantInstanceIds().length > 1
+    && getSelectedVariantLayerTargets().length > 0;
   const showBulkTextColors = isTextSelected && !isFrameSelected;
   const showBulkVectorColors = isVectorSelected && !isFrameSelected && !isTextSelected
-    && getSelectedVectorRecords().length > 1;
+    && (showMultiVariantColors || getSelectedVectorRecords().length > 1);
   const selectedFrameRecords = typeof getSelectedFrameLayoutRecords === "function"
     ? getSelectedFrameLayoutRecords()
     : getSelectedFrameRecords();
   const showBulkFrameColors = isFrameSelected && selectedFrameRecords.length > 1;
   const hasPartialTextFill = showBulkTextColors && Boolean(getPartialTextFillState()?.partial);
   const hasActiveTextRange = showBulkTextColors && Boolean(getActiveTextRangeSelection());
-  const groups = showBulkFrameColors
+  const groups = showMultiVariantColors
+    ? collectMultiVariantLayerColorGroups()
+    : showBulkFrameColors
     ? collectSelectedFrameColorGroups()
     : isFrameSelected
       ? collectSelectionColorGroups()

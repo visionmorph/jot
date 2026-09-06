@@ -14,6 +14,10 @@ function normalizeColorOpacity(value) {
   return Number.isFinite(opacity) ? Math.max(0, Math.min(100, opacity)) : 100;
 }
 
+function isTransparentColorValue(value) {
+  return String(value ?? "").trim().toLowerCase() === "transparent";
+}
+
 function getColorWithOpacity(color, opacity = 100) {
   const normalizedColor = normalizeHexColor(color);
   if (!normalizedColor) return "";

@@ -74,9 +74,18 @@ function setActiveComponentPropOption(context, value) {
   const { defaultCell, instance, prop } = context;
   if (!instance) return;
   if (prop.variantPropId == null) syncComponentPropVariantDefinition(prop);
-  if (prop.variantPropId == null || instance.propValues[prop.variantPropId] === value) return;
+  if (prop.variantPropId == null) return;
+  const selectedInstanceIds = new Set(getSelectedVariantInstanceIds());
+  const targetInstances = selectedInstanceIds.size > 0
+    ? variantModel.getInstances().filter((candidate) => selectedInstanceIds.has(candidate.id))
+    : [instance];
+  if (targetInstances.every((targetInstance) => (
+    targetInstance.propValues[prop.variantPropId] === value
+  ))) return;
   recordHistory();
-  instance.propValues[prop.variantPropId] = value;
+  targetInstances.forEach((targetInstance) => {
+    setVariantInstancePropValue(targetInstance, prop.variantPropId, value);
+  });
   defaultCell.querySelectorAll("[data-tag-value]").forEach((tagValue) => {
     tagValue.closest(".tag")?.classList.toggle("is-active", tagValue.value === value);
   });
@@ -215,9 +224,6 @@ function addComponentPropOption(context, input, retainFocus = false) {
   }
   recordHistory();
   context.prop.options = [...existing, nextValue];
-  if (context.instance && context.prop.variantPropId != null) {
-    context.instance.propValues[context.prop.variantPropId] = nextValue;
-  }
   syncComponentPropVariantDefinition(context.prop);
   renderComponentProps();
   if (retainFocus) focusComponentPropValueControl(context.prop.id, " .tag__add-input");

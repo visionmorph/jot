@@ -26,6 +26,7 @@ function duplicateTextRecord(
   parentRecord,
   offsetRoot = false,
   presentationSource = sourceRecord.element,
+  targetMap = null,
 ) {
   const source = sourceRecord.element;
   const runData = getCurrentTextRunData(presentationSource);
@@ -48,10 +49,11 @@ function duplicateTextRecord(
   duplicateRecord.name = sourceRecord.name;
   duplicate.setAttribute("aria-label", duplicateRecord.name || `Text ${duplicateRecord.id}`);
   applyLayerSizing("text", duplicateRecord);
+  targetMap?.set(`text:${sourceRecord.id}`, `text:${duplicateRecord.id}`);
   return duplicateRecord;
 }
 
-function duplicateVectorRecord(sourceRecord, parentRecord, offsetRoot = false) {
+function duplicateVectorRecord(sourceRecord, parentRecord, offsetRoot = false, targetMap = null) {
   const source = sourceRecord.element;
   const x = Number.parseFloat(source.style.left || "0") + (offsetRoot ? 16 : 0);
   const y = Number.parseFloat(source.style.top || "0") + (offsetRoot ? 16 : 0);
@@ -69,11 +71,13 @@ function duplicateVectorRecord(sourceRecord, parentRecord, offsetRoot = false) {
   duplicate.setAttribute("style", source.getAttribute("style") || "");
   duplicate.style.left = parentRecord ? "" : `${x}px`;
   duplicate.style.top = parentRecord ? "" : `${y}px`;
+  targetMap?.set(`vector:${sourceRecord.id}`, `vector:${duplicateRecord.id}`);
   return duplicateRecord;
 }
 
-function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false) {
+function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false, targetMap = null) {
   const source = sourceRecord.element;
+  const childLayers = getLayerChildren(sourceRecord.id);
   const x = Number.parseFloat(source.style.left || "0") + (offsetRoot ? 16 : 0);
   const y = Number.parseFloat(source.style.top || "0") + (offsetRoot ? 16 : 0);
   const duplicateRecord = createCanvasFrame(x, y, parentRecord, { recordHistory: false, select: false });
@@ -86,101 +90,105 @@ function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false) {
   duplicate.setAttribute("style", source.getAttribute("style") || "");
   duplicate.style.left = parentRecord ? "" : `${x}px`;
   duplicate.style.top = parentRecord ? "" : `${y}px`;
+  targetMap?.set(`frame:${sourceRecord.id}`, `frame:${duplicateRecord.id}`);
 
-  getLayerChildren(sourceRecord.id).forEach((childLayer) => {
-    if (childLayer.type === "frame") duplicateFrameRecord(childLayer.record, duplicateRecord);
-    else if (childLayer.type === "text") duplicateTextRecord(childLayer.record, duplicateRecord);
-    else duplicateVectorRecord(childLayer.record, duplicateRecord);
+  childLayers.forEach((childLayer) => {
+    if (childLayer.type === "frame") {
+      duplicateFrameRecord(childLayer.record, duplicateRecord, false, targetMap);
+    } else if (childLayer.type === "text") {
+      duplicateTextRecord(childLayer.record, duplicateRecord, false, childLayer.record.element, targetMap);
+    } else duplicateVectorRecord(childLayer.record, duplicateRecord, false, targetMap);
   });
   return duplicateRecord;
+}
+
+function cloneVariantDataForDuplicatedTargets(targetMap) {
+  if (!(targetMap instanceof Map) || targetMap.size === 0) return;
+  variantModel.getInstances().forEach((instance) => {
+    const copiedOverrides = [...(instance.overrides ?? [])].flatMap((override) => {
+      const target = targetMap.get(override.target);
+      return target ? [{ ...structuredClone(override), target }] : [];
+    });
+    instance.overrides = [...(instance.overrides ?? []), ...copiedOverrides];
+  });
+  const copiedRules = variantModel.getRules().flatMap((rule) => {
+    const target = targetMap.get(rule.target);
+    return target ? [{ ...structuredClone(rule), id: undefined, target }] : [];
+  });
+  copiedRules.forEach(({ id, ...rule }) => variantModel.addRule(rule));
+}
+
+function captureSelectedLayerCopies() {
+  const variantInstanceIds = getSelectedVariantInstanceIds();
+  const keys = variantInstanceIds.length > 0
+    ? getSelectedVariantLayerTargets()
+    : getSelectedLayerKeys();
+  const layers = getSelectedTopLevelLayers(keys).map((layer) => ({
+    type: layer.type,
+    id: layer.record.id,
+  }));
+  return {
+    layers,
+    variantInstanceIds,
+    primaryVariantInstanceId: selectedVariantInstanceId,
+  };
+}
+
+function insertLayerCopies(copy) {
+  if (!currentComponent || !copy?.layers?.length) return false;
+  const sourceLayers = copy.layers.map((layer) => ({
+    type: layer.type,
+    record: getLayerRecord(layer),
+  })).filter(({ record }) => record);
+  if (sourceLayers.length === 0) return false;
+
+  return runCanvasMutation(() => {
+    const targetMap = new Map();
+    const duplicates = sourceLayers.map(({ type, record }) => {
+      const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+      const parentRecord = parentId === null ? null : getFrameRecord(parentId);
+      const duplicate = type === "frame"
+        ? duplicateFrameRecord(record, parentRecord, parentId === null, targetMap)
+        : type === "text"
+          ? duplicateTextRecord(record, parentRecord, parentId === null, record.element, targetMap)
+          : duplicateVectorRecord(record, parentRecord, parentId === null, targetMap);
+      if (duplicate) {
+        moveLayerRelative(
+          { type, id: duplicate.id },
+          { type, id: record.id },
+          "after",
+        );
+      }
+      return duplicate ? { type, record: duplicate } : null;
+    }).filter(Boolean);
+    if (duplicates.length === 0) return false;
+
+    cloneVariantDataForDuplicatedTargets(targetMap);
+    const duplicateKeys = duplicates.map(({ type, record }) => getLayerKey(type, record.id));
+    const validVariantIds = copy.variantInstanceIds.filter((id) => getVariantInstance(id));
+    if (validVariantIds.length > 0) {
+      selectVariantInstancesLayerTargetsState(
+        validVariantIds,
+        duplicateKeys,
+        validVariantIds.includes(copy.primaryVariantInstanceId)
+          ? copy.primaryVariantInstanceId
+          : validVariantIds[validVariantIds.length - 1],
+      );
+      clearMasterSelectionForVariant();
+    } else {
+      selectLayerKeys(duplicateKeys, duplicateKeys[duplicateKeys.length - 1]);
+      syncElementSelectionStyles();
+    }
+    queueCanvasMutationEffects({ sizing: true, selection: true, tree: true });
+    return true;
+  });
 }
 
 function duplicateSelectedLayer() {
   const variantCopies = captureSelectedVariantCopies();
   if (variantCopies.length > 0) return insertVariantCopies(variantCopies);
   if (selectedComponentId !== null) return;
-  const variantSelection = selectionState.kind === "variant" ? { ...selectionState } : null;
-  let selectedFrameRecord = getSelectedFrameRecord();
-  let selectedTextRecord = getSelectedTextRecord();
-  let selectedVectorRecord = getSelectedVectorRecord();
-  const selectedTextPresentation = selectedTextRecord?.element ?? null;
-  if (variantSelection) {
-    if (selectedFrameRecord?.isVariantInstance) selectedFrameRecord = getFrameRecord(selectedFrameRecord.id);
-    if (selectedTextRecord?.isVariantInstance) selectedTextRecord = getTextRecord(selectedTextRecord.id);
-    if (selectedVectorRecord?.isVariantInstance) selectedVectorRecord = getVectorRecord(selectedVectorRecord.id);
-  }
-  if (!selectedFrameRecord && !selectedTextRecord && !selectedVectorRecord) return;
-
-  const selectDuplicate = (type, record) => {
-    if (variantSelection) {
-      selectVariantInstance(variantSelection.instanceId, {
-        render: false,
-        layerTarget: getLayerKey(type, record.id),
-      });
-      queueCanvasMutationEffects({ selection: true, tree: true });
-      return;
-    }
-    if (type === "frame") selectCanvasFrame(record.element);
-    else if (type === "text") selectCanvasText(record.element);
-    else selectCanvasVector(record.element);
-  };
-
-  return runCanvasMutation(() => {
-    if (selectedFrameRecord) {
-      const parentRecord = selectedFrameRecord.parentId === null
-        ? null
-        : getFrameRecord(selectedFrameRecord.parentId);
-      const duplicateRecord = duplicateFrameRecord(
-        selectedFrameRecord,
-        parentRecord,
-        selectedFrameRecord.parentId === null,
-      );
-      if (!duplicateRecord) return;
-      moveLayerRelative(
-        { type: "frame", id: duplicateRecord.id },
-        { type: "frame", id: selectedFrameRecord.id },
-        "after",
-      );
-      selectDuplicate("frame", duplicateRecord);
-      return;
-    }
-
-    if (selectedTextRecord) {
-      const parentRecord = selectedTextRecord.parentFrameId === null
-        ? null
-        : getFrameRecord(selectedTextRecord.parentFrameId);
-      const duplicateRecord = duplicateTextRecord(
-        selectedTextRecord,
-        parentRecord,
-        selectedTextRecord.parentFrameId === null,
-        selectedTextPresentation ?? selectedTextRecord.element,
-      );
-      if (!duplicateRecord) return;
-      moveLayerRelative(
-        { type: "text", id: duplicateRecord.id },
-        { type: "text", id: selectedTextRecord.id },
-        "after",
-      );
-      selectDuplicate("text", duplicateRecord);
-      return;
-    }
-
-    const parentRecord = selectedVectorRecord.parentFrameId === null
-      ? null
-      : getFrameRecord(selectedVectorRecord.parentFrameId);
-    const duplicateRecord = duplicateVectorRecord(
-      selectedVectorRecord,
-      parentRecord,
-      selectedVectorRecord.parentFrameId === null,
-    );
-    if (!duplicateRecord) return;
-    moveLayerRelative(
-      { type: "vector", id: duplicateRecord.id },
-      { type: "vector", id: selectedVectorRecord.id },
-      "after",
-    );
-    selectDuplicate("vector", duplicateRecord);
-  });
+  return insertLayerCopies(captureSelectedLayerCopies());
 }
 
 function getPrimaryLayerDescriptor() {
