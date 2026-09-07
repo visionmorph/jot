@@ -38,7 +38,9 @@ function resolveCanvasHit(target) {
   }
 
   const resizeControl = target.closest("[data-resize-handle]");
-  if (resizeControl instanceof HTMLElement && resizeOverlay.contains(resizeControl)) {
+  if (resizeControl instanceof HTMLElement
+    && resizeOverlay.contains(resizeControl)
+    && isActiveResizeSelection(getSelectedResizeElement())) {
     return {
       kind: "resize-control",
       target,

@@ -1372,7 +1372,7 @@ textarea:focus-visible {
 .canvas-frame.is-layer-hidden,
 .canvas-text.is-layer-hidden,
 .canvas-vector.is-layer-hidden {
-  visibility: hidden;
+  display: none;
 }
 
 .selection-rectangle {
@@ -1519,7 +1519,7 @@ textarea:focus-visible {
 .canvas-text:hover:not(.is-selected):not(.is-new-empty),
 .canvas-vector:hover:not(.is-selected) {
   outline: 1px solid var(--component);
-  outline-offset: -1px;
+  outline-offset: 0;
 }
 
 .canvas-root-stack.is-selected,
@@ -1527,7 +1527,7 @@ textarea:focus-visible {
 .canvas-text.is-selected,
 .canvas-vector.is-selected {
   outline: 1px solid var(--component);
-  outline-offset: -1px;
+  outline-offset: 0;
 }
 
 .canvas-root-stack.is-selected:hover,
@@ -1539,7 +1539,7 @@ textarea:focus-visible {
 .canvas-text.is-selected.is-selection-hovered:not(.is-new-empty),
 .canvas-vector.is-selected.is-selection-hovered {
   outline: 2px solid var(--component);
-  outline-offset: -2px;
+  outline-offset: 0;
 }
 
 .component-set.has-variants.is-selected {
@@ -1564,8 +1564,8 @@ textarea:focus-visible {
 .resize-handle {
   position: absolute;
   z-index: 1;
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
   margin: 0;
   padding: 0;
   border: 1px solid var(--component);
@@ -1587,10 +1587,140 @@ textarea:focus-visible {
   user-select: none;
 }
 
+.padding-handle {
+  position: absolute;
+  z-index: 2;
+  display: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.padding-handle::before,
+.gap-handle::before {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 1px;
+  background: var(--icon-inverse);
+  box-shadow: 0 0 0 1px var(--component);
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.resize-overlay.shows-padding-handles .padding-handle {
+  display: block;
+}
+
+.padding-handle--left,
+.padding-handle--right {
+  top: 50%;
+  width: 6px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  cursor: ew-resize;
+}
+
+.padding-handle--left::before,
+.padding-handle--right::before,
+.gap-handle--horizontal::before {
+  width: 2px;
+  height: 12px;
+}
+
+.padding-handle--left {
+  left: calc(var(--padding-left) / 2);
+}
+
+.padding-handle--right {
+  left: calc(100% - var(--padding-right) / 2);
+}
+
+.padding-handle--top,
+.padding-handle--bottom {
+  left: 50%;
+  width: 12px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  cursor: ns-resize;
+}
+
+.padding-handle--top::before,
+.padding-handle--bottom::before,
+.gap-handle--vertical::before {
+  width: 12px;
+  height: 2px;
+}
+
+.padding-handle--top {
+  top: calc(var(--padding-top) / 2);
+}
+
+.padding-handle--bottom {
+  top: calc(100% - var(--padding-bottom) / 2);
+}
+
+.gap-handle {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  transform: translate(-50%, -50%);
+}
+
+.gap-handle::before {
+  box-shadow: 0 0 0 1px #81ff3e;
+}
+
+.gap-handle--horizontal {
+  width: 6px;
+  height: 12px;
+  cursor: ew-resize;
+}
+
+.gap-handle--vertical {
+  width: 12px;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.canvas-spacing-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  display: none;
+  min-width: max-content;
+  padding: 2px 4px;
+  border-radius: 2px;
+  color: var(--text-inverse);
+  background: var(--background-inverse);
+  font-size: 11px;
+  line-height: 16px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+:is(.padding-handle, .gap-handle):hover .canvas-spacing-tooltip {
+  display: block;
+}
+
 .canvas.is-text-tool-active .resize-handle,
 .canvas.is-text-tool-active .resize-edge,
+.canvas.is-text-tool-active .padding-handle,
+.canvas.is-text-tool-active .gap-handle,
 .canvas.is-frame-tool-active .resize-handle,
-.canvas.is-frame-tool-active .resize-edge {
+.canvas.is-frame-tool-active .resize-edge,
+.canvas.is-frame-tool-active .padding-handle,
+.canvas.is-frame-tool-active .gap-handle {
   pointer-events: none;
 }
 
@@ -1598,7 +1728,7 @@ textarea:focus-visible {
 .resize-edge--s {
   left: 0;
   width: 100%;
-  height: 12px;
+  height: 4px;
   transform: translateY(-50%);
   cursor: ns-resize;
 }
@@ -1614,7 +1744,7 @@ textarea:focus-visible {
 .resize-edge--w,
 .resize-edge--e {
   top: 0;
-  width: 12px;
+  width: 4px;
   height: 100%;
   transform: translateX(-50%);
   cursor: ew-resize;
@@ -1666,6 +1796,8 @@ textarea:focus-visible {
 .resize-handle--ne,
 .resize-handle--sw,
 .resize-handle--se {
+  border: 0;
+  background: transparent;
   transform: translate(-50%, -50%);
 }
 

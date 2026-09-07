@@ -195,6 +195,7 @@ canvas?.addEventListener("pointerdown", (event) => {
     || activeTool !== "select"
     || canvasPointerDrag
     || resizeInteraction
+    || selectionDrag?.pointerId === event.pointerId
   ) return;
   const hit = resolveCanvasHit(event.target);
   const isVariantLayer = hit.kind === "variant-layer";

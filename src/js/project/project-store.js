@@ -410,8 +410,9 @@ function getSelectedTextRecord() {
 
 function getSelectedTextRecords() {
   if (selectionState.kind === "variants") {
-    const targets = getSelectedVariantLayerTargets().filter((target) => target.startsWith("text:"));
     return getSelectedVariantInstanceIds().flatMap((instanceId) => {
+      const targets = getSelectedVariantLayerTargets(instanceId)
+        .filter((target) => target.startsWith("text:"));
       const preview = componentSet?.querySelector(
         `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
       );
@@ -483,10 +484,11 @@ function getSelectedFrameRecord() {
 
 function getSelectedFrameRecords() {
   if (selectionState.kind === "variants") {
-    const targets = getSelectedVariantLayerTargets().length > 0
-      ? getSelectedVariantLayerTargets().filter((target) => target.startsWith("frame:"))
-      : ["component:0"];
     return getSelectedVariantInstanceIds().flatMap((instanceId) => {
+      const selectedTargets = getSelectedVariantLayerTargets(instanceId);
+      const targets = selectedTargets.length > 0
+        ? selectedTargets.filter((target) => target.startsWith("frame:"))
+        : ["component:0"];
       const preview = componentSet?.querySelector(
         `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
       );
@@ -555,8 +557,9 @@ function getSelectedVectorRecord() {
 
 function getSelectedVectorRecords() {
   if (selectionState.kind === "variants") {
-    const targets = getSelectedVariantLayerTargets().filter((target) => target.startsWith("vector:"));
     return getSelectedVariantInstanceIds().flatMap((instanceId) => {
+      const targets = getSelectedVariantLayerTargets(instanceId)
+        .filter((target) => target.startsWith("vector:"));
       const preview = componentSet?.querySelector(
         `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
       );

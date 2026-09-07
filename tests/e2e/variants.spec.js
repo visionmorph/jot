@@ -620,6 +620,9 @@ test("tree visibility changes propagate to every variant", async ({ page }) => {
     const text = createCanvasText(currentComponent.frameRecord, 0, 0, {
       beginEditing: false, isNew: false, textContent: "Label",
     });
+    createCanvasText(currentComponent.frameRecord, 0, 0, {
+      beginEditing: false, isNew: false, textContent: "Sibling",
+    });
     const variantProp = variantModel.addProp({ name: "visible", type: "boolean", defaultValue: true });
     componentProps.push({
       id: nextComponentPropId++,
@@ -638,11 +641,21 @@ test("tree visibility changes propagate to every variant", async ({ page }) => {
     renderTree();
   });
 
+  const previewSiblings = page.locator('.variant-preview [data-text-id="2"]');
+  const siblingOffsetsBefore = await previewSiblings.evaluateAll((elements) => elements.map((element) => {
+    const root = element.closest(".canvas-root-stack");
+    return element.getBoundingClientRect().left - root.getBoundingClientRect().left;
+  }));
   await page.getByRole("button", { name: "Hide Label" }).click({ force: true });
   const previewTexts = page.locator('.variant-preview [data-text-id="1"]');
   await expect(previewTexts).toHaveCount(2);
-  await expect(previewTexts.nth(0)).toHaveCSS("visibility", "hidden");
-  await expect(previewTexts.nth(1)).toHaveCSS("visibility", "hidden");
+  await expect(previewTexts.nth(0)).toHaveCSS("display", "none");
+  await expect(previewTexts.nth(1)).toHaveCSS("display", "none");
+  await expect.poll(() => previewSiblings.evaluateAll((elements) => elements.map((element) => {
+    const root = element.closest(".canvas-root-stack");
+    return element.getBoundingClientRect().left - root.getBoundingClientRect().left;
+  }))).toEqual(siblingOffsetsBefore.map(() => 10));
+  expect(siblingOffsetsBefore.every((offset) => offset > 10)).toBe(true);
 });
 
 test("shift-clicks variant component roots into and out of one selection", async ({ page }) => {
@@ -780,12 +793,12 @@ test("marquee-selects one or multiple variant component roots with the same inte
 
   await page.mouse.move(
     Math.max(canvasBounds.x + 1, firstBounds.x - 8),
-    Math.max(canvasBounds.y + 1, firstBounds.y - 8),
+    firstBounds.y + firstBounds.height / 2,
   );
   await page.mouse.down();
   await page.mouse.move(
-    firstBounds.x + firstBounds.width + 2,
-    firstBounds.y + firstBounds.height + 2,
+    firstBounds.x + 2,
+    firstBounds.y + firstBounds.height / 2 + 8,
     { steps: 8 },
   );
   await page.mouse.up();
@@ -793,6 +806,133 @@ test("marquee-selects one or multiple variant component roots with the same inte
   await expect(previews.nth(0)).toHaveAttribute("aria-selected", "true");
   await expect(previews.nth(1)).toHaveAttribute("aria-selected", "false");
   await expect(previews.nth(2)).toHaveAttribute("aria-selected", "false");
+});
+
+test("Ctrl-marquee keeps selecting children across every overlapped variant", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    createCanvasText(currentComponent.frameRecord, 0, 0, {
+      beginEditing: false, isNew: false, textContent: "Child text",
+    });
+    createCanvasVector({
+      name: "Child vector",
+      width: 24,
+      height: 24,
+      source: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M2 2h20v20H2z" fill="#336699"/></svg>',
+    }, 0, 0, currentComponent.frameRecord, { select: false });
+    addVariantInstance();
+    selectCanvasState();
+    renderTree();
+  });
+
+  const roots = page.locator(".variant-preview .canvas-root-stack");
+  const firstRoot = roots.nth(0);
+  const firstText = firstRoot.locator('[data-text-id="1"]');
+  const firstVector = firstRoot.locator('[data-vector-id="1"]');
+  const rootBounds = await firstRoot.boundingBox();
+  const textBounds = await firstText.boundingBox();
+  const vectorBounds = await firstVector.boundingBox();
+
+  await page.keyboard.down("Control");
+  await page.mouse.move(rootBounds.x + 4, rootBounds.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(
+    Math.max(textBounds.x + textBounds.width, vectorBounds.x + vectorBounds.width) + 2,
+    Math.max(textBounds.y + textBounds.height, vectorBounds.y + vectorBounds.height) + 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.keyboard.up("Control");
+
+  await expect(firstRoot).toHaveAttribute("aria-selected", "false");
+  await expect(firstText).toHaveAttribute("aria-selected", "true");
+  await expect(firstVector).toHaveAttribute("aria-selected", "true");
+  await expect(roots.nth(1).locator('[data-text-id="1"]')).toHaveAttribute("aria-selected", "false");
+  await expect(roots.nth(1).locator('[data-vector-id="1"]')).toHaveAttribute("aria-selected", "false");
+
+  const secondRoot = roots.nth(1);
+  const secondBounds = await secondRoot.boundingBox();
+  await page.evaluate(() => {
+    selectCanvasState();
+    syncVariantInstanceSelectionUI();
+  });
+  await page.keyboard.down("Control");
+  await page.mouse.move(
+    textBounds.x + textBounds.width / 2,
+    textBounds.y + textBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    secondBounds.x + secondBounds.width + 2,
+    secondBounds.y + secondBounds.height + 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.keyboard.up("Control");
+
+  for (let index = 0; index < 2; index += 1) {
+    await expect(roots.nth(index)).toHaveAttribute("aria-selected", "false");
+    await expect(roots.nth(index).locator('[data-text-id="1"]')).toHaveAttribute("aria-selected", "true");
+    await expect(roots.nth(index).locator('[data-vector-id="1"]')).toHaveAttribute("aria-selected", "true");
+  }
+});
+
+test("Ctrl-marquee selects partial child hits, rolls up enclosed variants, and keeps root depth", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    createCanvasText(currentComponent.frameRecord, 0, 0, {
+      beginEditing: false, isNew: false, textContent: "Child text",
+    });
+    addVariantInstance();
+    selectCanvasState();
+    renderTree();
+  });
+
+  const roots = page.locator(".variant-preview .canvas-root-stack");
+  const previews = page.locator(".variant-preview");
+  const firstBounds = await roots.nth(0).boundingBox();
+  const secondBounds = await roots.nth(1).boundingBox();
+  const firstText = roots.nth(0).locator('[data-text-id="1"]');
+  const secondText = roots.nth(1).locator('[data-text-id="1"]');
+  const firstTextBounds = await firstText.boundingBox();
+  const secondTextBounds = await secondText.boundingBox();
+  await page.keyboard.down("Control");
+  await page.mouse.move(firstBounds.x - 8, firstBounds.y - 8);
+  await page.mouse.down();
+  await page.mouse.move(
+    firstTextBounds.x + firstTextBounds.width + 2,
+    firstTextBounds.y + firstTextBounds.height + 2,
+    { steps: 4 },
+  );
+  await expect(roots.nth(0)).toHaveAttribute("aria-selected", "false");
+  await expect(firstText).toHaveAttribute("aria-selected", "true");
+
+  await page.mouse.move(
+    firstBounds.x + firstBounds.width + 2,
+    firstBounds.y + firstBounds.height + 2,
+    { steps: 8 },
+  );
+  await expect(roots.nth(0)).toHaveAttribute("aria-selected", "true");
+  await expect(firstText).toHaveAttribute("aria-selected", "false");
+
+  await page.mouse.move(
+    secondTextBounds.x + secondTextBounds.width + 2,
+    Math.max(firstBounds.y + firstBounds.height, secondBounds.y + secondBounds.height) + 2,
+    { steps: 4 },
+  );
+  await expect(roots.nth(0)).toHaveAttribute("aria-selected", "true");
+  await expect(roots.nth(1)).toHaveAttribute("aria-selected", "false");
+  await expect(secondText).toHaveAttribute("aria-selected", "true");
+
+  await page.mouse.move(
+    secondBounds.x + secondBounds.width + 2,
+    Math.max(firstBounds.y + firstBounds.height, secondBounds.y + secondBounds.height) + 2,
+    { steps: 4 },
+  );
+  await page.mouse.up();
+  await page.keyboard.up("Control");
+  await expect(previews.nth(0)).toHaveAttribute("aria-selected", "true");
+  await expect(previews.nth(1)).toHaveAttribute("aria-selected", "true");
 });
 
 test("assigns a Boolean prop value to every marquee-selected variant", async ({ page }) => {

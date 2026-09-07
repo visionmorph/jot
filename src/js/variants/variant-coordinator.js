@@ -223,8 +223,6 @@ function clearMasterSelectionForVariant() {
 
 function syncVariantInstanceSelectionUI() {
   const selectedIds = new Set(getSelectedVariantInstanceIds());
-  const selectsWholeVariants = selectionState.kind === "variants"
-    || (selectionState.kind === "variant" && getSelectedVariantLayerTargets().length === 0);
   document.querySelectorAll(".variant-preview").forEach((preview) => {
     const instanceId = Number(preview.dataset.variantInstanceId);
     const isSelectedInstance = selectedIds.has(instanceId);
@@ -232,7 +230,7 @@ function syncVariantInstanceSelectionUI() {
     preview.setAttribute("aria-selected", String(isSelectedInstance));
     const root = preview.querySelector(".canvas-root-stack");
     if (root instanceof HTMLElement) {
-      const isSelectedRoot = isSelectedInstance && selectsWholeVariants;
+      const isSelectedRoot = isVariantRootSelected(instanceId);
       root.classList.toggle("is-selected", isSelectedRoot);
       root.setAttribute("aria-selected", String(isSelectedRoot));
     }
@@ -241,10 +239,8 @@ function syncVariantInstanceSelectionUI() {
         ? "frame"
         : layerElement.classList.contains("canvas-text") ? "text" : "vector";
       const id = Number(layerElement.dataset[`${type}Id`]);
-      const isSelectedLayer = selectionState.kind === "variant"
-        && selectionState.instanceId === instanceId
-        && Number.isFinite(id)
-        && selectedVariantLayerTargets.has(`${type}:${id}`);
+      const isSelectedLayer = Number.isFinite(id)
+        && isVariantLayerTargetSelected(instanceId, `${type}:${id}`);
       layerElement.classList.toggle("is-selected", isSelectedLayer);
       layerElement.setAttribute("aria-selected", String(isSelectedLayer));
     });

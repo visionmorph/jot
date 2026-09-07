@@ -119,6 +119,7 @@ function bindVariantReorderPointer(preview, instance) {
     const additive = event.shiftKey || event.ctrlKey || event.metaKey;
     const instanceIds = selectedIds.includes(instance.id) ? selectedIds : [instance.id];
     const clickTarget = resolveVariantCanvasSelectionTarget(event.target);
+    if (event.ctrlKey && clickTarget?.kind === "variant-root") return;
     if (clickTarget?.kind === "variant-layer") return;
     if (!additive && !selectedIds.includes(instance.id)) selectVariantInstance(instance.id, { render: false });
     variantPointerDrag = {

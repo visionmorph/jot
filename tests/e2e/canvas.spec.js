@@ -321,6 +321,37 @@ test("multi-selects canvas layers and clears the selection from the canvas", asy
   await expect(secondFrame).toHaveAttribute("aria-selected", "false");
 });
 
+test("shows the bounding-box size for a multi-selection", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const firstFrame = component.locator(':scope > [data-frame-id="1"]');
+  const secondFrame = component.locator(':scope > [data-frame-id="2"]');
+  const sizeLabel = page.locator(".component-variant-size-label");
+
+  await page.evaluate(() => {
+    currentComponent.frameRecord.element.style.gap = "32px";
+    const first = createCanvasFrame(0, 0, currentComponent.frameRecord);
+    const second = createCanvasFrame(0, 0, currentComponent.frameRecord);
+    [first.element, second.element].forEach((element) => {
+      element.style.width = "32px";
+      element.style.height = "32px";
+    });
+  });
+
+  await firstFrame.click();
+  await secondFrame.click({ modifiers: ["Shift"] });
+  await expect(sizeLabel).toHaveText("96 x 32");
+
+  await page.evaluate(() => {
+    const first = currentComponent.frameRecord.element.querySelector('[data-frame-id="1"]');
+    first.style.width = "64px";
+    first.style.height = "64px";
+    syncVariantActionOverlay();
+  });
+  await expect(sizeLabel).toHaveText("128 x 64");
+});
+
 test("selects a text layer with a marquee drag", async ({ page }) => {
   await openApp(page);
 
@@ -342,14 +373,124 @@ test("selects a text layer with a marquee drag", async ({ page }) => {
   expect(componentBounds).not.toBeNull();
   expect(textBounds).not.toBeNull();
 
+  await page.keyboard.down("Control");
   await page.mouse.move(componentBounds.x - 6, textBounds.y - 2);
   await page.mouse.down();
   await page.mouse.move(textBounds.x + textBounds.width + 2, textBounds.y + textBounds.height + 2, {
     steps: 8,
   });
   await page.mouse.up();
+  await page.keyboard.up("Control");
 
   await expect(text).toHaveAttribute("aria-selected", "true");
+});
+
+test("standard marquee selects a component on partial overlap", async ({ page }) => {
+  await openApp(page);
+  const component = page.locator("[data-canvas-root-stack]");
+  const bounds = await component.boundingBox();
+
+  await page.mouse.move(bounds.x - 8, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 2, bounds.y + bounds.height / 2 + 8, { steps: 4 });
+  await page.mouse.up();
+
+  await expect(component).toHaveAttribute("aria-selected", "true");
+});
+
+test("marquee-selects multiple SVG layers", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const vectors = component.locator(":scope > [data-vector-id]");
+  await page.evaluate(() => {
+    ["#336699", "#cc5500"].forEach((color, index) => {
+      createCanvasVector({
+        name: `Vector ${index + 1}`,
+        width: 24,
+        height: 24,
+        source: `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M2 2h20v20H2z" fill="${color}"/></svg>`,
+      }, 0, 0, currentComponent.frameRecord, { select: false });
+    });
+    selectCanvasState();
+    syncElementSelectionStyles();
+  });
+
+  const componentBounds = await component.boundingBox();
+  const firstBounds = await vectors.nth(0).boundingBox();
+  const secondBounds = await vectors.nth(1).boundingBox();
+  await page.keyboard.down("Control");
+  await page.mouse.move(componentBounds.x - 6, Math.min(firstBounds.y, secondBounds.y) - 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    Math.max(firstBounds.x + firstBounds.width, secondBounds.x + secondBounds.width) + 2,
+    Math.max(firstBounds.y + firstBounds.height, secondBounds.y + secondBounds.height) + 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.keyboard.up("Control");
+
+  await expect(vectors.nth(0)).toHaveAttribute("aria-selected", "true");
+  await expect(vectors.nth(1)).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("[data-vector-inspector]").getByRole("heading", { name: "Vectors" })).toBeVisible();
+});
+
+test("Ctrl-marquee inside a component selects only its children", async ({ page }) => {
+  await openApp(page);
+
+  await page.evaluate(() => {
+    createCanvasText(currentComponent.frameRecord, 0, 0, {
+      beginEditing: false, isNew: false, textContent: "Child text",
+    });
+    createCanvasVector({
+      name: "Child vector",
+      width: 24,
+      height: 24,
+      source: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M2 2h20v20H2z" fill="#336699"/></svg>',
+    }, 0, 0, currentComponent.frameRecord, { select: false });
+    selectCanvasState();
+    syncElementSelectionStyles();
+  });
+
+  const component = page.locator("[data-canvas-root-stack]");
+  const text = component.locator(':scope > [data-text-id="1"]');
+  const vector = component.locator(':scope > [data-vector-id="1"]');
+  const componentBounds = await component.boundingBox();
+  const textBounds = await text.boundingBox();
+  const vectorBounds = await vector.boundingBox();
+
+  await page.keyboard.down("Control");
+  await page.mouse.move(componentBounds.x + 4, componentBounds.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(
+    Math.max(textBounds.x + textBounds.width, vectorBounds.x + vectorBounds.width) + 2,
+    Math.max(textBounds.y + textBounds.height, vectorBounds.y + vectorBounds.height) + 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.keyboard.up("Control");
+
+  await expect(component).toHaveAttribute("aria-selected", "false");
+  await expect(text).toHaveAttribute("aria-selected", "true");
+  await expect(vector).toHaveAttribute("aria-selected", "true");
+
+  await page.evaluate(() => {
+    selectCanvasState();
+    syncElementSelectionStyles();
+  });
+  await page.keyboard.down("Control");
+  await page.mouse.move(componentBounds.x - 6, componentBounds.y - 6);
+  await page.mouse.down();
+  await page.mouse.move(
+    componentBounds.x + componentBounds.width + 2,
+    componentBounds.y + componentBounds.height + 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.keyboard.up("Control");
+  await expect(component).toHaveAttribute("aria-selected", "true");
+  await expect(text).toHaveAttribute("aria-selected", "false");
+  await expect(vector).toHaveAttribute("aria-selected", "false");
 });
 
 test("changes selected frame opacity with a number shortcut", async ({ page }) => {
@@ -372,6 +513,30 @@ test("changes selected frame opacity with a number shortcut", async ({ page }) =
 
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(frame).toHaveCSS("opacity", "0.5");
+});
+
+test("selects an unselected frame at its edge before enabling resize", async ({ page }) => {
+  await openApp(page);
+  const component = page.locator("[data-canvas-root-stack]");
+  const frame = component.locator(':scope > [data-frame-id="1"]');
+  await page.getByRole("button", { name: "Frame", exact: true }).click();
+  await component.click({ position: { x: 50, y: 50 } });
+  await page.getByRole("region", { name: "Canvas" }).click({ position: { x: 20, y: 20 } });
+  await expect(frame).toHaveAttribute("aria-selected", "false");
+  await expect(page.locator(".resize-overlay")).toBeHidden();
+  await expect.poll(() => page.evaluate(() =>
+    resolveCanvasHit(document.querySelector('[data-resize-handle="e"]')).kind,
+  )).not.toBe("resize-control");
+
+  const bounds = await frame.boundingBox();
+  await page.mouse.click(bounds.x + bounds.width - 1, bounds.y + bounds.height / 2);
+  await expect(frame).toHaveAttribute("aria-selected", "true");
+  await expect(frame).toHaveCSS("width", "100px");
+  await expect(frame).toHaveCSS("height", "100px");
+  await expect(page.locator(".resize-overlay")).toBeVisible();
+  await expect.poll(() => page.evaluate(() =>
+    resolveCanvasHit(document.querySelector('[data-resize-handle="e"]')).kind,
+  )).toBe("resize-control");
 });
 
 test("resizes a selected frame with a canvas handle", async ({ page }) => {
@@ -409,6 +574,112 @@ test("resizes a selected frame with a canvas handle", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(frame).toHaveCSS("width", "140px");
   await expect(frame).toHaveCSS("height", "130px");
+});
+
+test("positions and drags frame padding handles", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    const frame = createCanvasFrame(0, 0, currentComponent.frameRecord);
+    ["Left", "Top", "Right", "Bottom"].forEach((side) => {
+      frame.element.dataset[`padding${side}`] = "16";
+      frame.element.style[`padding${side}`] = "16px";
+    });
+    syncResizeOverlay();
+  });
+
+  const frame = page.locator('[data-frame-id="1"]');
+  const leftHandle = page.locator('[data-padding-handle="left"]');
+  const topHandle = page.locator('[data-padding-handle="top"]');
+  const frameBounds = await frame.boundingBox();
+  const leftBounds = await leftHandle.boundingBox();
+  const topBounds = await topHandle.boundingBox();
+  expect(leftBounds.width).toBe(6);
+  expect(leftBounds.height).toBe(12);
+  expect(topBounds.width).toBe(12);
+  expect(topBounds.height).toBe(6);
+  expect(leftBounds.x + leftBounds.width / 2 - frameBounds.x).toBe(8);
+  expect(topBounds.y + topBounds.height / 2 - frameBounds.y).toBe(8);
+  await leftHandle.hover();
+  await expect(leftHandle.locator(".canvas-spacing-tooltip")).toHaveText("16px");
+  await expect(leftHandle.locator(".canvas-spacing-tooltip")).toBeVisible();
+
+  await page.mouse.move(leftBounds.x + 1, leftBounds.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(leftBounds.x + 5, leftBounds.y + 6);
+  await page.mouse.up();
+  await expect(frame).toHaveCSS("padding-left", "20px");
+
+  const movedLeftBounds = await leftHandle.boundingBox();
+  await page.keyboard.down("Alt");
+  await page.mouse.move(movedLeftBounds.x + 3, movedLeftBounds.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(movedLeftBounds.x + 9, movedLeftBounds.y + 6);
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  await expect(frame).toHaveCSS("padding-left", "30px");
+});
+
+test("shows one draggable gap handle between each pair of frame children", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    const frame = createCanvasFrame(0, 0, currentComponent.frameRecord);
+    frame.element.style.gap = "20px";
+    frame.element.dataset.gap = "20";
+    createCanvasText(frame, 0, 0, { beginEditing: false, isNew: false, textContent: "One" });
+    createCanvasText(frame, 0, 0, { beginEditing: false, isNew: false, textContent: "Two" });
+    selectCanvasFrame(frame.element);
+    syncElementSelectionStyles();
+    syncResizeOverlay();
+  });
+
+  const frame = page.locator('[data-frame-id="1"]');
+  const texts = frame.locator(":scope > [data-text-id]");
+  const gapHandle = page.locator('[data-gap-handle="horizontal"]');
+  await expect(gapHandle).toHaveCount(1);
+  const firstBounds = await texts.nth(0).boundingBox();
+  const secondBounds = await texts.nth(1).boundingBox();
+  const handleBounds = await gapHandle.boundingBox();
+  expect(handleBounds.width).toBe(6);
+  expect(handleBounds.height).toBe(12);
+  expect(handleBounds.x + handleBounds.width / 2).toBe((firstBounds.x + firstBounds.width + secondBounds.x) / 2);
+  await gapHandle.hover();
+  await expect(gapHandle.locator(".canvas-spacing-tooltip")).toHaveText("20px");
+
+  await page.mouse.move(handleBounds.x + 3, handleBounds.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(handleBounds.x + 8, handleBounds.y + 6);
+  await page.mouse.up();
+  await expect(frame).toHaveCSS("gap", "25px");
+
+  const movedHandleBounds = await gapHandle.boundingBox();
+  await page.keyboard.down("Alt");
+  await page.mouse.move(movedHandleBounds.x + 3, movedHandleBounds.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(movedHandleBounds.x + 9, movedHandleBounds.y + 6);
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+  await expect(frame).toHaveCSS("gap", "35px");
+});
+
+test("shows horizontal gap handles for every adjacent pair in a vertical frame", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    const frame = createCanvasFrame(0, 0, currentComponent.frameRecord);
+    frame.element.style.flexDirection = "column";
+    frame.element.dataset.direction = "vertical";
+    ["One", "Two", "Three"].forEach((textContent) => {
+      createCanvasText(frame, 0, 0, { beginEditing: false, isNew: false, textContent });
+    });
+    selectCanvasFrame(frame.element);
+    syncElementSelectionStyles();
+    syncResizeOverlay();
+  });
+
+  const handles = page.locator('[data-gap-handle="vertical"]');
+  await expect(handles).toHaveCount(2);
+  const bounds = await handles.first().boundingBox();
+  expect(bounds.width).toBe(12);
+  expect(bounds.height).toBe(6);
 });
 
 test("creates and edits a text layer", async ({ page }) => {

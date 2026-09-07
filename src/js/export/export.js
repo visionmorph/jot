@@ -290,7 +290,7 @@ function createStorySource(componentName) {
   const actionProps = exportProps.filter((prop) => prop.type === "action");
   const actionImport = actionProps.length > 0 ? `import { fn } from "storybook/test";\n` : "";
   const metaArgs = actionProps.length > 0
-    ? `\n  args: {\n${actionProps.map((prop) => `    ${prop.exportName}: fn(),`).join("\n")}\n  },`
+    ? `\n  args: {\n${actionProps.map((prop) => `    ${prop.exportName}: fn().mockName(${JSON.stringify(prop.exportName)}),`).join("\n")}\n  },`
     : "";
   const variantAxisArgTypes = variantAxes.map((axis) => axis.type === "boolean"
     ? `    ${axis.exportName}: { control: "boolean" },`
@@ -301,7 +301,7 @@ function createStorySource(componentName) {
     : "";
   const argTypes = exportProps.length > 0 || variantAxes.length > 0 || hasSelectableVariants
     ? `\n  argTypes: {\n${[...variantAxisArgTypes, variantEscapeArgType, ...exportProps.map((prop) => prop.type === "action"
-      ? `    ${prop.exportName}: { control: false },`
+      ? `    ${prop.exportName}: { action: ${JSON.stringify(prop.property === "onClick" ? "clicked" : prop.exportName)}, control: false },`
       : `    ${prop.exportName}: { control: "${prop.type === "string" ? "text" : "boolean"}" },`)].filter(Boolean).join("\n")}\n  },`
     : "";
   const defaultVariant = getDefaultVariantInstance();

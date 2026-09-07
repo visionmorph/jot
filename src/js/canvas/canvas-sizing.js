@@ -24,6 +24,54 @@ RESIZE_HANDLE_DIRECTIONS.filter((direction) => direction.length === 2).forEach((
   resizeOverlay.append(edge);
 });
 
+["left", "top", "right", "bottom"].forEach((side) => {
+  const handle = document.createElement("button");
+  handle.className = `padding-handle padding-handle--${side}`;
+  handle.type = "button";
+  handle.tabIndex = -1;
+  handle.dataset.paddingHandle = side;
+  handle.setAttribute("aria-label", `Adjust ${side} padding`);
+  const tooltip = document.createElement("span");
+  tooltip.className = "canvas-spacing-tooltip";
+  tooltip.setAttribute("role", "tooltip");
+  handle.append(tooltip);
+  resizeOverlay.append(handle);
+});
+
+function syncGapHandles(element, layer) {
+  resizeOverlay.querySelectorAll("[data-gap-handle]").forEach((handle) => handle.remove());
+  const isFrameTarget = layer?.type === "frame"
+    || (layer?.type === "variant" && ["component", "frame"].includes(layer.targetType));
+  if (!isFrameTarget) return;
+  const children = Array.from(element.children).filter((child) => (
+    child instanceof HTMLElement
+    && child.matches(".canvas-frame, .canvas-text, .canvas-vector")
+    && getComputedStyle(child).display !== "none"
+  ));
+  if (children.length < 2) return;
+  const overlayBounds = element.getBoundingClientRect();
+  const vertical = getComputedStyle(element).flexDirection === "column";
+  const gapValue = Number.parseFloat(getComputedStyle(element).gap) || 0;
+  children.slice(0, -1).forEach((child, index) => {
+    const first = child.getBoundingClientRect();
+    const second = children[index + 1].getBoundingClientRect();
+    const handle = document.createElement("button");
+    handle.className = `gap-handle gap-handle--${vertical ? "vertical" : "horizontal"}`;
+    handle.type = "button";
+    handle.tabIndex = -1;
+    handle.dataset.gapHandle = vertical ? "vertical" : "horizontal";
+    handle.setAttribute("aria-label", `Adjust gap ${index + 1}`);
+    handle.style.left = `${vertical ? overlayBounds.width / 2 : (first.right + second.left) / 2 - overlayBounds.left}px`;
+    handle.style.top = `${vertical ? (first.bottom + second.top) / 2 - overlayBounds.top : overlayBounds.height / 2}px`;
+    const tooltip = document.createElement("span");
+    tooltip.className = "canvas-spacing-tooltip";
+    tooltip.setAttribute("role", "tooltip");
+    tooltip.textContent = `${Math.round(gapValue)}px`;
+    handle.append(tooltip);
+    resizeOverlay.append(handle);
+  });
+}
+
 if (canvas instanceof HTMLElement) {
   canvas.insertBefore(resizeOverlay, toolbar instanceof Node ? toolbar : null);
 }
@@ -41,6 +89,10 @@ function getSelectedResizeElement() {
   }
   if (selectedComponentId === currentComponent?.id) return currentComponent.frameRecord.element;
   return selectedCanvasFrame || selectedCanvasText || selectedCanvasVector;
+}
+
+function isActiveResizeSelection(element) {
+  return element instanceof HTMLElement && element.classList.contains("is-selected");
 }
 
 function syncResizeTargetHover(isHovered) {
@@ -85,9 +137,10 @@ function positionResizeOverlay() {
 
   const element = getSelectedResizeElement();
   if (
-    !(element instanceof HTMLElement)
+    !isActiveResizeSelection(element)
     || !element.isConnected
     || getComputedStyle(element).visibility === "hidden"
+    || getComputedStyle(element).display === "none"
   ) {
     resizeOverlay.hidden = true;
     return;
@@ -104,6 +157,20 @@ function positionResizeOverlay() {
   resizeOverlay.style.top = `${bounds.top - canvasBounds.top}px`;
   resizeOverlay.style.width = `${bounds.width}px`;
   resizeOverlay.style.height = `${bounds.height}px`;
+  const layer = getSelectedResizeRecord();
+  const showsPaddingHandles = layer?.type === "frame"
+    || (layer?.type === "variant" && ["component", "frame"].includes(layer.targetType));
+  resizeOverlay.classList.toggle("shows-padding-handles", showsPaddingHandles);
+  if (showsPaddingHandles) {
+    const style = getComputedStyle(element);
+    ["left", "top", "right", "bottom"].forEach((side) => {
+      const property = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+      resizeOverlay.style.setProperty(`--padding-${side}`, style[property]);
+      const tooltip = resizeOverlay.querySelector(`[data-padding-handle="${side}"] .canvas-spacing-tooltip`);
+      if (tooltip instanceof HTMLElement) tooltip.textContent = `${Math.round(Number.parseFloat(style[property]) || 0)}px`;
+    });
+  }
+  syncGapHandles(element, layer);
 }
 
 function syncResizeOverlay() {
@@ -117,6 +184,187 @@ function syncResizeOverlay() {
   positionResizeOverlay();
   syncVariantActionOverlay();
 }
+
+let paddingInteraction = null;
+
+resizeOverlay.addEventListener("pointerdown", (event) => {
+  const handle = event.target instanceof HTMLElement ? event.target.closest("[data-padding-handle]") : null;
+  const layer = getSelectedResizeRecord();
+  const element = getSelectedResizeElement();
+  const side = handle?.dataset.paddingHandle;
+  const isPaddingTarget = layer?.type === "frame"
+    || (layer?.type === "variant" && ["component", "frame"].includes(layer.targetType));
+  if (!(handle instanceof HTMLButtonElement)
+    || !isActiveResizeSelection(element)
+    || !isPaddingTarget
+    || !["left", "top", "right", "bottom"].includes(side)
+    || event.button !== 0) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  const property = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+  paddingInteraction = {
+    element,
+    layer,
+    side,
+    property,
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    value: Number.parseFloat(getComputedStyle(element)[property]) || 0,
+    hasRecordedHistory: false,
+  };
+  handle.setPointerCapture(event.pointerId);
+});
+
+function applyPaddingPointerPosition(clientX, clientY, coarse = false) {
+  if (!paddingInteraction) return;
+  const { element, layer, side, property } = paddingInteraction;
+  const rawDelta = side === "left" || side === "right"
+    ? clientX - paddingInteraction.pointerX
+    : clientY - paddingInteraction.pointerY;
+  const signedDelta = side === "right" || side === "bottom" ? -rawDelta : rawDelta;
+  const delta = coarse ? Math.round(signedDelta / 10) * 10 : signedDelta;
+  const value = Math.max(0, Math.round(paddingInteraction.value + delta));
+  if (value === Number.parseFloat(getComputedStyle(element)[property])) return;
+  if (!paddingInteraction.hasRecordedHistory) {
+    recordHistory();
+    paddingInteraction.hasRecordedHistory = true;
+  }
+  if (layer.type === "variant") {
+    const setOverride = layer.target === "component:0"
+      ? (name, nextValue) => setSelectedVariantStyleOverride(name, nextValue, { render: false, record: false })
+      : (name, nextValue) => setSelectedVariantLayerOverride(name, nextValue, { render: false });
+    setOverride(property, `${value}px`);
+  } else {
+    element.dataset[property] = String(value);
+  }
+  element.style[property] = `${value}px`;
+  if (layer.type === "frame") {
+    applyLayerSizing("frame", layer.record);
+    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+  }
+  syncInspectorToSelectedFrame();
+  positionResizeOverlay();
+  syncVariantActionOverlay();
+}
+
+resizeOverlay.addEventListener("pointermove", (event) => {
+  if (!(event.target instanceof HTMLButtonElement)
+    || !event.target.matches("[data-padding-handle]")
+    || !event.target.hasPointerCapture(event.pointerId)) return;
+  applyPaddingPointerPosition(event.clientX, event.clientY, event.altKey);
+});
+
+function finishPaddingInteraction(event) {
+  if (!(event.target instanceof HTMLButtonElement)
+    || !event.target.matches("[data-padding-handle]")
+    || !event.target.hasPointerCapture(event.pointerId)) return;
+  applyPaddingPointerPosition(event.clientX, event.clientY, event.altKey);
+  event.target.releasePointerCapture(event.pointerId);
+  if (paddingInteraction?.layer.type === "variant") renderVariantInstances();
+  paddingInteraction = null;
+  syncResizeOverlay();
+}
+
+resizeOverlay.addEventListener("pointerup", finishPaddingInteraction);
+resizeOverlay.addEventListener("pointercancel", (event) => {
+  if (event.target instanceof HTMLButtonElement
+    && event.target.matches("[data-padding-handle]")
+    && event.target.hasPointerCapture(event.pointerId)) {
+    event.target.releasePointerCapture(event.pointerId);
+  }
+  if (paddingInteraction?.layer.type === "variant") renderVariantInstances();
+  paddingInteraction = null;
+  syncResizeOverlay();
+});
+
+let gapInteraction = null;
+
+resizeOverlay.addEventListener("pointerdown", (event) => {
+  const handle = event.target instanceof HTMLElement ? event.target.closest("[data-gap-handle]") : null;
+  const layer = getSelectedResizeRecord();
+  const element = getSelectedResizeElement();
+  const direction = handle?.dataset.gapHandle;
+  const isGapTarget = layer?.type === "frame"
+    || (layer?.type === "variant" && ["component", "frame"].includes(layer.targetType));
+  if (!(handle instanceof HTMLButtonElement)
+    || !isActiveResizeSelection(element)
+    || !isGapTarget
+    || !["horizontal", "vertical"].includes(direction)
+    || event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  gapInteraction = {
+    element,
+    layer,
+    direction,
+    pointerX: event.clientX,
+    pointerY: event.clientY,
+    value: Number.parseFloat(getComputedStyle(element).gap) || 0,
+    hasRecordedHistory: false,
+  };
+  handle.setPointerCapture(event.pointerId);
+});
+
+function applyGapPointerPosition(clientX, clientY, coarse = false) {
+  if (!gapInteraction) return;
+  const { element, layer, direction } = gapInteraction;
+  const rawDelta = direction === "vertical"
+    ? clientY - gapInteraction.pointerY
+    : clientX - gapInteraction.pointerX;
+  const delta = coarse ? Math.round(rawDelta / 10) * 10 : rawDelta;
+  const value = Math.max(0, Math.round(gapInteraction.value + delta));
+  if (value === Number.parseFloat(getComputedStyle(element).gap)) return;
+  if (!gapInteraction.hasRecordedHistory) {
+    recordHistory();
+    gapInteraction.hasRecordedHistory = true;
+  }
+  if (layer.type === "variant") {
+    const setOverride = layer.target === "component:0"
+      ? (name, nextValue) => setSelectedVariantStyleOverride(name, nextValue, { render: false, record: false })
+      : (name, nextValue) => setSelectedVariantLayerOverride(name, nextValue, { render: false });
+    setOverride("gap", `${value}px`);
+  } else {
+    element.dataset.gap = String(value);
+    element.dataset.gapMode = "fixed";
+  }
+  element.style.gap = `${value}px`;
+  syncInspectorToSelectedFrame();
+  syncVariantActionOverlay();
+  resizeOverlay.querySelectorAll("[data-gap-handle] .canvas-spacing-tooltip").forEach((tooltip) => {
+    tooltip.textContent = `${value}px`;
+  });
+}
+
+resizeOverlay.addEventListener("pointermove", (event) => {
+  if (!(event.target instanceof HTMLButtonElement)
+    || !event.target.matches("[data-gap-handle]")
+    || !event.target.hasPointerCapture(event.pointerId)) return;
+  applyGapPointerPosition(event.clientX, event.clientY, event.altKey);
+});
+
+resizeOverlay.addEventListener("pointerup", (event) => {
+  if (!(event.target instanceof HTMLButtonElement)
+    || !event.target.matches("[data-gap-handle]")
+    || !event.target.hasPointerCapture(event.pointerId)) return;
+  applyGapPointerPosition(event.clientX, event.clientY, event.altKey);
+  event.target.releasePointerCapture(event.pointerId);
+  if (gapInteraction?.layer.type === "variant") renderVariantInstances();
+  else if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+  gapInteraction = null;
+  syncResizeOverlay();
+});
+
+resizeOverlay.addEventListener("pointercancel", (event) => {
+  if (event.target instanceof HTMLButtonElement
+    && event.target.matches("[data-gap-handle]")
+    && event.target.hasPointerCapture(event.pointerId)) {
+    event.target.releasePointerCapture(event.pointerId);
+  }
+  if (gapInteraction?.layer.type === "variant") renderVariantInstances();
+  gapInteraction = null;
+  syncResizeOverlay();
+});
 
 function applyResizePointerPosition(clientX, clientY, proportional = false) {
   if (!resizeInteraction) return;
@@ -214,7 +462,7 @@ resizeOverlay.addEventListener("pointerdown", (event) => {
   const handle = event.target instanceof HTMLElement ? event.target.closest("[data-resize-handle]") : null;
   const layer = getSelectedResizeRecord();
   const element = getSelectedResizeElement();
-  if (!(handle instanceof HTMLButtonElement) || !(element instanceof HTMLElement) || !layer || event.button !== 0) return;
+  if (!(handle instanceof HTMLButtonElement) || !isActiveResizeSelection(element) || !layer || event.button !== 0) return;
 
   event.preventDefault();
   event.stopPropagation();

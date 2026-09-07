@@ -36,7 +36,7 @@ function applyVariantOperation(root, operation) {
     return;
   }
   if (property === "visibility") {
-    target.style.visibility = variantBoolean(value) ? "visible" : "hidden";
+    target.style.display = variantBoolean(value) ? "" : "none";
     return;
   }
   if (property === "disabled") {

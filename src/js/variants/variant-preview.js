@@ -195,7 +195,7 @@ function renderVariantInstances() {
     prepareVariantClone(clone, instance.id);
     resolveVariantOperations(instance).forEach((operation) => applyVariantOperation(clone, operation));
     syncVariantFlexbox(clone);
-    const isSelectedRoot = isSelectedInstance && selectedVariantLayerTarget === null;
+    const isSelectedRoot = isVariantRootSelected(instance.id);
     clone.classList.toggle("is-selected", isSelectedRoot);
     clone.setAttribute("aria-selected", String(isSelectedRoot));
     clone.addEventListener("click", (event) => {

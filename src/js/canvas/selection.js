@@ -62,6 +62,16 @@ canvas?.addEventListener("pointercancel", (event) => {
   if (canvasGestureState?.pointerId === event.pointerId) canvasGestureState = null;
 }, true);
 
+function getSelectionBoundingBox(elements) {
+  const bounds = elements.map((element) => element.getBoundingClientRect());
+  if (bounds.length === 0) return null;
+  const left = Math.min(...bounds.map((rect) => rect.left));
+  const top = Math.min(...bounds.map((rect) => rect.top));
+  const right = Math.max(...bounds.map((rect) => rect.right));
+  const bottom = Math.max(...bounds.map((rect) => rect.bottom));
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
 function syncVariantActionOverlay() {
   if (!(canvas instanceof HTMLElement)) return;
   if (variantActionOverlay.classList.contains("is-variant-reordering")) return;
@@ -75,6 +85,12 @@ function syncVariantActionOverlay() {
   const selectedVariantRoot = selectedVariantPreviews.length === 1
     ? selectedVariantPreviews[0].querySelector(".canvas-root-stack.is-selected")
     : null;
+  const selectedCanvasElements = Array.from(canvas.querySelectorAll(
+    ".canvas-root-stack.is-selected, .canvas-frame.is-selected, .canvas-text.is-selected, .canvas-vector.is-selected",
+  )).filter((element) => element instanceof HTMLElement && getComputedStyle(element).display !== "none");
+  const multiSelectionBounds = selectedCanvasElements.length > 1
+    ? getSelectionBoundingBox(selectedCanvasElements)
+    : null;
   const selectedElement = selectedVariantRoot instanceof HTMLElement
     ? selectedVariantRoot
     : getSelectedResizeElement();
@@ -84,26 +100,29 @@ function syncVariantActionOverlay() {
   const anchorElement = isComponentRootSelected && variantModel.getInstances().length > 0
     ? componentSet
     : selectedElement;
-  if (!(selectedElement instanceof HTMLElement)
+  if (!multiSelectionBounds && (
+    !(selectedElement instanceof HTMLElement)
     || !(anchorElement instanceof HTMLElement)
     || !selectedElement.isConnected
-    || !anchorElement.isConnected) {
+    || !anchorElement.isConnected
+  )) {
     variantActionOverlay.hidden = true;
     return;
   }
-  const canAddVariant = isComponentRootSelected || isVariantRootSelected;
+  const canAddVariant = !multiSelectionBounds && (isComponentRootSelected || isVariantRootSelected);
   variantAddTooltip.hidden = !canAddVariant;
   const canvasBounds = canvas.getBoundingClientRect();
-  const bounds = anchorElement.getBoundingClientRect();
-  const selectedBounds = selectedElement.getBoundingClientRect();
+  const bounds = multiSelectionBounds || anchorElement.getBoundingClientRect();
+  const selectedBounds = multiSelectionBounds || selectedElement.getBoundingClientRect();
   const fallbackVariantRoot = isComponentRootSelected && variantModel.getInstances().length > 0
     ? componentSet?.querySelector(".variant-preview .canvas-root-stack")
     : null;
   const measurementElement = selectedBounds.width > 0 && selectedBounds.height > 0
     ? selectedElement
     : fallbackVariantRoot instanceof HTMLElement ? fallbackVariantRoot : selectedElement;
-  const measurementBounds = measurementElement.getBoundingClientRect();
+  const measurementBounds = multiSelectionBounds || measurementElement.getBoundingClientRect();
   const getDimensionLabel = (dimension) => {
+    if (multiSelectionBounds) return `${Math.round(measurementBounds[dimension])}`;
     const override = selectedVariantInstanceId !== null
       ? getSelectedVariantStyleOverride(dimension, "")
       : "";
@@ -231,9 +250,7 @@ function doRectsIntersect(elementBounds, selectionBounds) {
 function getMarqueeLayerMatches(selectionBounds, parentFrameId = null) {
   return getLayerChildren(parentFrameId).flatMap(({ type, record }) => {
     const bounds = record.element.getBoundingClientRect();
-    const isMatch = type === "frame"
-      ? isRectEnclosed(bounds, selectionBounds)
-      : doRectsIntersect(bounds, selectionBounds);
+    const isMatch = doRectsIntersect(bounds, selectionBounds);
     const ownMatch = isMatch ? [getLayerKey(type, record.id)] : [];
     const descendantMatches = type === "frame"
       ? getMarqueeLayerMatches(selectionBounds, record.id)
@@ -246,61 +263,84 @@ function applyMarqueeSelection(selectionBounds) {
   if (!selectionDrag || !currentComponent) return;
   if (variantModel.getInstances().length > 0) {
     const variantMatches = [];
-    const layerMatches = [];
+    const layerMatchesByInstance = new Map();
     variantModel.getInstances().forEach((instance) => {
       const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`);
       const root = preview?.querySelector(".canvas-root-stack");
       if (!(root instanceof HTMLElement)) return;
-      if (isRectEnclosed(root.getBoundingClientRect(), selectionBounds)) {
+      const rootBounds = root.getBoundingClientRect();
+      const rootOverlaps = doRectsIntersect(rootBounds, selectionBounds);
+      const rootMatches = selectionDrag.selectsChildren
+        ? isRectEnclosed(rootBounds, selectionBounds)
+        : rootOverlaps;
+      if (rootMatches) {
         variantMatches.push(instance.id);
-        return;
       }
+      if (!selectionDrag.selectsChildren || rootMatches) return;
       root.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((element) => {
         const type = element.classList.contains("canvas-frame")
           ? "frame"
           : element.classList.contains("canvas-text") ? "text" : "vector";
         const id = Number(element.dataset[`${type}Id`]);
         if (!Number.isFinite(id)) return;
-        const isMatch = type === "frame"
-          ? isRectEnclosed(element.getBoundingClientRect(), selectionBounds)
-          : doRectsIntersect(element.getBoundingClientRect(), selectionBounds);
-        if (isMatch) layerMatches.push({ instanceId: instance.id, target: `${type}:${id}` });
+        const isMatch = doRectsIntersect(element.getBoundingClientRect(), selectionBounds);
+        if (!isMatch) return;
+        const targets = layerMatchesByInstance.get(instance.id) ?? [];
+        targets.push(`${type}:${id}`);
+        layerMatchesByInstance.set(instance.id, targets);
       });
     });
-    if (variantMatches.length > 0) {
-      const nextIds = selectionDrag.additive
-        ? [...new Set([...selectionDrag.initialVariantIds, ...variantMatches])]
-        : variantMatches;
-      selectVariantInstancesState(nextIds, variantMatches[variantMatches.length - 1]);
-      clearMasterSelectionForVariant();
-    } else {
-      const anchorMatch = layerMatches[layerMatches.length - 1];
-      if (anchorMatch) {
-        const matchedTargets = layerMatches
-          .filter((match) => match.instanceId === anchorMatch.instanceId)
-          .map((match) => match.target);
-        const initialTargets = selectionDrag.additive
-          && selectionDrag.initialVariantInstanceId === anchorMatch.instanceId
-          ? selectionDrag.initialVariantTargets
-          : [];
-        const nextTargets = [...new Set([...initialTargets, ...matchedTargets])];
-        const anchorTarget = getShallowestPrimaryLayerKey(nextTargets);
-        selectVariantLayerTargetsState(anchorMatch.instanceId, nextTargets, anchorTarget);
+    if (selectionDrag.selectsChildren) {
+      const rootIds = new Set(selectionDrag.additive ? selectionDrag.initialVariantRootIds : []);
+      const targetsByInstance = new Map(
+        selectionDrag.additive
+          ? Object.entries(selectionDrag.initialVariantTargetsByInstance)
+            .map(([instanceId, targets]) => [Number(instanceId), [...targets]])
+          : [],
+      );
+      variantMatches.forEach((instanceId) => {
+        rootIds.add(instanceId);
+        targetsByInstance.delete(instanceId);
+      });
+      layerMatchesByInstance.forEach((targets, instanceId) => {
+        if (!rootIds.has(instanceId)) {
+          const existingTargets = targetsByInstance.get(instanceId) ?? [];
+          targetsByInstance.set(instanceId, [...new Set([...existingTargets, ...targets])]);
+        }
+      });
+      const matchedIds = [...variantMatches, ...layerMatchesByInstance.keys()];
+      if (rootIds.size > 0 || targetsByInstance.size > 0) {
+        selectVariantMarqueeState(
+          rootIds,
+          targetsByInstance,
+          matchedIds[matchedIds.length - 1] ?? selectionDrag.initialVariantInstanceId,
+        );
         clearMasterSelectionForVariant();
       } else if (!selectionDrag.additive) {
         selectCanvasState();
         clearElementSelection();
       }
+    } else if (variantMatches.length > 0) {
+      const nextIds = selectionDrag.additive
+        ? [...new Set([...selectionDrag.initialVariantIds, ...variantMatches])]
+        : variantMatches;
+      selectVariantInstancesState(nextIds, variantMatches[variantMatches.length - 1]);
+      clearMasterSelectionForVariant();
+    } else if (!selectionDrag.additive) {
+      selectCanvasState();
+      clearElementSelection();
     }
     renderTree();
     return;
   }
   const nextKeys = new Set(selectionDrag.additive ? selectionDrag.initialKeys : []);
-  const componentIsEnclosed = isRectEnclosed(canvasRootStack.getBoundingClientRect(), selectionBounds);
+  const componentMatches = selectionDrag.selectsChildren
+    ? isRectEnclosed(canvasRootStack.getBoundingClientRect(), selectionBounds)
+    : doRectsIntersect(canvasRootStack.getBoundingClientRect(), selectionBounds);
 
-  if (componentIsEnclosed) {
+  if (componentMatches) {
     selectComponentState(currentComponent.id);
-  } else {
+  } else if (selectionDrag.selectsChildren) {
     getMarqueeLayerMatches(selectionBounds).forEach((key) => nextKeys.add(key));
     if (nextKeys.size > 0) {
       const keys = [...nextKeys];
@@ -308,21 +348,24 @@ function applyMarqueeSelection(selectionBounds) {
     } else if (!selectionDrag.additive) {
       selectCanvasState();
     }
-  }
+  } else if (!selectionDrag.additive) selectCanvasState();
   syncElementSelectionStyles();
   renderTree();
 }
 
 canvas?.addEventListener("pointerdown", (event) => {
   const hit = resolveCanvasHit(event.target);
+  const startsInsideContainer = event.ctrlKey
+    && ["component-root", "variant-root", "layer", "variant-layer"].includes(hit.kind);
   const startsOnCanvasBackground = hit.kind === "canvas"
     || hit.kind === "component-set";
   if (
     !(canvas instanceof HTMLElement)
-    || !startsOnCanvasBackground
+    || (!startsOnCanvasBackground && !startsInsideContainer)
     || event.button !== 0
     || activeTool !== "select"
   ) return;
+  if (startsInsideContainer) event.preventDefault();
   const canvasBounds = canvas.getBoundingClientRect();
   const startX = Math.max(canvasBounds.left, Math.min(event.clientX, canvasBounds.right));
   const startY = Math.max(canvasBounds.top, Math.min(event.clientY, canvasBounds.bottom));
@@ -330,11 +373,19 @@ canvas?.addEventListener("pointerdown", (event) => {
     pointerId: event.pointerId,
     startX,
     startY,
-    additive: event.shiftKey || event.ctrlKey || event.metaKey,
+    additive: event.shiftKey || event.metaKey,
+    selectsChildren: event.ctrlKey,
     initialKeys: [...selectedLayerKeys],
     initialVariantIds: getSelectedVariantInstanceIds(),
     initialVariantInstanceId: selectedVariantInstanceId,
-    initialVariantTargets: getSelectedVariantLayerTargets(),
+    initialVariantRootIds: getSelectedVariantInstanceIds().filter(isVariantRootSelected),
+    initialVariantTargetsByInstance: Object.fromEntries(
+      getSelectedVariantInstanceIds().map((instanceId) => [
+        String(instanceId),
+        getSelectedVariantLayerTargets(instanceId),
+      ]),
+    ),
+    initialHit: hit,
     dragged: false,
   };
   canvas.setPointerCapture(event.pointerId);
@@ -359,6 +410,7 @@ canvas?.addEventListener("pointermove", (event) => {
 function finishMarqueeSelection(event) {
   if (!selectionDrag || event.pointerId !== selectionDrag.pointerId || !(canvas instanceof HTMLElement)) return;
   const wasDragged = selectionDrag.dragged;
+  const initialHit = selectionDrag.initialHit;
   selectionDrag = null;
   selectionRectangle.classList.remove("is-visible");
   selectionRectangle.removeAttribute("style");
@@ -375,6 +427,11 @@ function finishMarqueeSelection(event) {
         if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
       });
     }
+  } else if (event.type === "pointerup" && initialHit?.kind === "variant-layer") {
+    const target = getLayerDescriptorKey(initialHit.layer);
+    selectVariantLayerTarget(initialHit.instanceId, target, true);
+    clearMasterSelectionForVariant();
+    renderTree();
   }
 }
 

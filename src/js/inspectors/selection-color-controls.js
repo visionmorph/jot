@@ -276,7 +276,7 @@ function collectMultiVariantLayerColorGroups() {
       `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"] .canvas-root-stack`,
     );
     if (!(root instanceof HTMLElement)) continue;
-    for (const target of getSelectedVariantLayerTargets()) {
+    for (const target of getSelectedVariantLayerTargets(instanceId)) {
       const element = findVariantTarget(root, target);
       if (!(element instanceof HTMLElement)) continue;
       elements.add(element);

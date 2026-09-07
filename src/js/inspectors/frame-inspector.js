@@ -111,11 +111,11 @@ function setFramePaddingControlMode(isIndividual) {
 
 function getSelectedFrameLayoutRecords() {
   if (selectionState.kind !== "variants") return getSelectedFrameRecords();
-  const selectedTargets = getSelectedVariantLayerTargets();
-  const targets = selectedTargets.length > 0
-    ? selectedTargets.filter((target) => target.startsWith("frame:"))
-    : ["component:0"];
   return getSelectedVariantInstanceIds().flatMap((instanceId) => {
+    const selectedTargets = getSelectedVariantLayerTargets(instanceId);
+    const targets = selectedTargets.length > 0
+      ? selectedTargets.filter((target) => target.startsWith("frame:"))
+      : ["component:0"];
     const preview = componentSet?.querySelector(
       `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
     );

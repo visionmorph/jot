@@ -66,7 +66,8 @@ test("generates Storybook click actions with a shared fn spy", async ({ page }) 
   const source = await page.evaluate(() => createStorySource("Button"));
 
   expect(source).toContain('import { fn } from "storybook/test";');
-  expect(source).toContain("args: {\n    onClick: fn(),\n  },");
+  expect(source).toContain('args: {\n    onClick: fn().mockName("onClick"),\n  },');
+  expect(source).toContain('onClick: { action: "clicked", control: false }');
   expect(source).not.toContain("storybook/actions");
   expect(source).not.toContain("onClickAction");
 });

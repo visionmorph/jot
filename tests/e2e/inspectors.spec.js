@@ -1566,6 +1566,7 @@ test("bulk edits marquee-selected text layers from the inspector", async ({ page
   expect(componentBounds).not.toBeNull();
   expect(firstBounds).not.toBeNull();
   expect(secondBounds).not.toBeNull();
+  await page.keyboard.down("Control");
   await page.mouse.move(componentBounds.x - 6, Math.min(firstBounds.y, secondBounds.y) - 2);
   await page.mouse.down();
   await page.mouse.move(
@@ -1574,6 +1575,7 @@ test("bulk edits marquee-selected text layers from the inspector", async ({ page
     { steps: 8 },
   );
   await page.mouse.up();
+  await page.keyboard.up("Control");
   await expect(texts.nth(0)).toHaveAttribute("aria-selected", "true");
   await expect(texts.nth(1)).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("[data-selection-colors]")).toBeHidden();
@@ -1876,18 +1878,12 @@ test("bulk edits selected vector dimensions and colors", async ({ page }) => {
       { name: "Green", width: 36, height: 40, color: "#00AA00" },
       { name: "Purple", width: 48, height: 52, color: "#663399" },
     ];
-    const records = definitions.map((definition) => createCanvasVector({
+    definitions.forEach((definition) => createCanvasVector({
       name: definition.name,
       width: definition.width,
       height: definition.height,
       source: `<svg xmlns="http://www.w3.org/2000/svg" width="${definition.width}" height="${definition.height}"><path d="M2 2h20v20H2z" fill="${definition.color}"/></svg>`,
     }, 0, 0, currentComponent.frameRecord, { select: false }));
-    selectLayerKeys(
-      records.slice(0, 2).map((record) => `vector:${record.id}`),
-      `vector:${records[1].id}`,
-    );
-    syncElementSelectionStyles();
-    updateInspector();
   });
 
   const inspector = page.locator("[data-vector-inspector]");
@@ -1896,6 +1892,9 @@ test("bulk edits selected vector dimensions and colors", async ({ page }) => {
   const width = page.getByRole("spinbutton", { name: "Vector width" });
   const height = page.getByRole("spinbutton", { name: "Vector height" });
   const selectionColors = inspector.locator(":scope > [data-selection-colors]");
+
+  await vectors.nth(0).click();
+  await vectors.nth(1).click({ modifiers: ["Shift"] });
 
   await expect(inspector.getByRole("heading", { name: "Vectors", exact: true })).toBeVisible();
   await expect(width).toHaveValue("");
