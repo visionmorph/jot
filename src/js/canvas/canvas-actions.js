@@ -364,6 +364,33 @@ function reorderPrimaryLayer(step = 0, edge = null) {
   return didMove;
 }
 
+function selectMatchingLayers() {
+  const instanceIds = getSelectedVariantInstanceIds();
+  // Canvas records have unique schema IDs. Only variant instances repeat those
+  // IDs; a standalone canvas layer or component therefore has no other match.
+  if (instanceIds.length !== 1) return false;
+  const targets = getSelectedVariantLayerTargets(instanceIds[0]);
+  if (targets.length > 1) return false;
+  const instance = getVariantInstance(instanceIds[0]);
+  if (!instance || instance.componentId !== currentComponent?.id) return false;
+  const matchingIds = variantModel.getInstances()
+    .filter((candidate) => candidate.componentId === instance.componentId)
+    .map((candidate) => candidate.id);
+  if (matchingIds.length < 2) return false;
+
+  // The delta target (type:id) is the canonical identity, shared by every
+  // instance, regardless of names, styling, or local property overrides.
+  if (targets.length === 1) {
+    if (!getElementForLayerKey(targets[0])) return false;
+    selectVariantInstancesLayerTargetsState(matchingIds, targets, instance.id);
+  } else {
+    selectVariantInstancesState(matchingIds, instance.id);
+  }
+  clearMasterSelectionForVariant();
+  renderTree();
+  return true;
+}
+
 function selectHierarchyChild() {
   if (selectedComponentId === currentComponent?.id && variantModel.getInstances().length > 0) {
     selectVariantInstancesState(variantModel.getInstances().map((instance) => instance.id));

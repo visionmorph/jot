@@ -91,6 +91,12 @@ document.addEventListener("keydown", (event) => {
     (shortcutTarget instanceof HTMLElement && (shortcutTarget.isContentEditable || Boolean(shortcutTarget.closest(".props-panel"))));
   const lowerKey = event.key.toLowerCase();
 
+  if (!isTyping && event.ctrlKey && event.altKey && !event.metaKey && !event.shiftKey && lowerKey === "a") {
+    event.preventDefault();
+    selectMatchingLayers();
+    return;
+  }
+
   if (!isTyping && event.shiftKey && !isCommandShortcut && !event.altKey && lowerKey === "a") {
     event.preventDefault();
     wrapSelectedLayersInFrame();

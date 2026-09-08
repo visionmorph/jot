@@ -15,7 +15,15 @@ const contentTypes = {
 
 const server = http.createServer((request, response) => {
   const pathname = decodeURIComponent(new URL(request.url, `http://${host}`).pathname);
-  const requestedPath = pathname === "/" ? "/index.html" : pathname;
+  if (pathname === "/storybook") {
+  response.writeHead(302, { Location: "/storybook/" }).end();
+  return;
+}
+
+const requestedPath =
+  pathname === "/" ? "/index.html" :
+  pathname === "/storybook/" ? "/storybook/index.html" :
+  pathname;
   const filePath = path.resolve(root, `.${requestedPath}`);
 
   if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
