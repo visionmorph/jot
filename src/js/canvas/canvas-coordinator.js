@@ -171,7 +171,13 @@ canvas?.addEventListener("click", (event) => {
   const hit = resolveCanvasHit(event.target);
   if (!(canvas instanceof HTMLElement) || hit.kind !== "canvas") return;
 
+  // Selection can reveal a handle under the pointer between down and up,
+  // causing the browser to target their shared canvas ancestor for the click.
+  const initialHitKind = canvasGestureState?.pointerId === event.pointerId
+    ? canvasGestureState.initialHitKind
+    : null;
   if (consumeSuppressedCanvasClick(event)) return;
+  if (initialHitKind && !["canvas", "component-set"].includes(initialHitKind)) return;
 
   clearLayerSelection();
   if (variantModel.getInstances().length > 0) return;

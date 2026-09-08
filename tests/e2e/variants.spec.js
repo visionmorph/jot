@@ -1,6 +1,63 @@
 const { test, expect } = require("playwright/test");
 const { openApp } = require("../support/open-app.cjs");
 
+for (const handleSelector of ['[data-padding-handle="left"]', '[data-gap-handle]']) {
+  test(`keeps first-click variant selection when ${handleSelector} appears before release`, async ({ page }) => {
+    await openApp(page);
+    await page.evaluate(() => {
+      createCanvasText(currentComponent.frameRecord, 0, 0, { beginEditing: false, isNew: false, textContent: "One" });
+      createCanvasText(currentComponent.frameRecord, 0, 0, { beginEditing: false, isNew: false, textContent: "Two" });
+      addVariantInstance();
+      selectVariantInstance(variantModel.getInstances()[0].id, { render: false });
+    });
+    const handle = page.locator(handleSelector).first();
+    await expect(handle).toBeVisible();
+    const bounds = await handle.boundingBox();
+    await page.evaluate(() => clearLayerSelection());
+    await expect(page.locator(".resize-overlay")).toBeHidden();
+
+    await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await page.mouse.down();
+    await expect(handle).toBeVisible();
+    await expect.poll(() => page.evaluate(() => getSelectedVariantInstanceIds())).toEqual([1]);
+    await page.mouse.up();
+    await expect.poll(() => page.evaluate(() => getSelectedVariantInstanceIds())).toEqual([1]);
+    await expect(handle).toBeVisible();
+
+    await page.getByRole("region", { name: "Canvas" }).click({ position: { x: 20, y: 20 } });
+    await expect.poll(() => page.evaluate(() => getSelectedVariantInstanceIds())).toEqual([]);
+    await expect(page.locator(".resize-overlay")).toBeHidden();
+  });
+}
+
+test("clicking variant spacing handles selects the whole variant without editing spacing", async ({ page }) => {
+  await openApp(page);
+  await page.evaluate(() => {
+    const frame = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    frame.element.style.gap = "20px";
+    frame.element.dataset.gap = "20";
+    createCanvasText(frame, 0, 0, { beginEditing: false, isNew: false, textContent: "One" });
+    createCanvasText(frame, 0, 0, { beginEditing: false, isNew: false, textContent: "Two" });
+    addVariantInstance();
+    selectVariantInstance(variantModel.getInstances()[0].id, { render: false, layerTarget: "frame:1" });
+  });
+
+  await page.locator('[data-padding-handle="left"]').click();
+  await expect.poll(() => page.evaluate(() => getSelectedVariantLayerTargets())).toEqual([]);
+  await expect.poll(() => page.evaluate(() => getLocalVariantOverride(
+    variantModel.getInstances()[0], "frame:1", "paddingLeft",
+  ))).toBeNull();
+
+  await page.evaluate(() => {
+    selectVariantInstance(variantModel.getInstances()[0].id, { render: false, layerTarget: "frame:1" });
+  });
+  await page.locator('[data-gap-handle]').first().click();
+  await expect.poll(() => page.evaluate(() => getSelectedVariantLayerTargets())).toEqual([]);
+  await expect.poll(() => page.evaluate(() => getLocalVariantOverride(
+    variantModel.getInstances()[0], "frame:1", "gap",
+  ))).toBeNull();
+});
+
 test("shows and independently edits colors across drilled-down variants", async ({ page }) => {
   await openApp(page);
   await page.evaluate(() => {

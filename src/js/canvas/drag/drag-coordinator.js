@@ -37,7 +37,7 @@ function resolveCanvasHit(target) {
     return { kind: "outside", target };
   }
 
-  const resizeControl = target.closest("[data-resize-handle]");
+  const resizeControl = target.closest("[data-resize-handle], [data-padding-handle], [data-gap-handle]");
   if (resizeControl instanceof HTMLElement
     && resizeOverlay.contains(resizeControl)
     && isActiveResizeSelection(getSelectedResizeElement())) {

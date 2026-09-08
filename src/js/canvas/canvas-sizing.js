@@ -3,6 +3,7 @@
 resizeOverlay.className = "resize-overlay";
 resizeOverlay.hidden = true;
 resizeOverlay.setAttribute("aria-hidden", "true");
+let gapInteraction = null;
 
 RESIZE_HANDLE_DIRECTIONS.filter((direction) => direction.length === 2).forEach((direction) => {
   const handle = document.createElement("button");
@@ -38,20 +39,47 @@ RESIZE_HANDLE_DIRECTIONS.filter((direction) => direction.length === 2).forEach((
   resizeOverlay.append(handle);
 });
 
-function syncGapHandles(element, layer) {
-  resizeOverlay.querySelectorAll("[data-gap-handle]").forEach((handle) => handle.remove());
-  const isFrameTarget = layer?.type === "frame"
-    || (layer?.type === "variant" && ["component", "frame"].includes(layer.targetType));
-  if (!isFrameTarget) return;
+function getGapHandleLayout(element) {
   const children = Array.from(element.children).filter((child) => (
     child instanceof HTMLElement
     && child.matches(".canvas-frame, .canvas-text, .canvas-vector")
     && getComputedStyle(child).display !== "none"
   ));
-  if (children.length < 2) return;
   const overlayBounds = element.getBoundingClientRect();
   const vertical = getComputedStyle(element).flexDirection === "column";
   const gapValue = Number.parseFloat(getComputedStyle(element).gap) || 0;
+  return { children, overlayBounds, vertical, gapValue };
+}
+
+function positionGapHandles(element) {
+  const handles = resizeOverlay.querySelectorAll("[data-gap-handle]");
+  const { children, overlayBounds, vertical, gapValue } = getGapHandleLayout(element);
+  handles.forEach((handle, index) => {
+    const first = children[index]?.getBoundingClientRect();
+    const second = children[index + 1]?.getBoundingClientRect();
+    if (!(handle instanceof HTMLElement) || !first || !second) return;
+    handle.style.left = `${vertical ? overlayBounds.width / 2 : (first.right + second.left) / 2 - overlayBounds.left}px`;
+    handle.style.top = `${vertical ? (first.bottom + second.top) / 2 - overlayBounds.top : overlayBounds.height / 2}px`;
+    const tooltip = handle.querySelector(".canvas-spacing-tooltip");
+    if (tooltip instanceof HTMLElement) tooltip.textContent = String(Math.round(gapValue));
+  });
+}
+
+function syncGapHandles(element, layer) {
+  const isFrameTarget = layer?.type === "frame"
+    || (layer?.type === "variant" && ["component", "frame"].includes(layer.targetType));
+  if (!isFrameTarget) {
+    resizeOverlay.querySelectorAll("[data-gap-handle]").forEach((handle) => handle.remove());
+    return;
+  }
+  // Preserve pointer capture during a drag while still following the live layout.
+  if (gapInteraction) {
+    positionGapHandles(element);
+    return;
+  }
+  resizeOverlay.querySelectorAll("[data-gap-handle]").forEach((handle) => handle.remove());
+  const { children, overlayBounds, vertical, gapValue } = getGapHandleLayout(element);
+  if (children.length < 2) return;
   children.slice(0, -1).forEach((child, index) => {
     const first = child.getBoundingClientRect();
     const second = children[index + 1].getBoundingClientRect();
@@ -66,7 +94,7 @@ function syncGapHandles(element, layer) {
     const tooltip = document.createElement("span");
     tooltip.className = "canvas-spacing-tooltip";
     tooltip.setAttribute("role", "tooltip");
-    tooltip.textContent = `${Math.round(gapValue)}px`;
+    tooltip.textContent = String(Math.round(gapValue));
     handle.append(tooltip);
     resizeOverlay.append(handle);
   });
@@ -92,7 +120,18 @@ function getSelectedResizeElement() {
 }
 
 function isActiveResizeSelection(element) {
-  return element instanceof HTMLElement && element.classList.contains("is-selected");
+  if (!(element instanceof HTMLElement) || !element.classList.contains("is-selected")) return false;
+  const preview = element.closest(".variant-preview[data-variant-instance-id]");
+  if (!(preview instanceof HTMLElement)) return true;
+  const instanceId = Number(preview.dataset.variantInstanceId);
+  if (!Number.isFinite(instanceId) || !isVariantInstanceSelected(instanceId)) return false;
+  const layer = getCanvasLayerDescriptor(element);
+  const target = element.classList.contains("canvas-root-stack")
+    ? "component:0"
+    : layer ? `${layer.type}:${layer.id}` : null;
+  return target === "component:0"
+    ? isVariantRootSelected(instanceId)
+    : Boolean(target && isVariantLayerTargetSelected(instanceId, target));
 }
 
 function syncResizeTargetHover(isHovered) {
@@ -102,7 +141,22 @@ function syncResizeTargetHover(isHovered) {
   }
 }
 
-resizeOverlay.addEventListener("pointerover", () => syncResizeTargetHover(true));
+function positionSpacingTooltip(event) {
+  const handle = event.target instanceof Element
+    ? event.target.closest("[data-padding-handle], [data-gap-handle]")
+    : null;
+  const tooltip = handle?.querySelector(".canvas-spacing-tooltip");
+  if (!(handle instanceof HTMLElement) || !(tooltip instanceof HTMLElement)) return;
+  const bounds = handle.getBoundingClientRect();
+  tooltip.style.left = `${event.clientX - bounds.left}px`;
+  tooltip.style.top = `${event.clientY - bounds.top}px`;
+}
+
+resizeOverlay.addEventListener("pointerover", (event) => {
+  syncResizeTargetHover(true);
+  positionSpacingTooltip(event);
+});
+resizeOverlay.addEventListener("pointermove", positionSpacingTooltip);
 resizeOverlay.addEventListener("pointerout", (event) => {
   if (event.relatedTarget instanceof Node && resizeOverlay.contains(event.relatedTarget)) return;
   syncResizeTargetHover(false);
@@ -127,11 +181,47 @@ function getSelectedResizeRecord() {
   return null;
 }
 
+function getPaddingHandleLimits(element) {
+  const bounds = element.getBoundingClientRect();
+  const children = Array.from(element.children).filter((child) => (
+    child instanceof HTMLElement
+    && child.matches(".canvas-frame, .canvas-text, .canvas-vector")
+    && getComputedStyle(child).display !== "none"
+  ));
+  if (children.length === 0) {
+    return { left: bounds.width / 2, top: bounds.height / 2, right: bounds.width / 2, bottom: bounds.height / 2 };
+  }
+  const childBounds = children.map((child) => child.getBoundingClientRect());
+  return {
+    left: Math.max(0, (Math.min(...childBounds.map((child) => child.left)) - bounds.left) / 2),
+    top: Math.max(0, (Math.min(...childBounds.map((child) => child.top)) - bounds.top) / 2),
+    right: Math.max(0, (bounds.right - Math.max(...childBounds.map((child) => child.right))) / 2),
+    bottom: Math.max(0, (bounds.bottom - Math.max(...childBounds.map((child) => child.bottom))) / 2),
+  };
+}
+
+function positionPaddingHandles(element, style) {
+  const bounds = element.getBoundingClientRect();
+  const limits = getPaddingHandleLimits(element);
+  ["left", "top", "right", "bottom"].forEach((side) => {
+    const property = `padding${side[0].toUpperCase()}${side.slice(1)}`;
+    const value = Number.parseFloat(style[property]) || 0;
+    const inset = value === 0 ? -1 : Math.min(value / 2, limits[side]);
+    const handle = resizeOverlay.querySelector(`[data-padding-handle="${side}"]`);
+    if (!(handle instanceof HTMLElement)) return;
+    if (side === "left") handle.style.left = `${inset}px`;
+    else if (side === "right") handle.style.left = `${bounds.width - inset}px`;
+    else if (side === "top") handle.style.top = `${inset}px`;
+    else handle.style.top = `${bounds.height - inset}px`;
+  });
+}
+
 function positionResizeOverlay() {
   if (!(canvas instanceof HTMLElement)) return;
   if (canvasReflowAnimations.has(resizeOverlay)) return;
   if (activeTool !== "select" || canvasDragSession || canvasPointerDrag?.hasStarted) {
     resizeOverlay.hidden = true;
+    resizeOverlay.classList.remove("is-active-selection");
     return;
   }
 
@@ -143,6 +233,9 @@ function positionResizeOverlay() {
     || getComputedStyle(element).display === "none"
   ) {
     resizeOverlay.hidden = true;
+    resizeOverlay.classList.remove("is-active-selection");
+    resizeOverlay.classList.remove("shows-padding-handles");
+    resizeOverlay.querySelectorAll("[data-gap-handle]").forEach((handle) => handle.remove());
     return;
   }
 
@@ -150,8 +243,11 @@ function positionResizeOverlay() {
   const bounds = element.getBoundingClientRect();
   if (bounds.width <= 0 || bounds.height <= 0) {
     resizeOverlay.hidden = true;
+    resizeOverlay.classList.remove("is-active-selection", "shows-padding-handles");
+    resizeOverlay.querySelectorAll("[data-gap-handle]").forEach((handle) => handle.remove());
     return;
   }
+  resizeOverlay.classList.add("is-active-selection");
   resizeOverlay.hidden = false;
   resizeOverlay.style.left = `${bounds.left - canvasBounds.left}px`;
   resizeOverlay.style.top = `${bounds.top - canvasBounds.top}px`;
@@ -163,11 +259,12 @@ function positionResizeOverlay() {
   resizeOverlay.classList.toggle("shows-padding-handles", showsPaddingHandles);
   if (showsPaddingHandles) {
     const style = getComputedStyle(element);
+    positionPaddingHandles(element, style);
     ["left", "top", "right", "bottom"].forEach((side) => {
       const property = `padding${side[0].toUpperCase()}${side.slice(1)}`;
       resizeOverlay.style.setProperty(`--padding-${side}`, style[property]);
       const tooltip = resizeOverlay.querySelector(`[data-padding-handle="${side}"] .canvas-spacing-tooltip`);
-      if (tooltip instanceof HTMLElement) tooltip.textContent = `${Math.round(Number.parseFloat(style[property]) || 0)}px`;
+      if (tooltip instanceof HTMLElement) tooltip.textContent = String(Math.round(Number.parseFloat(style[property]) || 0));
     });
   }
   syncGapHandles(element, layer);
@@ -186,6 +283,14 @@ function syncResizeOverlay() {
 }
 
 let paddingInteraction = null;
+
+function selectSpacingInteractionVariant(interaction) {
+  if (interaction?.layer.type !== "variant" || interaction.hasRecordedHistory) return false;
+  const instanceId = selectedVariantInstanceId;
+  if (!Number.isFinite(instanceId)) return false;
+  selectVariantInstance(instanceId, { render: false, layerTarget: null });
+  return true;
+}
 
 resizeOverlay.addEventListener("pointerdown", (event) => {
   const handle = event.target instanceof HTMLElement ? event.target.closest("[data-padding-handle]") : null;
@@ -208,6 +313,7 @@ resizeOverlay.addEventListener("pointerdown", (event) => {
     layer,
     side,
     property,
+    handle,
     pointerX: event.clientX,
     pointerY: event.clientY,
     value: Number.parseFloat(getComputedStyle(element)[property]) || 0,
@@ -260,10 +366,12 @@ function finishPaddingInteraction(event) {
     || !event.target.matches("[data-padding-handle]")
     || !event.target.hasPointerCapture(event.pointerId)) return;
   applyPaddingPointerPosition(event.clientX, event.clientY, event.altKey);
+  const interaction = paddingInteraction;
   event.target.releasePointerCapture(event.pointerId);
-  if (paddingInteraction?.layer.type === "variant") renderVariantInstances();
+  if (interaction?.layer.type === "variant" && interaction.hasRecordedHistory) renderVariantInstances();
+  event.target.style.removeProperty(interaction?.side === "left" || interaction?.side === "right" ? "left" : "top");
   paddingInteraction = null;
-  syncResizeOverlay();
+  if (!selectSpacingInteractionVariant(interaction)) syncResizeOverlay();
 }
 
 resizeOverlay.addEventListener("pointerup", finishPaddingInteraction);
@@ -274,11 +382,14 @@ resizeOverlay.addEventListener("pointercancel", (event) => {
     event.target.releasePointerCapture(event.pointerId);
   }
   if (paddingInteraction?.layer.type === "variant") renderVariantInstances();
+  if (paddingInteraction?.handle instanceof HTMLElement) {
+    paddingInteraction.handle.style.removeProperty(
+      paddingInteraction.side === "left" || paddingInteraction.side === "right" ? "left" : "top",
+    );
+  }
   paddingInteraction = null;
   syncResizeOverlay();
 });
-
-let gapInteraction = null;
 
 resizeOverlay.addEventListener("pointerdown", (event) => {
   const handle = event.target instanceof HTMLElement ? event.target.closest("[data-gap-handle]") : null;
@@ -298,6 +409,7 @@ resizeOverlay.addEventListener("pointerdown", (event) => {
     element,
     layer,
     direction,
+    handle,
     pointerX: event.clientX,
     pointerY: event.clientY,
     value: Number.parseFloat(getComputedStyle(element).gap) || 0,
@@ -330,10 +442,8 @@ function applyGapPointerPosition(clientX, clientY, coarse = false) {
   }
   element.style.gap = `${value}px`;
   syncInspectorToSelectedFrame();
+  positionResizeOverlay();
   syncVariantActionOverlay();
-  resizeOverlay.querySelectorAll("[data-gap-handle] .canvas-spacing-tooltip").forEach((tooltip) => {
-    tooltip.textContent = `${value}px`;
-  });
 }
 
 resizeOverlay.addEventListener("pointermove", (event) => {
@@ -348,11 +458,13 @@ resizeOverlay.addEventListener("pointerup", (event) => {
     || !event.target.matches("[data-gap-handle]")
     || !event.target.hasPointerCapture(event.pointerId)) return;
   applyGapPointerPosition(event.clientX, event.clientY, event.altKey);
+  const interaction = gapInteraction;
   event.target.releasePointerCapture(event.pointerId);
-  if (gapInteraction?.layer.type === "variant") renderVariantInstances();
-  else if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+  if (interaction?.layer.type === "variant") {
+    if (interaction.hasRecordedHistory) renderVariantInstances();
+  } else if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
   gapInteraction = null;
-  syncResizeOverlay();
+  if (!selectSpacingInteractionVariant(interaction)) syncResizeOverlay();
 });
 
 resizeOverlay.addEventListener("pointercancel", (event) => {

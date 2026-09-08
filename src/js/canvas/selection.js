@@ -40,6 +40,7 @@ function beginCanvasGesture(event) {
   if (event.button !== 0 || !event.isPrimary) return;
   canvasGestureState = {
     pointerId: event.pointerId,
+    initialHitKind: resolveCanvasHit(event.target).kind,
     suppressClick: false,
   };
 }

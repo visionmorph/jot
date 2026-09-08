@@ -1595,7 +1595,7 @@ textarea:focus-visible {
   padding: 0;
   border: 0;
   background: transparent;
-  pointer-events: auto;
+  pointer-events: none;
   touch-action: none;
   user-select: none;
 }
@@ -1671,14 +1671,19 @@ textarea:focus-visible {
   padding: 0;
   border: 0;
   background: transparent;
-  pointer-events: auto;
+  pointer-events: none;
   touch-action: none;
   user-select: none;
   transform: translate(-50%, -50%);
 }
 
+.resize-overlay.is-active-selection :is(.padding-handle, .gap-handle) {
+  pointer-events: auto;
+}
+
 .gap-handle::before {
-  box-shadow: 0 0 0 1px #81ff3e;
+  background: var(--icon-inverse);
+  box-shadow: 0 0 0 1px #6fdc8c;
 }
 
 .gap-handle--horizontal {
@@ -1695,22 +1700,31 @@ textarea:focus-visible {
 
 .canvas-spacing-tooltip {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 6px);
   display: none;
   min-width: max-content;
   padding: 2px 4px;
   border-radius: 2px;
   color: var(--text-inverse);
-  background: var(--background-inverse);
   font-size: 11px;
   line-height: 16px;
   pointer-events: none;
-  transform: translateX(-50%);
+  transform: translate(-50%, calc(-100% - 6px));
+}
+
+.padding-handle .canvas-spacing-tooltip {
+  background: var(--component);
+}
+
+.gap-handle .canvas-spacing-tooltip {
+  background: #6fdc8c;
 }
 
 :is(.padding-handle, .gap-handle):hover .canvas-spacing-tooltip {
   display: block;
+}
+
+:is(.padding-handle, .gap-handle):hover {
+  z-index: 3;
 }
 
 .canvas.is-text-tool-active .resize-handle,
