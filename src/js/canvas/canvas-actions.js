@@ -370,7 +370,6 @@ function selectMatchingLayers() {
   // IDs; a standalone canvas layer or component therefore has no other match.
   if (instanceIds.length !== 1) return false;
   const targets = getSelectedVariantLayerTargets(instanceIds[0]);
-  if (targets.length > 1) return false;
   const instance = getVariantInstance(instanceIds[0]);
   if (!instance || instance.componentId !== currentComponent?.id) return false;
   const matchingIds = variantModel.getInstances()
@@ -380,8 +379,8 @@ function selectMatchingLayers() {
 
   // The delta target (type:id) is the canonical identity, shared by every
   // instance, regardless of names, styling, or local property overrides.
-  if (targets.length === 1) {
-    if (!getElementForLayerKey(targets[0])) return false;
+  if (targets.length > 0) {
+    if (targets.some((target) => !getElementForLayerKey(target))) return false;
     selectVariantInstancesLayerTargetsState(matchingIds, targets, instance.id);
   } else {
     selectVariantInstancesState(matchingIds, instance.id);
