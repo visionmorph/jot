@@ -1368,11 +1368,13 @@ textarea:focus-visible {
   box-shadow: inset 0 0 0 2px var(--component);
 }
 
+.canvas [data-layer-visibility="hidden"],
 .canvas-root-stack.is-layer-hidden,
 .canvas-frame.is-layer-hidden,
 .canvas-text.is-layer-hidden,
 .canvas-vector.is-layer-hidden {
-  display: none;
+  /* Tree visibility must override inline frame and text layout modes. */
+  display: none !important;
 }
 
 .selection-rectangle {

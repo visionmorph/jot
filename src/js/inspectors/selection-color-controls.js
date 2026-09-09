@@ -3,6 +3,20 @@
 const selectionColorSection = document.querySelector("[data-selection-colors]");
 let selectionColorGroups = new Map();
 
+function isHiddenFromSelectionColors(element) {
+  let current = element;
+  while (current instanceof HTMLElement) {
+    if (current.matches(".canvas-root-stack, .canvas-frame, .canvas-text, .canvas-vector")) {
+      if (!isLayerVisible(current)
+        || current.classList.contains("is-layer-hidden")
+        || current.style.display === "none") return true;
+      if (current.classList.contains("canvas-root-stack")) break;
+    }
+    current = current.parentElement;
+  }
+  return false;
+}
+
 function getLayerTargetForElement(element) {
   if (element === canvasRootStack || element.classList.contains("canvas-root-stack")) return "component:0";
   if (element.classList.contains("canvas-frame")) return `frame:${element.dataset.frameId}`;
@@ -35,6 +49,7 @@ function hasMaskImage(styles) {
 }
 
 function getFrameColorMembers(element, target) {
+  if (isHiddenFromSelectionColors(element)) return [];
   const members = [];
   const styles = getComputedStyle(element);
   const inlineBackground = String(element.style.backgroundColor).trim();
@@ -54,6 +69,7 @@ function getFrameColorMembers(element, target) {
 }
 
 function getTextColorMembers(element, target) {
+  if (isHiddenFromSelectionColors(element)) return [];
   const textId = Number(element.dataset.textId);
   const sourceRecord = getTextRecord(textId);
   const preview = element.closest(".variant-preview[data-variant-instance-id]");
@@ -93,6 +109,7 @@ function getTextColorMembers(element, target) {
 }
 
 function getVectorColorMembers(element, target) {
+  if (isHiddenFromSelectionColors(element)) return [];
   const record = { element };
   if (getVectorPaintProperties(record).length === 0) return [];
   const value = getResolvedColorValue(
@@ -122,26 +139,7 @@ function getElementColorMembers(element) {
     : members;
 }
 
-function getSelectionColorRoot() {
-  if (selectionState.kind === "component" && selectionState.componentId === currentComponent?.id) {
-    return canvasRootStack;
-  }
-  if (selectionState.kind === "layers"
-    && getSelectedLayerKeys().length === 1
-    && getPrimarySelectedLayerKey()?.startsWith("frame:")) {
-    return getElementForLayerKey(getPrimarySelectedLayerKey());
-  }
-  if (selectionState.kind !== "variant" || getSelectedVariantLayerTargets().length > 1) return null;
-  const target = selectedVariantLayerTarget;
-  if (target !== null && !target.startsWith("frame:")) return null;
-  const preview = componentSet?.querySelector(
-    `.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`,
-  );
-  const root = preview?.querySelector(".canvas-root-stack");
-  return root instanceof HTMLElement ? findVariantTarget(root, target || "component:0") : null;
-}
-
-function groupSelectionColorMembers(members, variantInstanceId = null) {
+function groupPaintMembers(members) {
   const groups = new Map();
   members.forEach((member) => {
     const group = groups.get(member.key);
@@ -151,62 +149,14 @@ function groupSelectionColorMembers(members, variantInstanceId = null) {
       color: member.color,
       opacity: member.opacity,
       members: [member],
-      variantInstanceId,
+      variantInstanceId: member.variantInstanceId ?? null,
     });
   });
   return [...groups.values()];
 }
 
-function collectSelectionColorGroups() {
-  const root = getSelectionColorRoot();
-  if (!(root instanceof HTMLElement)) return [];
-  const directChildren = Array.from(root.children).filter((element) => (
-    element.matches(".canvas-frame, .canvas-text, .canvas-vector")
-  ));
-  if (!directChildren.some((element) => getElementColorMembers(element).length > 0)) return [];
-
-  const descendants = Array.from(root.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector"));
-  const members = [
-    ...getElementColorMembers(root),
-    ...descendants.flatMap((element) => getElementColorMembers(element)),
-  ];
-  return groupSelectionColorMembers(
-    members,
-    selectionState.kind === "variant" ? selectedVariantInstanceId : null,
-  );
-}
-
-function collectSelectedFrameColorGroups() {
-  const records = typeof getSelectedFrameLayoutRecords === "function"
-    ? getSelectedFrameLayoutRecords()
-    : getSelectedFrameRecords();
-  if (records.length < 2) return [];
-  let hasNestedColor = false;
-  const rootSignatures = [];
-  const members = records.flatMap((record) => {
-    const root = record.element;
-    const rootMembers = getElementColorMembers(root);
-    rootSignatures.push(rootMembers
-      .map((member) => `${member.kind}:${member.key}`)
-      .sort()
-      .join("|"));
-    const descendantMembers = Array.from(
-      root.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector"),
-    ).flatMap((element) => getElementColorMembers(element));
-    if (descendantMembers.length > 0) hasNestedColor = true;
-    return [...rootMembers, ...descendantMembers];
-  });
-  if (members.length === 0) return [];
-  const hasDifferentRootPaint = rootSignatures.some((signature) => signature !== rootSignatures[0]);
-  const hasDistinctColors = new Set(members.map((member) => member.key)).size > 1;
-  if (!hasNestedColor && !hasDifferentRootPaint && !hasDistinctColors) return [];
-  return groupSelectionColorMembers(
-    members,
-    selectionState.kind === "variant" ? selectedVariantInstanceId : null,
-  );
-}
-
 function createTextRangeColorMembers(record, rangeSelection) {
+  if (isHiddenFromSelectionColors(record.element)) return [];
   return getCurrentTextRunData(record, rangeSelection).segments.map((segment) => ({
     color: segment.color,
     opacity: segment.opacity,
@@ -217,74 +167,113 @@ function createTextRangeColorMembers(record, rangeSelection) {
     record,
     start: segment.start,
     end: segment.end,
+    variantInstanceId: rangeSelection.variantInstanceId ?? record.variantInstanceId ?? null,
   }));
 }
 
-function collectSelectedTextColorGroups() {
-  const records = getSelectedTextRecords();
-  if (records.length === 0) return [];
-  const members = records.flatMap((record) => {
-    const runData = getCurrentTextRunData(record);
-    if (!runData.hasRuns) {
-      return getTextColorMembers(record.element, `text:${record.id}`);
+function createPaintScope(element, includeDescendants, record = null, rangeSelection = null) {
+  if (!(element instanceof HTMLElement)) return null;
+  const preview = element.closest(".variant-preview[data-variant-instance-id]");
+  const variantInstanceId = preview instanceof HTMLElement
+    ? Number(preview.dataset.variantInstanceId)
+    : null;
+  return {
+    element,
+    target: getLayerTargetForElement(element),
+    variantInstanceId: Number.isFinite(variantInstanceId) ? variantInstanceId : null,
+    includeDescendants,
+    ...(record ? { record } : {}),
+    ...(rangeSelection ? { rangeSelection } : {}),
+  };
+}
+
+function getSelectedPaintScopes(isFrameSelected, isTextSelected, isVectorSelected) {
+  if (getSelectedVariantInstanceIds().length > 1 && getSelectedVariantLayerTargets().length > 0) {
+    const scopes = [];
+    for (const instanceId of getSelectedVariantInstanceIds()) {
+      const root = componentSet?.querySelector(
+        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"] .canvas-root-stack`,
+      );
+      if (!(root instanceof HTMLElement)) continue;
+      for (const target of getSelectedVariantLayerTargets(instanceId)) {
+        const element = findVariantTarget(root, target);
+        const scope = createPaintScope(element, target.startsWith("frame:"));
+        if (scope) scopes.push(scope);
+      }
     }
-    return runData.segments.map((segment) => ({
-      color: segment.color,
-      opacity: segment.opacity,
-      key: segment.key,
-      kind: "text-range",
-      target: `text:${record.id}`,
-      element: record.element,
-      record,
-      start: segment.start,
-      end: segment.end,
-    }));
-  });
-  if (new Set(members.map((member) => member.key)).size < 2) return [];
-  return groupSelectionColorMembers(
-    members,
-    selectionState.kind === "variant" ? selectedVariantInstanceId : null,
-  );
+    return scopes;
+  }
+
+  if (isFrameSelected) {
+    const records = typeof getSelectedFrameLayoutRecords === "function"
+      ? getSelectedFrameLayoutRecords()
+      : getSelectedFrameRecords();
+    return records.map((record) => createPaintScope(record.element, true, record)).filter(Boolean);
+  }
+  if (isTextSelected) {
+    const record = getSelectedTextRecord();
+    const rangeSelection = getActiveTextRangeSelection(record);
+    if (record && rangeSelection) return [createPaintScope(record.element, false, record, rangeSelection)].filter(Boolean);
+    return getSelectedTextRecords()
+      .map((candidate) => createPaintScope(candidate.element, false, candidate))
+      .filter(Boolean);
+  }
+  if (isVectorSelected) {
+    return getSelectedVectorRecords()
+      .map((record) => createPaintScope(record.element, false, record))
+      .filter(Boolean);
+  }
+  return [];
 }
 
-function collectSelectedVectorColorGroups() {
-  const records = getSelectedVectorRecords();
-  if (records.length < 2) return [];
-  const members = records.flatMap((record) => (
-    getVectorColorMembers(record.element, `vector:${record.id}`)
-  ));
-  if (new Set(members.map((member) => member.key)).size < 2) return [];
-  return groupSelectionColorMembers(
-    members,
-    selectionState.kind === "variant" ? selectedVariantInstanceId : null,
-  );
-}
-
-function collectActiveTextRangeColorGroups() {
-  const record = getSelectedTextRecord();
-  const rangeSelection = getActiveTextRangeSelection(record);
-  if (!record || !rangeSelection) return [];
-  const members = createTextRangeColorMembers(record, rangeSelection);
-  if (new Set(members.map((member) => member.key)).size < 2) return [];
-  return groupSelectionColorMembers(members, rangeSelection.variantInstanceId);
-}
-
-function collectMultiVariantLayerColorGroups() {
+function collectPaintMembers(scopes) {
   const elements = new Set();
-  for (const instanceId of getSelectedVariantInstanceIds()) {
-    const root = componentSet?.querySelector(
-      `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"] .canvas-root-stack`,
-    );
-    if (!(root instanceof HTMLElement)) continue;
-    for (const target of getSelectedVariantLayerTargets(instanceId)) {
-      const element = findVariantTarget(root, target);
-      if (!(element instanceof HTMLElement)) continue;
-      elements.add(element);
-      element.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector")
+  const members = [];
+  scopes.forEach((scope) => {
+    if (scope.rangeSelection && scope.record) {
+      members.push(...createTextRangeColorMembers(scope.record, scope.rangeSelection));
+      return;
+    }
+    elements.add(scope.element);
+    if (scope.includeDescendants) {
+      scope.element.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector")
         .forEach((descendant) => elements.add(descendant));
     }
-  }
-  return groupSelectionColorMembers([...elements].flatMap(getElementColorMembers));
+  });
+  members.push(...[...elements].flatMap(getElementColorMembers));
+  return members;
+}
+
+function shouldShowPaintGroups(scopes, members, groups) {
+  if (groups.length === 0) return false;
+  if (groups.length > 1) return true;
+  if (scopes.some((scope) => scope.rangeSelection)) return false;
+
+  const variantIds = new Set(scopes
+    .map((scope) => scope.variantInstanceId)
+    .filter(Number.isFinite));
+  const targetTypes = new Set(scopes.map((scope) => scope.target?.split(":")[0]).filter(Boolean));
+  if (variantIds.size > 1 && targetTypes.size === 1) return false;
+  if (targetTypes.size > 1) return true;
+  if (scopes.every((scope) => !scope.includeDescendants)) return false;
+
+  const hasDescendantPaint = scopes.some((scope) => scope.includeDescendants
+    && members.some((member) => member.element !== scope.element && scope.element.contains(member.element)));
+  if (hasDescendantPaint) return true;
+
+  const rootSignatures = scopes.map((scope) => members
+    .filter((member) => member.element === scope.element)
+    .map((member) => `${member.kind}:${member.key}`)
+    .sort()
+    .join("|"));
+  return rootSignatures.some((signature) => signature !== rootSignatures[0]);
+}
+
+function getSelectionPaintGroups(isFrameSelected, isTextSelected, isVectorSelected) {
+  const scopes = getSelectedPaintScopes(isFrameSelected, isTextSelected, isVectorSelected);
+  const members = collectPaintMembers(scopes);
+  const groups = groupPaintMembers(members);
+  return shouldShowPaintGroups(scopes, members, groups) ? groups : [];
 }
 
 function createSelectionColorControl(group, index) {
@@ -315,23 +304,8 @@ function syncSelectionColorControls(isFrameSelected, isTextSelected, isVectorSel
   const showBulkTextColors = isTextSelected && !isFrameSelected;
   const showBulkVectorColors = isVectorSelected && !isFrameSelected && !isTextSelected
     && (showMultiVariantColors || getSelectedVectorRecords().length > 1);
-  const selectedFrameRecords = typeof getSelectedFrameLayoutRecords === "function"
-    ? getSelectedFrameLayoutRecords()
-    : getSelectedFrameRecords();
-  const showBulkFrameColors = isFrameSelected && selectedFrameRecords.length > 1;
   const hasPartialTextFill = showBulkTextColors && Boolean(getPartialTextFillState()?.partial);
-  const hasActiveTextRange = showBulkTextColors && Boolean(getActiveTextRangeSelection());
-  const groups = showMultiVariantColors
-    ? collectMultiVariantLayerColorGroups()
-    : showBulkFrameColors
-    ? collectSelectedFrameColorGroups()
-    : isFrameSelected
-      ? collectSelectionColorGroups()
-    : showBulkTextColors
-      ? hasActiveTextRange ? collectActiveTextRangeColorGroups() : collectSelectedTextColorGroups()
-      : showBulkVectorColors
-        ? collectSelectedVectorColorGroups()
-      : [];
+  const groups = getSelectionPaintGroups(isFrameSelected, isTextSelected, isVectorSelected);
   const textPaintSection = textColorPicker?.closest("[data-paint-section]");
   if (textPaintSection instanceof HTMLElement) {
     textPaintSection.hidden = showBulkTextColors && groups.length > 0 && !hasPartialTextFill;

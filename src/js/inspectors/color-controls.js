@@ -54,11 +54,15 @@ function getSelectedTextsInLayerTreeOrder(records = getSelectedTextRecords()) {
   ));
 }
 
+function getVisibleColorRecords(records) {
+  return records.filter((record) => !isHiddenFromSelectionColors(record.element));
+}
+
 function getMixedFramePaintState(property) {
   const selectedRecords = typeof getSelectedFrameLayoutRecords === "function"
     ? getSelectedFrameLayoutRecords()
     : getSelectedFrameRecords();
-  const records = getSelectedFramesInLayerTreeOrder(selectedRecords);
+  const records = getSelectedFramesInLayerTreeOrder(getVisibleColorRecords(selectedRecords));
   if (records.length < 2 || !["frame-background", "frame-outline"].includes(property)) return null;
   const isOutline = property === "frame-outline";
   const values = records.map((record) => {
@@ -79,7 +83,7 @@ function getMixedFramePaintState(property) {
 }
 
 function getPartialTextFillState() {
-  const records = getSelectedTextsInLayerTreeOrder();
+  const records = getSelectedTextsInLayerTreeOrder(getVisibleColorRecords(getSelectedTextRecords()));
   if (records.length < 2) return null;
   const values = records.map((record) => {
     const member = getTextColorMembers(record.element, `text:${record.id}`)[0];
@@ -172,9 +176,11 @@ function getCustomColorState(control) {
   }
   if (property === "text") {
     const capturedRange = textColorControlRanges.get(control);
-    const record = capturedRange?.record ?? getSelectedTextRecord();
+    const selectedRecord = capturedRange?.record ?? getSelectedTextRecord();
+    const records = getVisibleColorRecords(getSelectedTextRecords());
+    const record = capturedRange?.record
+      ?? (selectedRecord && !isHiddenFromSelectionColors(selectedRecord.element) ? selectedRecord : records[0]);
     if (!record) return null;
-    const records = getSelectedTextRecords();
     const rangeSelection = capturedRange?.rangeSelection
       ?? (records.length === 1 ? getActiveTextRangeSelection(record) : null);
     const rangeValues = rangeSelection
@@ -201,9 +207,10 @@ function getCustomColorState(control) {
     };
   }
   if (property === "vector") {
-    const record = getSelectedVectorRecord();
+    const selectedRecord = getSelectedVectorRecord();
+    const records = getVisibleColorRecords(getSelectedVectorRecords());
+    const record = selectedRecord && !isHiddenFromSelectionColors(selectedRecord.element) ? selectedRecord : records[0];
     if (!record) return null;
-    const records = getSelectedVectorRecords();
     const variantPaintProperties = record.isVariantInstance ? getVectorPaintProperties(record) : [];
     const color = record.isVariantInstance
       ? variantPaintProperties.length > 0 ? getVectorRenderedColor(record) : ""
@@ -221,10 +228,12 @@ function getCustomColorState(control) {
       picker: vectorColorPicker,
     };
   }
-  const record = getSelectedFrameRecord();
-  const records = typeof getSelectedFrameLayoutRecords === "function"
+  const selectedRecord = getSelectedFrameRecord();
+  const selectedRecords = typeof getSelectedFrameLayoutRecords === "function"
     ? getSelectedFrameLayoutRecords()
     : getSelectedFrameRecords();
+  const records = getVisibleColorRecords(selectedRecords);
+  const record = selectedRecord && !isHiddenFromSelectionColors(selectedRecord.element) ? selectedRecord : records[0];
   if (!record) return null;
   const inspectorValues = getFrameInspectorValues(record);
   if (property === "frame-background") {

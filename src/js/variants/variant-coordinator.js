@@ -209,7 +209,6 @@ function handleVariantStructureToolClick(instance, parentTarget, event) {
   }
   const record = createCanvasText(parentRecord, 0, 0, {
     beginEditing: false,
-    isNew: false,
     useDefaultName: true,
   });
   if (!record) return true;

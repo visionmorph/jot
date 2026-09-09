@@ -36,7 +36,9 @@ function applyVariantOperation(root, operation) {
     return;
   }
   if (property === "visibility") {
-    target.style.display = variantBoolean(value) ? "" : "none";
+    // Keep visibility separate from display overrides used for text alignment
+    // and frame layout, which may be applied later in the same render.
+    target.classList.toggle("is-layer-hidden", !isLayerVisible(target) || !variantBoolean(value));
     return;
   }
   if (property === "disabled") {

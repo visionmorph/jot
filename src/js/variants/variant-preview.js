@@ -263,6 +263,25 @@ function renderVariantInstances() {
       });
       text.addEventListener("blur", () => {
         endHistoryGesture(text);
+        const sourceRecord = getTextRecord(textId);
+        if (sourceRecord?.isNew && (text.textContent ?? "").length === 0) {
+          const deletedTarget = `text:${textId}`;
+          variantModel.getInstances().forEach((variantInstance) => {
+            variantInstance.overrides = (variantInstance.overrides ?? [])
+              .filter((override) => override.target !== deletedTarget);
+          });
+          variantModel.replaceRules(
+            variantModel.getRules().filter((rule) => rule.target !== deletedTarget),
+          );
+          selectVariantState(instance.id);
+          removeCanvasText(sourceRecord.element);
+          scheduleVariantInstanceRender();
+          return;
+        }
+        if (sourceRecord?.isNew) {
+          sourceRecord.isNew = false;
+          sourceRecord.element.classList.remove("is-new-empty");
+        }
         text.contentEditable = "false";
         scheduleVariantInstanceRender();
       });

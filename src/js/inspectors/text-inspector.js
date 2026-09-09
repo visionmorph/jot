@@ -229,18 +229,25 @@ function syncInspectorToSelectedText() {
   syncTextInspectorInput(lineHeightInput, lineHeight);
   syncTextInspectorInput(letterSpacingInput, letterSpacing);
   if (textColorPicker instanceof HTMLInputElement) {
-    const rangeSelection = records.length === 1 ? getActiveTextRangeSelection(record) : null;
-    const rangeValue = rangeSelection ? getActiveTextRangeColorValues(record)[0] : null;
-    const uniformRunColor = getUniformTextRunColor(record);
-    const renderedColor = record.isVariantInstance ? styles.color : "";
+    const colorRecords = getVisibleColorRecords(records);
+    const colorRecord = !isHiddenFromSelectionColors(record.element) ? record : colorRecords[0];
+    const colorElement = colorRecord?.element;
+    const colorStyles = colorElement ? getComputedStyle(colorElement) : styles;
+    const rangeSelection = colorRecord && colorRecords.length === 1 ? getActiveTextRangeSelection(colorRecord) : null;
+    const rangeValue = rangeSelection ? getActiveTextRangeColorValues(colorRecord)[0] : null;
+    const uniformRunColor = colorRecord ? getUniformTextRunColor(colorRecord) : null;
+    const renderedColor = colorRecord?.isVariantInstance ? colorStyles.color : "";
     const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
-    const isTransparent = isTransparentColorValue(element.style.color)
+    const isTransparent = isTransparentColorValue(colorElement?.style.color)
       || renderedColor === "transparent"
       || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
-    const layerColor = record.isVariantInstance
+    const layerColor = colorRecord?.isVariantInstance
       ? isTransparent ? "" : cssColorToHex(renderedColor) || "#000000"
-      : Object.prototype.hasOwnProperty.call(element.dataset, "textColor") ? element.dataset.textColor : "#000000";
-    const layerOpacity = record.isVariantInstance ? rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : 100 : element.dataset.textColorOpacity || "100";
+      : colorElement && Object.prototype.hasOwnProperty.call(colorElement.dataset, "textColor")
+        ? colorElement.dataset.textColor : colorElement ? "#000000" : "";
+    const layerOpacity = colorRecord?.isVariantInstance
+      ? rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : 100
+      : colorElement?.dataset.textColorOpacity || "100";
     syncCustomColorControl(
       textColorPicker,
       rangeValue?.color ?? uniformRunColor?.color ?? layerColor,

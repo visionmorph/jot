@@ -79,11 +79,12 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
       : /^fixed$/i.test(trimmedValue)
         ? "fixed"
         : null;
-  const numberMatch = trimmedValue.match(/^\d+(?:\.\d+)?$/);
+  const numberMatch = trimmedValue.match(/^-?\d+(?:\.\d+)?$/);
   if (!requestedMode && !numberMatch) return false;
   const fixedNumber = numberMatch
     ? Math.max(MIN_INTERACTIVE_LAYER_SIZE, Number(numberMatch[0]))
     : null;
+  if (numberMatch && Number(numberMatch[0]) < MIN_INTERACTIVE_LAYER_SIZE) input.value = String(fixedNumber);
 
   if (selectedVariantInstanceId !== null && type === "frame" && record.isVariantInstance) {
     const primaryFixedValue = fixedNumber ?? (

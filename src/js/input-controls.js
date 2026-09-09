@@ -43,7 +43,8 @@ document.querySelectorAll("[data-text-input-prefix]").forEach((prefix) => {
     drag.didDrag = true;
     prefix.classList.add("is-dragging");
     const multiplier = event.shiftKey ? 10 : 1;
-    const minimumValue = input.min || input.dataset.min;
+    const minimumValue = input.matches("[data-frame-size], [data-text-layer-size], [data-vector-size]")
+      ? MIN_INTERACTIVE_LAYER_SIZE : input.min || input.dataset.min;
     const maximumValue = input.max || input.dataset.max;
     const minimum = minimumValue == null || minimumValue === "" ? -Infinity : Number(minimumValue);
     const maximum = maximumValue == null || maximumValue === "" ? Infinity : Number(maximumValue);

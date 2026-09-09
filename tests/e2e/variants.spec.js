@@ -536,6 +536,38 @@ test("starts new variant text with an empty caret", async ({ page }) => {
   })).toBe(true);
 });
 
+test("discards empty text created on a variant background when Escape is pressed", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  const previews = page.locator(".variant-preview");
+  const selectedRoot = previews.nth(1).locator(".canvas-root-stack");
+  await page.getByRole("button", { name: "Text", exact: true }).click();
+  await selectedRoot.click({ position: { x: 40, y: 40 } });
+
+  await expect(selectedRoot.locator(":scope > .canvas-text")).toBeFocused();
+  await page.keyboard.press("Escape");
+
+  await expect(previews.locator(".canvas-text")).toHaveCount(0);
+});
+
+test("keeps variant text with at least one character when Escape is pressed", async ({ page }) => {
+  await openApp(page);
+
+  await page.getByRole("button", { name: "Add variant preview" }).click();
+  const previews = page.locator(".variant-preview");
+  const selectedRoot = previews.nth(1).locator(".canvas-root-stack");
+  await page.getByRole("button", { name: "Text", exact: true }).click();
+  await selectedRoot.click({ position: { x: 40, y: 40 } });
+
+  const text = selectedRoot.locator(":scope > .canvas-text");
+  await text.pressSequentially("A");
+  await page.keyboard.press("Escape");
+
+  await expect(selectedRoot.locator(":scope > .canvas-text")).toHaveText("A");
+  await expect(previews.locator(".canvas-text")).toHaveCount(2);
+});
+
 test("creates variant previews and supports undo and redo", async ({ page }) => {
   await openApp(page);
 

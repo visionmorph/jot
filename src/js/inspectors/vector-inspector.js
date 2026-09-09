@@ -123,7 +123,6 @@ function syncInspectorToSelectedVector() {
   const records = getSelectedVectorRecords();
   if (!record || records.length === 0) return;
   const values = records.map(getVectorInspectorValues);
-  const primaryValues = getVectorInspectorValues(record);
   const heading = vectorInspector?.querySelector("#vector-heading");
   if (heading instanceof HTMLElement) heading.textContent = records.length > 1 ? "Vectors" : "Vector";
   vectorSizeInputs.forEach((input) => {
@@ -135,7 +134,10 @@ function syncInspectorToSelectedVector() {
     input.placeholder = state.mixed ? "Mixed" : "";
   });
   if (vectorColorPicker instanceof HTMLInputElement) {
-    syncCustomColorControl(vectorColorPicker, primaryValues.color, primaryValues.opacity);
+    const colorRecords = getVisibleColorRecords(records);
+    const colorRecord = !isHiddenFromSelectionColors(record.element) ? record : colorRecords[0];
+    const colorValues = colorRecord ? getVectorInspectorValues(colorRecord) : { color: "", opacity: 100 };
+    syncCustomColorControl(vectorColorPicker, colorValues.color, colorValues.opacity);
   }
 }
 vectorSizeInputs.forEach((input) => {

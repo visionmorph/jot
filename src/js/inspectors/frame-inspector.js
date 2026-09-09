@@ -273,7 +273,6 @@ function syncFrameSizeMode(wrapper, state) {
 
 function syncBulkInspectorToSelectedFrames(records) {
   const values = records.map(getFrameInspectorValues);
-  const primaryValues = getFrameInspectorValues(getSelectedFrameRecord() ?? records[0]);
   const shared = (property) => getSharedFrameInspectorValue(values, property);
   if (frameInspectorHeading instanceof HTMLElement) frameInspectorHeading.textContent = "Frames";
   if (addVariantAction instanceof HTMLElement) addVariantAction.hidden = true;
@@ -323,11 +322,18 @@ function syncBulkInspectorToSelectedFrames(records) {
     syncFrameInspectorInput(input, shared(input.dataset.framePaddingAxis === "y" ? "paddingY" : "paddingX"));
   });
 
+  const paintRecords = getVisibleColorRecords(records);
+  const selectedRecord = getSelectedFrameRecord();
+  const paintRecord = selectedRecord && !isHiddenFromSelectionColors(selectedRecord.element)
+    ? selectedRecord : paintRecords[0];
+  const paintValues = paintRecord
+    ? getFrameInspectorValues(paintRecord)
+    : { fillColor: "", fillOpacity: 100, outlineColor: "", outlineOpacity: 100 };
   if (frameColorPicker instanceof HTMLInputElement) {
-    syncCustomColorControl(frameColorPicker, primaryValues.fillColor, primaryValues.fillOpacity);
+    syncCustomColorControl(frameColorPicker, paintValues.fillColor, paintValues.fillOpacity);
   }
   if (frameOutlineColorPicker instanceof HTMLInputElement) {
-    syncCustomColorControl(frameOutlineColorPicker, primaryValues.outlineColor, primaryValues.outlineOpacity);
+    syncCustomColorControl(frameOutlineColorPicker, paintValues.outlineColor, paintValues.outlineOpacity);
   }
   if (frameOutlinePositionSelect instanceof HTMLInputElement) {
     syncFrameInspectorInput(frameOutlinePositionSelect, shared("outlinePosition"), { dropdown: true });
