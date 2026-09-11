@@ -142,12 +142,19 @@ function getExportComponentProps({
       targetFrame
       && normalizeFrameHtmlTag(targetFrame.element.dataset.htmlTag || "div") === "button",
     );
+    const hasCompatibleInputTarget = Boolean(
+      targetFrame
+      && normalizeFrameHtmlTag(targetFrame.element.dataset.htmlTag || "div") === "input",
+    );
     const isValid = prop.type === "boolean"
       ? prop.property === "disabled"
         ? hasCompatibleButtonTarget
-        : prop.property === "visibility" && Boolean(targetFrame || targetText || targetVector)
+        : prop.property === "invalid"
+          ? hasCompatibleInputTarget
+          : prop.property === "visibility" && Boolean(targetFrame || targetText || targetVector)
       : prop.type === "string"
-        ? prop.property === "textContent" && Boolean(targetText)
+        ? (prop.property === "textContent" && Boolean(targetText))
+          || (prop.property === "placeholder" && hasCompatibleInputTarget)
         : prop.property === "onClick" && hasCompatibleButtonTarget;
     if (!isValid) return [];
 
@@ -204,12 +211,32 @@ function renderExportLayer(layer, depth, exportProps, exportContext = null, expo
   const htmlTag = normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div");
   const disabledProp = exportProps.find((prop) => prop.targetFrameId === record.id && prop.property === "disabled");
   const onClickProp = exportProps.find((prop) => prop.targetFrameId === record.id && prop.property === "onClick");
+  const placeholderProp = exportProps.find((prop) => (
+    prop.targetFrameId === record.id && prop.property === "placeholder"
+  ));
+  const invalidProp = exportProps.find((prop) => (
+    prop.targetFrameId === record.id && prop.property === "invalid"
+  ));
   const isVariantDisabled = record.element.hasAttribute("disabled");
+  const isVariantInvalid = record.element.dataset.invalid === "true";
   const classAttribute = className ? ` className=${JSON.stringify(className)}` : "";
-  const attributes = htmlTag === "button"
-    ? ` type="button"${disabledProp ? ` disabled={${disabledProp.exportName}}` : isVariantDisabled ? " disabled" : ""}${onClickProp ? ` onClick={${onClickProp.exportName}}` : ""}`
-    : "";
-  if (children.length === 0) return `${indent}<${htmlTag}${classAttribute}${attributes} style={${style}} />`;
+  let attributes = "";
+  if (htmlTag === "button") {
+    attributes = ` type="button"${disabledProp ? ` disabled={${disabledProp.exportName}}` : isVariantDisabled ? " disabled" : ""}${onClickProp ? ` onClick={${onClickProp.exportName}}` : ""}`;
+  } else if (htmlTag === "input") {
+    const placeholderAttribute = placeholderProp
+      ? ` placeholder={${placeholderProp.exportName}}`
+      : record.element.dataset.placeholder
+        ? ` placeholder=${JSON.stringify(record.element.dataset.placeholder)}`
+        : "";
+    const invalidAttribute = invalidProp
+      ? ` aria-invalid={${invalidProp.exportName}}`
+      : isVariantInvalid ? ' aria-invalid="true"' : "";
+    attributes = `${placeholderAttribute}${invalidAttribute}`;
+  }
+  if (htmlTag === "input" || children.length === 0) {
+    return `${indent}<${htmlTag}${classAttribute}${attributes} style={${style}} />`;
+  }
   const childMarkup = children.map((child) => renderExportLayer(child, depth + 1, exportProps, exportContext, exportClasses)).join("\n");
   return `${indent}<${htmlTag}${classAttribute}${attributes} style={${style}}>\n${childMarkup}\n${indent}</${htmlTag}>`;
 }

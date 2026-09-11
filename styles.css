@@ -1433,7 +1433,7 @@ textarea:focus-visible {
 
 .canvas-text {
   min-width: 1px;
-  min-height: 16px;
+  min-height: 0;
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 400;
@@ -1445,6 +1445,10 @@ textarea:focus-visible {
   outline: none;
   touch-action: none;
   user-select: none;
+}
+
+.canvas-text.is-new-empty {
+  min-height: 16px;
 }
 
 .canvas-text[contenteditable="true"] {

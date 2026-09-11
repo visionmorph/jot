@@ -147,7 +147,7 @@ function createComponentPropNameCell(prop) {
           ? "label"
           : prop.type === "action"
             ? "onClick"
-            : prop.property === "visibility" ? "visible" : "disabled";
+            : prop.property === "visibility" ? "visible" : prop.property;
     const name = input.value.trim() || fallbackName;
     if (name === prop.name) return;
     recordHistory();
@@ -169,14 +169,19 @@ function setComponentPropType(prop, value, compatibleTargets) {
   if (isOptionComponentProp(value)) {
     configureOptionComponentProp(prop, value);
   } else if (value === "string") {
-    const target = textRecords[0];
-    prop.name = "label";
+    const textTarget = textRecords[0];
+    const inputTarget = getCompatiblePlaceholderTargets()[0];
+    const usesPlaceholder = !textTarget && Boolean(inputTarget);
+    const target = usesPlaceholder ? inputTarget : textTarget;
+    prop.name = usesPlaceholder ? "placeholder" : "label";
     prop.type = "string";
-    prop.defaultValue = target?.element.textContent ?? "";
-    prop.targetFrameId = null;
-    prop.targetTextId = target?.id ?? null;
+    prop.defaultValue = usesPlaceholder
+      ? target?.element.dataset.placeholder ?? ""
+      : target?.element.textContent ?? "";
+    prop.targetFrameId = usesPlaceholder ? target?.id ?? null : null;
+    prop.targetTextId = usesPlaceholder ? null : target?.id ?? null;
     prop.targetVectorId = null;
-    prop.property = "textContent";
+    prop.property = usesPlaceholder ? "placeholder" : "textContent";
   } else if (value === "action") {
     const target = getCompatibleDisabledTargets()[0];
     prop.name = "onClick";
@@ -253,11 +258,15 @@ function setEnumComponentPropProperty(prop, value, currentProperty) {
   recordHistory();
   const wasStateProp = isStateComponentProp(prop);
   if (value === "state") {
+    const target = getCompatibleInteractionTargets()[0];
     prop.variantSubtype = "state";
     prop.name = "Interaction";
     prop.property = "state";
     prop.options = [...INTERACTION_STATE_OPTIONS];
     prop.defaultValue = prop.options[0];
+    prop.targetFrameId = target?.id ?? null;
+    prop.targetTextId = null;
+    prop.targetVectorId = null;
   } else {
     delete prop.variantSubtype;
     prop.property = value;
@@ -265,6 +274,9 @@ function setEnumComponentPropProperty(prop, value, currentProperty) {
       prop.name = `${value[0].toUpperCase()}${value.slice(1)}`;
       prop.options = [DEFAULT_ENUM_OPTION];
       prop.defaultValue = prop.options[0];
+      prop.targetFrameId = null;
+      prop.targetTextId = null;
+      prop.targetVectorId = null;
     }
   }
   syncComponentPropVariantDefinition(prop);
@@ -283,13 +295,25 @@ function createComponentPropPropertyCell(prop, compatibleTargets, hasCurrentTarg
     ));
   } else if (prop.type === "boolean") {
     cell.append(createPropSelect(
-      [
-        { value: "visibility", label: "Visibility" },
-        { value: "disabled", label: "Disabled", disabled: compatibleTargets.length === 0 },
-      ],
+      BOOLEAN_COMPONENT_PROPERTY_OPTIONS.map((option) => ({
+        ...option,
+        disabled: option.value === "disabled"
+          ? compatibleTargets.length === 0
+          : option.value === "invalid" && getCompatibleInvalidTargets().length === 0,
+      })),
       prop.property,
       "Target property",
       (value) => setBooleanPropProperty(prop, value),
+    ));
+  } else if (prop.type === "string") {
+    cell.append(createPropSelect(
+      [
+        { value: "textContent", label: "Text content", disabled: textRecords.length === 0 },
+        { value: "placeholder", label: "Placeholder", disabled: getCompatiblePlaceholderTargets().length === 0 },
+      ],
+      prop.property,
+      "Target property",
+      (value) => setStringPropProperty(prop, value),
     ));
   } else {
     cell.append(createPropSelect(
@@ -353,12 +377,18 @@ function addComponentProp(type = "enum") {
       property: "kind",
     });
   } else if (type === "string") {
-    const target = textRecords[0];
+    const textTarget = textRecords[0];
+    const inputTarget = getCompatiblePlaceholderTargets()[0];
+    const usesPlaceholder = !textTarget && Boolean(inputTarget);
+    const target = usesPlaceholder ? inputTarget : textTarget;
     Object.assign(prop, {
-      name: "label",
-      defaultValue: target?.element.textContent ?? "",
-      targetTextId: target?.id ?? null,
-      property: "textContent",
+      name: usesPlaceholder ? "placeholder" : "label",
+      defaultValue: usesPlaceholder
+        ? target?.element.dataset.placeholder ?? ""
+        : target?.element.textContent ?? "",
+      targetFrameId: usesPlaceholder ? target?.id ?? null : null,
+      targetTextId: usesPlaceholder ? null : target?.id ?? null,
+      property: usesPlaceholder ? "placeholder" : "textContent",
     });
   } else if (type === "action") {
     const target = getCompatibleDisabledTargets()[0];

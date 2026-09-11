@@ -13,42 +13,62 @@ const contentTypes = {
   ".svg": "image/svg+xml",
 };
 
-const server = http.createServer((request, response) => {
-  const pathname = decodeURIComponent(new URL(request.url, `http://${host}`).pathname);
-  if (pathname === "/storybook") {
-  response.writeHead(302, { Location: "/storybook/" }).end();
-  return;
-}
-
-const requestedPath =
-  pathname === "/" ? "/index.html" :
-  pathname === "/storybook/" ? "/storybook/index.html" :
-  pathname;
-  const filePath = path.resolve(root, `.${requestedPath}`);
-
-  if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
-    response.writeHead(403).end("Forbidden");
-    return;
-  }
-
-  fs.readFile(filePath, (error, contents) => {
-    if (error) {
-      response.writeHead(error.code === "ENOENT" ? 404 : 500).end("Not found");
+function createStaticServer() {
+  return http.createServer((request, response) => {
+    const pathname = decodeURIComponent(new URL(request.url, `http://${host}`).pathname);
+    if (pathname === "/storybook") {
+      response.writeHead(302, { Location: "/storybook/" }).end();
       return;
     }
 
-    response.writeHead(200, {
-      "Cache-Control": "no-store",
-      "Content-Type": contentTypes[path.extname(filePath).toLowerCase()] || "application/octet-stream",
+    const requestedPath =
+      pathname === "/" ? "/index.html" :
+      pathname === "/storybook/" ? "/storybook/index.html" :
+      pathname;
+    const filePath = path.resolve(root, `.${requestedPath}`);
+
+    if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
+      response.writeHead(403).end("Forbidden");
+      return;
+    }
+
+    fs.readFile(filePath, (error, contents) => {
+      if (error) {
+        response.writeHead(error.code === "ENOENT" ? 404 : 500).end("Not found");
+        return;
+      }
+
+      response.writeHead(200, {
+        "Cache-Control": "no-store",
+        "Content-Type": contentTypes[path.extname(filePath).toLowerCase()] || "application/octet-stream",
+      });
+      response.end(contents);
     });
-    response.end(contents);
   });
-});
+}
 
-server.listen(port, host, () => {
-  console.log(`Component authoring tool available at http://${host}:${port}`);
-});
+function startStaticServer() {
+  const server = createStaticServer();
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, host, () => {
+      server.removeListener("error", reject);
+      resolve(server);
+    });
+  });
+}
 
-const closeServer = () => server.close(() => process.exit(0));
-process.on("SIGINT", closeServer);
-process.on("SIGTERM", closeServer);
+if (require.main === module) {
+  startStaticServer().then((server) => {
+    console.log(`Component authoring tool available at http://${host}:${port}`);
+
+    const closeServer = () => server.close(() => process.exit(0));
+    process.on("SIGINT", closeServer);
+    process.on("SIGTERM", closeServer);
+  }).catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = { host, port, startStaticServer };

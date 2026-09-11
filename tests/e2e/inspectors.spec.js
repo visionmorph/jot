@@ -907,6 +907,26 @@ test("changes the frame HTML tag and supports undo and redo", async ({ page }) =
   await expect(component).toHaveAttribute("data-html-tag", "button");
 });
 
+test("changes the frame HTML tag to input", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  await page.getByRole("button", { name: "Open HTML tag options" }).click();
+  await page.getByRole("option", { name: "input", exact: true }).click();
+
+  await expect(component).toHaveAttribute("data-html-tag", "input");
+});
+
+test("changes the frame HTML tag to label", async ({ page }) => {
+  await openApp(page);
+
+  const component = page.locator("[data-canvas-root-stack]");
+  await page.getByRole("button", { name: "Open HTML tag options" }).click();
+  await page.getByRole("option", { name: "label", exact: true }).click();
+
+  await expect(component).toHaveAttribute("data-html-tag", "label");
+});
+
 test("changes frame sizing modes and supports undo and redo", async ({ page }) => {
   await openApp(page);
 
@@ -1804,6 +1824,32 @@ test("changes text typography and alignment", async ({ page }) => {
 
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(text).toHaveCSS("text-align", "center");
+});
+
+test("accepts Auto line height when typed sequentially", async ({ page }) => {
+  await openApp(page);
+
+  const text = await createTextLayer(page, "Auto line height target");
+  const lineHeightInput = page.locator("#text-line-height");
+
+  await lineHeightInput.click();
+  await lineHeightInput.pressSequentially("Auto");
+  await expect(lineHeightInput).toHaveValue("Auto");
+  await expect(text).toHaveAttribute("data-line-height", "Auto");
+  await expect(text).toHaveCSS("line-height", "normal");
+});
+
+test("lets line height shrink a hug text layer below the default height", async ({ page }) => {
+  await openApp(page);
+
+  const text = await createTextLayer(page, "Compact line height");
+  const lineHeightInput = page.locator("#text-line-height");
+
+  await lineHeightInput.fill("12");
+  await lineHeightInput.press("Tab");
+  await expect(text).toHaveCSS("line-height", "12px");
+  await expect.poll(async () => Math.round((await text.boundingBox()).height)).toBe(12);
+  await expect(page.locator(".component-variant-size-label")).toContainText("x 12 Hug");
 });
 
 test("changes text weight and supports undo and redo", async ({ page }) => {

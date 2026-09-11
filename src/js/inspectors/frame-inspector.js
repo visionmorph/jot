@@ -1,7 +1,8 @@
 /* Frame inspector layout, alignment, padding, paint, gap, HTML tag, and control wiring. */
 
 function normalizeFrameHtmlTag(value) {
-  return value.trim().toLowerCase() === "button" ? "button" : "div";
+  const htmlTag = value.trim().toLowerCase();
+  return ["button", "input", "label"].includes(htmlTag) ? htmlTag : "div";
 }
 function getFrameAlignmentValues(element) {
   const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");

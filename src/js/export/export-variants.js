@@ -158,6 +158,32 @@ function getInteractionPseudoClass(value) {
   return "";
 }
 
+function getInteractionTargetForStateAxis(axis) {
+  const componentProp = componentProps.find((prop) => (
+    prop.id === axis.sourceComponentPropId || prop.variantPropId === axis.id
+  ));
+  const record = getFrameRecord(componentProp?.targetFrameId);
+  if (!record) return "component:0";
+  const htmlTag = normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div");
+  if (!["button", "input"].includes(htmlTag)) return "component:0";
+  return record.isComponent ? "component:0" : `frame:${record.id}`;
+}
+
+function getInteractionStateSelector(cssClassName, scopeClass, stateAxes, instance) {
+  let selector = `.${cssClassName}.${scopeClass}`;
+  stateAxes.forEach((axis) => {
+    const pseudoClass = getInteractionPseudoClass(getExportVariantAxisValue(instance, axis));
+    if (!pseudoClass) return;
+    const interactionTarget = getInteractionTargetForStateAxis(axis);
+    if (interactionTarget === "component:0") {
+      selector += pseudoClass;
+      return;
+    }
+    selector += `:has(.${getExportTargetClassName(cssClassName, interactionTarget)}${pseudoClass})`;
+  });
+  return selector;
+}
+
 function getContextOperationMap(context) {
   const result = new Map();
   context?.operationsByTarget.forEach((operations, target) => {
@@ -181,10 +207,10 @@ function createStateStylesheetSource(
   const rules = [];
 
   getExportVariantEntries(variantAxes).forEach((stateEntry) => {
-    const pseudoClasses = stateAxes
-      .map((axis) => getInteractionPseudoClass(getExportVariantAxisValue(stateEntry.instance, axis)))
-      .filter(Boolean);
-    if (pseudoClasses.length === 0) return;
+    const hasInteractiveState = stateAxes.some((axis) => (
+      Boolean(getInteractionPseudoClass(getExportVariantAxisValue(stateEntry.instance, axis)))
+    ));
+    if (!hasInteractiveState) return;
     const baseEntry = baseByCombination.get(stateEntry.combinationKey);
     if (!baseEntry) return;
     const baseOperations = getContextOperationMap(createVariantExportContext(baseEntry.instance));
@@ -198,7 +224,12 @@ function createStateStylesheetSource(
         if (declaration) declarations.push(declaration);
       });
       if (declarations.length === 0) return;
-      const rootSelector = `.${cssClassName}.${baseEntry.scopeClass}${pseudoClasses.join("")}`;
+      const rootSelector = getInteractionStateSelector(
+        cssClassName,
+        baseEntry.scopeClass,
+        stateAxes,
+        stateEntry.instance,
+      );
       const targetClass = getExportTargetClassName(cssClassName, target);
       let selector = target === "component:0" ? rootSelector : `${rootSelector} .${targetClass}`;
       if (declarations.some(({ property }) => property === "fill" || property === "stroke")) {

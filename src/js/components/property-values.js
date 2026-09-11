@@ -55,6 +55,13 @@ function createVariantBooleanDefaultControl(prop) {
       renderVariantInstances();
     } else {
       prop.defaultValue = nextValue;
+      if (prop.property === "invalid") {
+        const target = getFrameRecord(prop.targetFrameId);
+        if (target) {
+          target.element.dataset.invalid = String(nextValue);
+          target.element.setAttribute("aria-invalid", String(nextValue));
+        }
+      }
       syncComponentPropVariantDefinition(prop, { render: false });
     }
     if (transitionDuration === 0) {
@@ -82,12 +89,16 @@ function createStringDefaultControl(prop) {
   const commitValue = (renderPanel = false) => {
     const didChange = input.value !== String(prop.defaultValue ?? "");
     if (didChange) recordHistoryForGesture(input);
-    const target = getTextRecord(prop.targetTextId);
-    if (target) {
-      syncTextRecordContent(target, input.value);
-      applyLayerSizing("text", target);
+    const textTarget = prop.property === "textContent" ? getTextRecord(prop.targetTextId) : null;
+    const inputTarget = prop.property === "placeholder" ? getFrameRecord(prop.targetFrameId) : null;
+    if (textTarget) {
+      syncTextRecordContent(textTarget, input.value);
+      applyLayerSizing("text", textTarget);
       requestAnimationFrame(syncResizeOverlay);
       if (renderPanel) renderTree();
+    } else if (inputTarget) {
+      prop.defaultValue = input.value;
+      inputTarget.element.dataset.placeholder = input.value;
     }
     if (didChange) {
       if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
@@ -132,7 +143,7 @@ function createComponentPropDefaultCell(prop) {
     populateOptionComponentPropDefaultCell(cell, prop);
   } else if (prop.type === "boolean" && prop.variantPropId != null) {
     cell.append(createVariantBooleanDefaultControl(prop));
-  } else if (prop.type === "string" && prop.property === "textContent") {
+  } else if (prop.type === "string" && ["textContent", "placeholder"].includes(prop.property)) {
     cell.classList.add("props-table-value-cell--control");
     cell.append(createStringDefaultControl(prop));
   } else if (prop.type === "action" && prop.property === "onClick") {

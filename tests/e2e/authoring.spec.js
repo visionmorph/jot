@@ -188,3 +188,100 @@ test("changes a String property value and supports undo and redo", async ({ page
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(text).toHaveText("Updated label");
 });
+
+test("targets an input placeholder with a String property", async ({ page }) => {
+  await openApp(page);
+
+  await page.evaluate(() => {
+    currentComponent.frameRecord.element.dataset.htmlTag = "input";
+    renderComponentProps();
+  });
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "String", exact: true }).click();
+
+  await expect(page.getByRole("textbox", { name: "Prop name" })).toHaveValue("placeholder");
+  await expect(page.getByRole("button", { name: "Target layer" })).toContainText("Component 1");
+  const propertyControl = page.getByRole("button", { name: "Target property" });
+  await expect(propertyControl).toContainText("Placeholder");
+  await propertyControl.click();
+  await expect(page.getByRole("option", { name: "Placeholder", exact: true })).toBeEnabled();
+  await page.getByRole("option", { name: "Placeholder", exact: true }).click();
+
+  const valueInput = page.getByRole("textbox", { name: "Default placeholder value" });
+  await valueInput.fill("Email address");
+  await valueInput.press("Tab");
+  await expect(page.locator("[data-canvas-root-stack]")).toHaveAttribute("data-placeholder", "Email address");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(page.locator("[data-canvas-root-stack]")).not.toHaveAttribute("data-placeholder", /.+/);
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(page.locator("[data-canvas-root-stack]")).toHaveAttribute("data-placeholder", "Email address");
+});
+
+test("targets an interactive frame with an Interaction state property", async ({ page }) => {
+  await openApp(page);
+
+  const targetIds = await page.evaluate(() => {
+    const input = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    input.name = "Input field";
+    input.element.dataset.htmlTag = "input";
+    const button = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    button.name = "Submit button";
+    button.element.dataset.htmlTag = "button";
+    renderTree();
+    renderComponentProps();
+    return { input: input.id, button: button.id };
+  });
+
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Variant" }).click();
+  await page.getByRole("button", { name: "Variant property" }).click();
+  await page.getByRole("option", { name: "State" }).click();
+
+  await expect(page.getByRole("textbox", { name: "Prop name" })).toHaveValue("Interaction");
+  const targetControl = page.getByRole("button", { name: "Target layer" });
+  await expect(targetControl).toContainText("Input field");
+  await targetControl.click();
+  await expect(page.getByRole("option", { name: "Input field" })).toBeEnabled();
+  await expect(page.getByRole("option", { name: "Submit button" })).toBeEnabled();
+  await page.getByRole("option", { name: "Submit button" }).click();
+  await expect(page.getByRole("button", { name: "Target layer" })).toContainText("Submit button");
+  await expect.poll(() => page.evaluate(() => componentProps[0].targetFrameId)).toBe(targetIds.button);
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect.poll(() => page.evaluate(() => componentProps[0].targetFrameId)).toBe(targetIds.input);
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect.poll(() => page.evaluate(() => componentProps[0].targetFrameId)).toBe(targetIds.button);
+});
+
+test("targets an input with an Invalid Boolean property", async ({ page }) => {
+  await openApp(page);
+
+  await page.evaluate(() => {
+    currentComponent.frameRecord.element.dataset.htmlTag = "input";
+    renderComponentProps();
+  });
+  await page.getByRole("button", { name: "Add prop" }).click();
+  await page.getByRole("option", { name: "Boolean" }).click();
+  await page.getByRole("button", { name: "Target property" }).click();
+  await expect(page.getByRole("option", { name: "Invalid", exact: true })).toBeEnabled();
+  await page.getByRole("option", { name: "Invalid", exact: true }).click();
+
+  await expect(page.getByRole("textbox", { name: "Prop name" })).toHaveValue("invalid");
+  await expect(page.getByRole("button", { name: "Target layer" })).toContainText("Component 1");
+  const invalidToggle = page.getByRole("switch", { name: "invalid value" });
+  await expect(invalidToggle).toHaveAttribute("aria-checked", "false");
+  await invalidToggle.click();
+  await expect(page.locator("[data-canvas-root-stack]")).toHaveAttribute("data-invalid", "true");
+  await expect(page.locator("[data-canvas-root-stack]")).toHaveAttribute("aria-invalid", "true");
+
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(page.locator("[data-canvas-root-stack]")).not.toHaveAttribute("data-invalid", /.+/);
+  await expect(page.locator("[data-canvas-root-stack]")).not.toHaveAttribute("aria-invalid", /.+/);
+
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(page.locator("[data-canvas-root-stack]")).toHaveAttribute("data-invalid", "true");
+  await expect(page.locator("[data-canvas-root-stack]")).toHaveAttribute("aria-invalid", "true");
+});

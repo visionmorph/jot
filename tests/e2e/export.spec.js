@@ -189,3 +189,130 @@ test("exports action and disabled props for a nested button", async ({ page }) =
   expect(source).toContain("function NestedButton({ onClick, disabled = false })");
   expect(source).toContain('<button type="button" disabled={disabled} onClick={onClick}');
 });
+
+test("exports input frames as void elements", async ({ page }) => {
+  await openApp(page);
+
+  const source = await page.evaluate(() => {
+    currentComponent.frameRecord.element.dataset.htmlTag = "input";
+    return createReactComponentSource("Input");
+  });
+
+  expect(source).toContain("<input");
+  expect(source).toContain(" />");
+  expect(source).not.toContain("</input>");
+});
+
+test("exports an input placeholder String property", async ({ page }) => {
+  await openApp(page);
+
+  const source = await page.evaluate(() => {
+    const input = currentComponent.frameRecord;
+    input.element.dataset.htmlTag = "input";
+    input.element.dataset.placeholder = "Email address";
+    componentProps.push({
+      id: nextComponentPropId,
+      name: "placeholder",
+      type: "string",
+      defaultValue: "Email address",
+      targetFrameId: input.id,
+      targetTextId: null,
+      targetVectorId: null,
+      property: "placeholder",
+    });
+    return createReactComponentSource("Input");
+  });
+
+  expect(source).toContain('function Input({ placeholder = "Email address" })');
+  expect(source).toContain("<input placeholder={placeholder}");
+});
+
+test("exports an input Invalid Boolean property as aria-invalid", async ({ page }) => {
+  await openApp(page);
+
+  const { componentSource, storySource } = await page.evaluate(() => {
+    const input = currentComponent.frameRecord;
+    input.element.dataset.htmlTag = "input";
+    componentProps.push({
+      id: nextComponentPropId,
+      name: "invalid",
+      type: "boolean",
+      defaultValue: false,
+      targetFrameId: input.id,
+      targetTextId: null,
+      targetVectorId: null,
+      property: "invalid",
+    });
+    return {
+      componentSource: createReactComponentSource("Input"),
+      storySource: createStorySource("Input"),
+    };
+  });
+
+  expect(componentSource).toContain("function Input({ invalid = false })");
+  expect(componentSource).toContain("<input aria-invalid={invalid}");
+  expect(storySource).toContain('invalid: { control: "boolean" }');
+});
+
+test("exports label frames with their child layers", async ({ page }) => {
+  await openApp(page);
+
+  const source = await page.evaluate(() => {
+    currentComponent.frameRecord.element.dataset.htmlTag = "label";
+    createCanvasText(currentComponent.frameRecord, 0, 0, {
+      beginEditing: false,
+      isNew: false,
+      textContent: "Email address",
+    });
+    const input = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    input.element.dataset.htmlTag = "input";
+    return createReactComponentSource("Label");
+  });
+
+  expect(source).toContain("<label");
+  expect(source).toContain("<span");
+  expect(source).toContain("<input");
+  expect(source).toContain("</label>");
+});
+
+test("exports nested interaction targets with native state selectors", async ({ page }) => {
+  await openApp(page);
+
+  const { componentSource, stylesheet } = await page.evaluate(() => {
+    currentComponent.frameRecord.element.dataset.htmlTag = "label";
+    const input = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
+    input.element.dataset.htmlTag = "input";
+    const interactionProp = {
+      id: nextComponentPropId,
+      name: "Interaction",
+      type: "enum",
+      options: [...INTERACTION_STATE_OPTIONS],
+      defaultValue: "enabled",
+      targetFrameId: input.id,
+      targetTextId: null,
+      targetVectorId: null,
+      property: "state",
+      variantSubtype: "state",
+    };
+    nextComponentPropId += 1;
+    componentProps.push(interactionProp);
+    syncComponentPropVariantDefinition(interactionProp, { render: false });
+    const focusedInstance = addVariantInstance({ render: false });
+    const enabledInstance = getDefaultVariantInstance();
+    const axis = variantModel.getProps().find((prop) => prop.id === interactionProp.variantPropId);
+    setVariantInstancePropValue(enabledInstance, axis.id, "enabled");
+    setVariantInstancePropValue(focusedInstance, axis.id, "focus-visible");
+    upsertLocalVariantOverride(focusedInstance, "component:0", "backgroundColor", "#E6F0FF");
+    return {
+      componentSource: createReactComponentSource("TextInput"),
+      stylesheet: createStateStylesheetSource("TextInput", "TextInput"),
+    };
+  });
+
+  expect(componentSource).toContain('className="TextInput__frame-1"');
+  expect(stylesheet).toContain(
+    ".TextInput.TextInput--variant-1:has(.TextInput__frame-1:focus-visible) {",
+  );
+  expect(stylesheet).toContain("background-color: #E6F0FF !important;");
+  expect(stylesheet).not.toContain(".TextInput.TextInput--variant-1:focus-visible {");
+});

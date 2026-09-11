@@ -13,6 +13,12 @@ const ENUM_COMPONENT_PROPERTY_OPTIONS = [
   { value: "state", label: "State" },
 ];
 
+const BOOLEAN_COMPONENT_PROPERTY_OPTIONS = [
+  { value: "visibility", label: "Visibility" },
+  { value: "disabled", label: "Disabled" },
+  { value: "invalid", label: "Invalid" },
+];
+
 function getEnumComponentProperty(prop) {
   if (isStateComponentProp(prop)) return "state";
   const property = String(prop?.property ?? "").toLowerCase();

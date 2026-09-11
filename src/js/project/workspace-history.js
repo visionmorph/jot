@@ -66,6 +66,10 @@ function restoreElementState(element, dataset, style) {
   });
   if (style === null) element.removeAttribute("style");
   else element.setAttribute("style", style);
+  if (element.matches(".canvas-root-stack, .canvas-frame")) {
+    if ("invalid" in element.dataset) element.setAttribute("aria-invalid", element.dataset.invalid);
+    else element.removeAttribute("aria-invalid");
+  }
 }
 
 function getSnapshotArray(snapshot, key) {

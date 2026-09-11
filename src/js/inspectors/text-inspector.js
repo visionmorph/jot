@@ -397,7 +397,7 @@ sizeSelect?.addEventListener("keydown", (event) => {
 if (sizeSelect instanceof HTMLElement) bindHistoryGesture(sizeSelect);
 sizeSelect?.addEventListener("change", () => applyTextSizeValue());
 
-function applyLineHeightValue() {
+function applyLineHeightValue(normalizeDisplay = true) {
   const records = getSelectedTextRecords();
   if (records.length === 0 || !(lineHeightInput instanceof HTMLInputElement)) return false;
   const value = lineHeightInput.value.trim();
@@ -405,7 +405,7 @@ function applyLineHeightValue() {
     if (records.some((record) => (record.element.dataset.lineHeight || "Auto") !== "Auto")) {
       recordHistoryForGesture(lineHeightInput);
     }
-    lineHeightInput.value = "Auto";
+    if (normalizeDisplay) lineHeightInput.value = "Auto";
     records.forEach((record) => {
       record.element.dataset.lineHeight = "Auto";
       record.element.style.lineHeight = "normal";
@@ -421,7 +421,7 @@ function applyLineHeightValue() {
   if (records.some((record) => (record.element.dataset.lineHeight || "Auto") !== String(numberValue))) {
     recordHistoryForGesture(lineHeightInput);
   }
-  lineHeightInput.value = String(numberValue);
+  if (normalizeDisplay) lineHeightInput.value = String(numberValue);
   records.forEach((record) => {
     record.element.dataset.lineHeight = String(numberValue);
     record.element.style.lineHeight = `${numberValue}px`;
@@ -436,7 +436,7 @@ lineHeightInput?.addEventListener("click", () => {
   if (lineHeightInput instanceof HTMLInputElement) lineHeightInput.select();
 });
 
-lineHeightInput?.addEventListener("input", applyLineHeightValue);
+lineHeightInput?.addEventListener("input", () => applyLineHeightValue(false));
 
 lineHeightInput?.addEventListener("blur", () => {
   if (!applyLineHeightValue()) syncInspectorToSelectedText();

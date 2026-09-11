@@ -48,6 +48,12 @@ function applyVariantOperation(root, operation) {
     target.setAttribute("aria-disabled", String(isDisabled));
     return;
   }
+  if (property === "invalid") {
+    const isInvalid = variantBoolean(value);
+    target.dataset.invalid = String(isInvalid);
+    target.setAttribute("aria-invalid", String(isInvalid));
+    return;
+  }
   if ((property === "fill" || property === "stroke") && target.classList.contains("canvas-vector")) {
     const paintTargets = target.querySelectorAll("path, rect, circle, ellipse, line, polyline, polygon, text, tspan, use");
     paintTargets.forEach((element) => element.style.setProperty(property, String(value)));
@@ -104,7 +110,7 @@ function getBooleanComponentPropOperations(instance) {
   return componentProps
     .filter((prop) => (
       prop.type === "boolean"
-      && ["visibility", "disabled"].includes(prop.property)
+      && ["visibility", "disabled", "invalid"].includes(prop.property)
       && prop.variantPropId != null
     ))
     .map((prop) => {
