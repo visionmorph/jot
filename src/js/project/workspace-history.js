@@ -1,50 +1,51 @@
 /* Workspace snapshots, restoration, and undo/redo history. */
 
+function captureAuthoredAttributes(element) {
+  return Object.fromEntries(["role", "aria-label", "aria-checked", "aria-invalid", "aria-disabled", "disabled"]
+    .filter((name) => element.hasAttribute(name))
+    .map((name) => [name, element.getAttribute(name)]));
+}
+
 function captureWorkspaceState() {
   return {
+    schemaVersion: COMPONENT_SCHEMA_VERSION,
     componentId: currentComponent?.id ?? null,
     componentName: currentComponent?.name ?? "Component",
     componentFrame: canvasRootStack instanceof HTMLElement
       ? {
-          dataset: { ...canvasRootStack.dataset },
+          dataset: getAuthoredLayerDataset(canvasRootStack),
           style: canvasRootStack.getAttribute("style"),
+          attributes: captureAuthoredAttributes(canvasRootStack),
         }
       : getDefaultComponentFrameState(),
-    frames: frameRecords.map((record) => ({
-      record,
-      name: record.name,
+    layers: layerRecords.map((record) => ({
+      id: record.id,
+      type: record.type,
+      ...(record.type === "component-instance" ? { sourceComponentId: record.sourceComponentId, variantId: record.variantId,
+        labelOverrides: structuredClone(record.labelOverrides ?? []), propValues: structuredClone(record.propValues ?? {}),
+        presentation: captureInstancePresentation(record), layerOverrides: structuredClone(record.layerOverrides ?? []) } : {}),
       parentId: record.parentId,
       order: record.order,
-      dataset: { ...record.element.dataset },
+      dataset: getAuthoredLayerDataset(record.element),
       style: record.element.getAttribute("style"),
+      attributes: captureAuthoredAttributes(record.element),
+      ...(record.type === "text" ? {
+        isNew: record.isNew,
+        textContent: record.element.textContent ?? "",
+        richTextHtml: record.element.innerHTML,
+      } : { name: record.name }),
+      ...(record.type === "vector" ? {
+        svgSource: record.svgSource,
+        originalSvgSource: record.originalSvgSource,
+      } : {}),
     })),
-    texts: textRecords.map((record) => ({
-      record,
-      name: record.name,
-      parentFrameId: record.parentFrameId,
-      order: record.order,
-      isNew: record.isNew,
-      dataset: { ...record.element.dataset },
-      style: record.element.getAttribute("style"),
-      textContent: record.element.textContent ?? "",
-      richTextHtml: record.element.innerHTML,
-      contentEditable: record.element.contentEditable,
-    })),
-    vectors: vectorRecords.map((record) => ({
-      record,
-      parentFrameId: record.parentFrameId,
-      order: record.order,
-      name: record.name,
-      svgSource: record.svgSource,
-      originalSvgSource: record.originalSvgSource,
-      dataset: { ...record.element.dataset },
-      style: record.element.getAttribute("style"),
-    })),
-    selection: captureSelectionState(),
+    selection: qualifySelectionLayerReferences(captureSelectionState(), currentComponent.id),
     expandedFrameIds: [...expandedFrameIds],
+    expandedInstanceTreeKeys: [...expandedInstanceTreeKeys].filter(key => key.startsWith(`${currentComponent?.id}/`)),
     nextFrameId,
     nextTextId,
     nextVectorId,
+    nextComponentInstanceId,
     nextLayerOrder,
     componentProps: componentProps.map((prop) => ({
       ...prop,
@@ -52,7 +53,7 @@ function captureWorkspaceState() {
     })),
     nextComponentPropId,
     ...variantModel.capture(),
-    variantModelVersion: 3,
+    variantModelVersion: 4,
     canvasColor: canvasColorValue,
     canvasColorOpacity,
     activeTool,
@@ -84,16 +85,46 @@ function normalizeSnapshotCounter(value, fallback) {
   return Number.isInteger(number) && number >= 1 ? Math.max(number, fallback) : fallback;
 }
 
-function normalizeWorkspaceLayerEntries(snapshot, key) {
-  return getSnapshotArray(snapshot, key).map((entry, index) => {
-    if (!entry || typeof entry !== "object" || !entry.record || typeof entry.record !== "object") {
-      throw new TypeError(`Workspace snapshot "${key}[${index}]" is missing its layer record.`);
+function normalizeWorkspaceLayers(snapshot) {
+  const legacy = snapshot.schemaVersion == null || snapshot.schemaVersion < 2;
+  const entries = legacy ? [
+    ...getSnapshotArray(snapshot, "frames").map((entry) => ({ ...entry, type: "frame" })),
+    ...getSnapshotArray(snapshot, "texts").map((entry) => ({ ...entry, type: "text" })),
+    ...getSnapshotArray(snapshot, "vectors").map((entry) => ({ ...entry, type: "vector" })),
+  ] : getSnapshotArray(snapshot, "layers");
+  const ids = new Set();
+  return entries.map((entry, index) => {
+    const id = entry?.id ?? entry?.record?.id;
+    const type = entry?.type;
+    const key = `${type}:${id}`;
+    if (!LAYER_TYPES.includes(type) || !Number.isInteger(id) || id < 1 || ids.has(key)) {
+      throw new TypeError(`Workspace snapshot "layers[${index}]" has an invalid type or duplicate layer ID.`);
     }
-    if (!(entry.record.element instanceof HTMLElement)) {
-      throw new TypeError(`Workspace snapshot "${key}[${index}]" is missing its layer element.`);
+    ids.add(key);
+    if (type === "component-instance") {
+      requireIdentityId(entry.sourceComponentId, "source component ID");
+      if (entry.variantId != null) requireIdentityId(entry.variantId, "variant ID");
     }
     return {
-      ...entry,
+      id,
+      type,
+      ...(type === "component-instance" ? { sourceComponentId: entry.sourceComponentId, variantId: entry.variantId ?? null,
+        labelOverrides: normalizeInstanceLabelOverrides(entry.labelOverrides, entry.sourceComponentId),
+        propValues: structuredClone(entry.propValues ?? {}), presentation: structuredClone(entry.presentation ?? { style: {}, dataset: {} }),
+        layerOverrides: normalizeInstanceLayerOverrides(entry.layerOverrides, entry.sourceComponentId) } : {}),
+      parentId: entry.parentId ?? (legacy ? entry.parentFrameId : null) ?? null,
+      order: Number.isFinite(entry.order) ? entry.order : index + 1,
+      ...(type !== "text" ? { name: String(entry.name ?? entry.record?.name ?? `${type} ${id}`) } : {
+        isNew: entry.isNew === true,
+        textContent: String(entry.textContent ?? ""),
+        ...(typeof entry.richTextHtml === "string" ? { richTextHtml: entry.richTextHtml } : {}),
+      }),
+      ...(type === "vector" ? {
+        svgSource: String(entry.svgSource ?? entry.record?.svgSource ?? ""),
+        originalSvgSource: String(entry.originalSvgSource ?? entry.record?.originalSvgSource ?? entry.svgSource ?? ""),
+      } : {}),
+      attributes: { ...(entry.attributes ?? (entry.record?.element
+        ? captureAuthoredAttributes(entry.record.element) : {})) },
       dataset: entry.dataset && typeof entry.dataset === "object" && !Array.isArray(entry.dataset)
         ? { ...entry.dataset }
         : {},
@@ -104,7 +135,7 @@ function normalizeWorkspaceLayerEntries(snapshot, key) {
 
 function getNextSnapshotRecordId(entries) {
   return entries.reduce((nextId, entry) => {
-    const id = Number(entry.record.id);
+    const id = Number(entry.id);
     return Number.isInteger(id) && id >= nextId ? id + 1 : nextId;
   }, 1);
 }
@@ -120,17 +151,79 @@ function normalizeWorkspaceSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
     throw new TypeError("Workspace snapshot must be an object.");
   }
+  if (snapshot.schemaVersion != null && ![1, 2, 3, COMPONENT_SCHEMA_VERSION].includes(snapshot.schemaVersion)) {
+    throw new TypeError("Unsupported component schema version.");
+  }
 
-  const frames = normalizeWorkspaceLayerEntries(snapshot, "frames");
-  const texts = normalizeWorkspaceLayerEntries(snapshot, "texts");
-  const vectors = normalizeWorkspaceLayerEntries(snapshot, "vectors").map((entry) => ({
-    ...entry,
-    svgSource: String(entry.svgSource ?? entry.record.svgSource ?? ""),
+  // Accept the old variant-instance names only at the snapshot boundary.
+  snapshot = { ...snapshot };
+  snapshot.variants ??= snapshot.variantInstances;
+  snapshot.nextVariantId ??= snapshot.nextVariantInstanceId;
+  snapshot.selectedVariantId ??= snapshot.selectedVariantInstanceId;
+  delete snapshot.variantInstances;
+  delete snapshot.nextVariantInstanceId;
+  delete snapshot.selectedVariantInstanceId;
+  if (["variant", "variants"].includes(snapshot.selection?.kind)) {
+    const selection = { ...snapshot.selection };
+    selection.variantId ??= selection.instanceId;
+    selection.variantIds ??= selection.instanceIds;
+    selection.primaryVariantId ??= selection.primaryInstanceId;
+    selection.targetsByVariant ??= selection.targetsByInstance;
+    delete selection.instanceId;
+    delete selection.instanceIds;
+    delete selection.primaryInstanceId;
+    delete selection.targetsByInstance;
+    snapshot.selection = selection;
+  }
+
+  const layers = normalizeWorkspaceLayers(snapshot);
+  delete snapshot.frames;
+  delete snapshot.texts;
+  delete snapshot.vectors;
+  const frames = layers.filter((entry) => entry.type === "frame");
+  const texts = layers.filter((entry) => entry.type === "text");
+  const vectors = layers.filter((entry) => entry.type === "vector");
+  const framesById = new Map(frames.map((entry) => [entry.id, entry]));
+  layers.forEach((entry) => {
+    let parent = entry.parentId;
+    const visited = new Set(entry.type === "frame" ? [entry.id] : []);
+    while (parent !== null) {
+      if (!framesById.has(parent) || visited.has(parent)) throw new TypeError("Invalid layer parent or cyclic layer hierarchy.");
+      visited.add(parent);
+      parent = framesById.get(parent).parentId;
+    }
+  });
+  const normalizedComponentProps = getSnapshotArray(snapshot, "componentProps").map((prop) => (
+    prop.variantSubtype === "state"
+      ? { ...prop, options: [...INTERACTION_STATE_OPTIONS], defaultValue: "default" }
+      : prop
+  ));
+  const normalizedVariantProps = getSnapshotArray(snapshot, "variantProps").map((prop) => (
+    prop.variantSubtype === "state"
+      ? { ...prop, options: [...INTERACTION_STATE_OPTIONS], defaultValue: "default" }
+      : prop
+  ));
+  const interactionAxisIds = new Set(normalizedVariantProps
+    .filter((prop) => prop.variantSubtype === "state")
+    .map((prop) => String(prop.id)));
+  const componentId = snapshot.componentId ?? currentComponent?.id;
+  const normalizedVariantRules = getSnapshotArray(snapshot, "variantRules").map((rule) => ({
+    ...structuredClone(rule),
+    conditions: Object.fromEntries(Object.entries(rule.conditions ?? {}).map(([propId, value]) => [
+      propId,
+      interactionAxisIds.has(String(propId)) && value === "enabled" ? "default" : value,
+    ])),
+    target: normalizeLayerIdentity(rule.target, componentId),
   }));
-  const normalizedComponentProps = getSnapshotArray(snapshot, "componentProps");
-  const normalizedVariantProps = getSnapshotArray(snapshot, "variantProps");
-  const normalizedVariantRules = getSnapshotArray(snapshot, "variantRules");
-  const normalizedVariantInstances = getSnapshotArray(snapshot, "variantInstances");
+  const normalizedVariants = qualifyVariantLayerReferences(getSnapshotArray(snapshot, "variants"), componentId)
+    .map((variant) => ({
+      ...variant,
+      propValues: Object.fromEntries(Object.entries(variant.propValues ?? {}).map(([propId, value]) => [
+        propId,
+        interactionAxisIds.has(String(propId)) && value === "enabled" ? "default" : value,
+      ])),
+    }));
+  snapshot.selection = qualifySelectionLayerReferences(snapshot.selection, componentId);
   const defaultComponentFrame = getDefaultComponentFrameState();
   const componentFrame = snapshot.componentFrame && typeof snapshot.componentFrame === "object"
     ? snapshot.componentFrame
@@ -140,7 +233,7 @@ function normalizeWorkspaceSnapshot(snapshot) {
     && !Array.isArray(componentFrame.dataset)
     ? componentFrame.dataset
     : {};
-  const layerEntries = [...frames, ...texts, ...vectors];
+  const layerEntries = layers;
   const nextLayerOrderFallback = layerEntries.reduce((nextOrder, entry) => {
     const order = Number(entry.order);
     return Number.isFinite(order) && order >= nextOrder ? order + 1 : nextOrder;
@@ -149,28 +242,32 @@ function normalizeWorkspaceSnapshot(snapshot) {
 
   return {
     ...snapshot,
+    schemaVersion: COMPONENT_SCHEMA_VERSION,
     componentId: snapshot.componentId ?? currentComponent?.id ?? null,
     componentName: typeof snapshot.componentName === "string"
       ? snapshot.componentName
       : currentComponent?.name ?? "Component",
     componentFrame: {
+      attributes: { ...(componentFrame.attributes ?? {}) },
       dataset: { ...defaultComponentFrame.dataset, ...componentFrameDataset },
       style: typeof componentFrame.style === "string" || componentFrame.style === null
         ? componentFrame.style
         : defaultComponentFrame.style,
     },
-    frames,
-    texts,
-    vectors,
+    layers,
     expandedFrameIds: getSnapshotArray(snapshot, "expandedFrameIds"),
+    expandedInstanceTreeKeys: getSnapshotArray(snapshot, "expandedInstanceTreeKeys")
+      .filter(key => typeof key === "string" && key.startsWith(`${snapshot.componentId ?? currentComponent?.id}/`)),
     nextFrameId: normalizeSnapshotCounter(snapshot.nextFrameId, getNextSnapshotRecordId(frames)),
     nextTextId: normalizeSnapshotCounter(snapshot.nextTextId, getNextSnapshotRecordId(texts)),
     nextVectorId: normalizeSnapshotCounter(snapshot.nextVectorId, getNextSnapshotRecordId(vectors)),
+    nextComponentInstanceId: normalizeSnapshotCounter(snapshot.nextComponentInstanceId,
+      getNextSnapshotRecordId(layers.filter((entry) => entry.type === "component-instance"))),
     nextLayerOrder: normalizeSnapshotCounter(snapshot.nextLayerOrder, nextLayerOrderFallback),
     componentProps: normalizedComponentProps,
     variantProps: normalizedVariantProps,
     variantRules: normalizedVariantRules,
-    variantInstances: normalizedVariantInstances,
+    variants: normalizedVariants,
     nextComponentPropId: normalizeSnapshotCounter(
       snapshot.nextComponentPropId,
       getNextSnapshotEntityId(normalizedComponentProps),
@@ -183,9 +280,9 @@ function normalizeWorkspaceSnapshot(snapshot) {
       snapshot.nextVariantRuleId,
       getNextSnapshotEntityId(normalizedVariantRules),
     ),
-    nextVariantInstanceId: normalizeSnapshotCounter(
-      snapshot.nextVariantInstanceId,
-      getNextSnapshotEntityId(normalizedVariantInstances),
+    nextVariantId: normalizeSnapshotCounter(
+      snapshot.nextVariantId,
+      getNextSnapshotEntityId(normalizedVariants),
     ),
     canvasColor: typeof snapshot.canvasColor === "string" ? snapshot.canvasColor : "#121619",
     canvasColorOpacity: Number.isFinite(canvasOpacity) ? Math.max(0, Math.min(100, canvasOpacity)) : 100,
@@ -193,74 +290,44 @@ function normalizeWorkspaceSnapshot(snapshot) {
   };
 }
 
-function attachRestoredLayers(parentFrameId, parentElement) {
-  getLayerChildren(parentFrameId).forEach((layer) => {
-    if (parentFrameId === null && canvasRootStack instanceof HTMLElement) {
+function attachRestoredLayers(parentId, parentElement) {
+  getLayerChildren(parentId).forEach((layer) => {
+    if (parentId === null && canvasRootStack instanceof HTMLElement) {
       canvasRootStack.append(layer.record.element);
     } else parentElement.append(layer.record.element);
     if (layer.type === "frame") attachRestoredLayers(layer.record.id, layer.record.element);
   });
 }
 
-function applyWorkspaceSnapshot(snapshot, preparedVectorSvgs) {
+function applyWorkspaceSnapshot(snapshot, views) {
   const allElements = new Set([
-    ...frameRecords.map((record) => record.element),
-    ...textRecords.map((record) => record.element),
-    ...vectorRecords.map((record) => record.element),
-    ...snapshot.frames.map((entry) => entry.record.element),
-    ...snapshot.texts.map((entry) => entry.record.element),
-    ...(snapshot.vectors ?? []).map((entry) => entry.record.element),
+    ...layerRecords.map((record) => record.element),
   ]);
   allElements.forEach((element) => element.remove());
 
   if (canvasRootStack instanceof HTMLElement) {
     if (currentComponent && typeof snapshot.componentName === "string") {
+      const previousName = currentComponent.name;
       currentComponent.name = snapshot.componentName;
       currentComponent.frameRecord.name = snapshot.componentName;
+      if (previousName !== currentComponent.name) renameComponentInstances(currentComponent.id, currentComponent.name);
     }
     const componentFrameState = snapshot.componentFrame ?? getDefaultComponentFrameState();
     restoreElementState(canvasRootStack, componentFrameState.dataset, componentFrameState.style);
+    setRenderedLayerScope(canvasRootStack, snapshot.componentId);
+    applyAuthoredAttributes(canvasRootStack, componentFrameState.attributes);
     canvasRootStack.style.removeProperty("outline");
     syncLayerVisibility(canvasRootStack);
     canvasRootStack.setAttribute("aria-label", currentComponent?.name || "Component");
     canvasRootStack.setAttribute("aria-selected", "false");
   }
 
-  frameRecords = snapshot.frames.map((entry) => {
-    entry.record.name = entry.name ?? `Frame ${entry.record.id}`;
-    entry.record.parentId = entry.parentId;
-    entry.record.order = entry.order;
-    restoreElementState(entry.record.element, entry.dataset, entry.style);
-    syncLayerVisibility(entry.record.element);
-    return entry.record;
-  });
-  textRecords = snapshot.texts.map((entry) => {
-    entry.record.name = entry.name;
-    entry.record.parentFrameId = entry.parentFrameId;
-    entry.record.order = entry.order;
-    entry.record.isNew = entry.isNew;
-    restoreElementState(entry.record.element, entry.dataset, entry.style);
-    syncLayerVisibility(entry.record.element);
-    if (typeof entry.richTextHtml === "string") entry.record.element.innerHTML = entry.richTextHtml;
-    else entry.record.element.textContent = entry.textContent;
-    entry.record.element.contentEditable = entry.contentEditable;
-    return entry.record;
-  });
-  vectorRecords = snapshot.vectors.map((entry, index) => {
-    entry.record.parentFrameId = entry.parentFrameId;
-    entry.record.order = entry.order;
-    entry.record.name = entry.name;
-    entry.record.svgSource = entry.svgSource;
-    entry.record.originalSvgSource = entry.originalSvgSource ?? entry.record.originalSvgSource ?? entry.svgSource;
-    restoreElementState(entry.record.element, entry.dataset, entry.style);
-    syncLayerVisibility(entry.record.element);
-    entry.record.element.replaceChildren(preparedVectorSvgs[index]);
-    return entry.record;
-  });
+  layerRecords = views;
 
   nextFrameId = snapshot.nextFrameId;
   nextTextId = snapshot.nextTextId;
   nextVectorId = snapshot.nextVectorId ?? 1;
+  nextComponentInstanceId = snapshot.nextComponentInstanceId ?? 1;
   nextLayerOrder = snapshot.nextLayerOrder;
   componentProps = (snapshot.componentProps ?? []).map((prop) => {
     const normalizedProp = {
@@ -271,33 +338,36 @@ function applyWorkspaceSnapshot(snapshot, preparedVectorSvgs) {
     if (["size", "variant", "shape"].includes(legacyEnumType)) {
       normalizedProp.name = normalizedProp.name || normalizedProp.type;
       normalizedProp.type = "enum";
-      normalizedProp.property = legacyEnumType === "size"
-        ? "size"
-        : "kind";
+      normalizedProp.property = "custom";
     }
     if (normalizedProp.type === "enum") {
       const isState = normalizedProp.variantSubtype === "state";
+      const isFocus = normalizedProp.variantSubtype === "focus";
       const options = isState
-        ? ["enabled", "hover", "active", "focus-visible"]
-        : Array.isArray(normalizedProp.options) && normalizedProp.options.length > 0
-        ? normalizedProp.options
-        : ["default"];
+        ? [...INTERACTION_STATE_OPTIONS]
+        : isFocus
+          ? [...FOCUS_STATE_OPTIONS]
+          : Array.isArray(normalizedProp.options) && normalizedProp.options.length > 0
+            ? normalizedProp.options
+            : ["default"];
       normalizedProp.options = options;
       normalizedProp.defaultValue = options[0];
-      const enumProperties = ["size", "kind", "state"];
+      const enumProperties = ["custom", "state", "focus"];
       const savedProperty = String(normalizedProp.property ?? "").toLowerCase();
       const namedProperty = String(normalizedProp.name ?? "").trim().toLowerCase();
-      const migratedProperty = savedProperty === "type" || savedProperty === "variant"
-        ? "kind"
+      const migratedProperty = ["size", "kind", "type", "variant"].includes(savedProperty)
+        ? "custom"
         : savedProperty;
-      const migratedNamedProperty = namedProperty === "type" || namedProperty === "variant"
-        ? "kind"
+      const migratedNamedProperty = ["size", "kind", "type", "variant"].includes(namedProperty)
+        ? "custom"
         : namedProperty;
       normalizedProp.property = isState
         ? "state"
-        : enumProperties.includes(migratedProperty)
-          ? migratedProperty
-          : enumProperties.includes(migratedNamedProperty) ? migratedNamedProperty : "kind";
+        : isFocus
+          ? "focus"
+          : enumProperties.includes(migratedProperty)
+            ? migratedProperty
+            : enumProperties.includes(migratedNamedProperty) ? migratedNamedProperty : "custom";
     } else if (normalizedProp.type === "boolean") {
       normalizedProp.defaultValue = normalizedProp.defaultValue === true || normalizedProp.defaultValue === "true";
     }
@@ -305,8 +375,8 @@ function applyWorkspaceSnapshot(snapshot, preparedVectorSvgs) {
   });
   nextComponentPropId = snapshot.nextComponentPropId ?? 1;
   variantModel.restore(snapshot);
-  if (variantModel.getInstances().length > 0 && (snapshot.variantModelVersion ?? 0) < 2) {
-    variantModel.addInstance({
+  if (variantModel.getVariants().length > 0 && (snapshot.variantModelVersion ?? 0) < 2) {
+    variantModel.addVariant({
       name: "Variant 1",
       componentId: currentComponent?.id ?? snapshot.componentId,
       parentVariantId: null,
@@ -316,12 +386,17 @@ function applyWorkspaceSnapshot(snapshot, preparedVectorSvgs) {
       overrides: [],
     }, { prepend: true });
   }
-  normalizeDefaultVariantInstance();
+  normalizeDefaultVariant();
   expandedFrameIds.clear();
   snapshot.expandedFrameIds.forEach((frameId) => expandedFrameIds.add(frameId));
+  for (const key of expandedInstanceTreeKeys) {
+    if (key.startsWith(`${snapshot.componentId}/`)) expandedInstanceTreeKeys.delete(key);
+  }
+  snapshot.expandedInstanceTreeKeys.forEach(key => expandedInstanceTreeKeys.add(key));
   restoreSelectionState(snapshot);
 
   attachRestoredLayers(null, canvas);
+  if (layerRecords.some(record => record.type === "component-instance")) applyAllLayerSizing();
   syncElementSelectionStyles();
   canvasColorValue = snapshot.canvasColor ?? "#121619";
   canvasColorOpacity = Math.max(0, Math.min(100, Number(snapshot.canvasColorOpacity ?? 100)));
@@ -336,14 +411,16 @@ function restoreWorkspaceState(snapshot, options = {}) {
   if (!(canvas instanceof HTMLElement)) return;
 
   const normalizedSnapshot = normalizeWorkspaceSnapshot(snapshot);
-  const preparedVectorSvgs = normalizedSnapshot.vectors.map((entry) => createCanvasSvg(entry.svgSource));
+  validateComponentDependencies(normalizedSnapshot);
+  const views = createWorkspaceLayerViews(normalizedSnapshot, { interactive: true });
   const previousRestoringHistory = isRestoringHistory;
   isRestoringHistory = true;
   try {
-    applyWorkspaceSnapshot(normalizedSnapshot, preparedVectorSvgs);
+    applyWorkspaceSnapshot(normalizedSnapshot, views);
   } finally {
     isRestoringHistory = previousRestoringHistory;
   }
+  commitCanvasComponentData();
   if (options.render !== false) renderTree();
 }
 
@@ -394,6 +471,10 @@ function undoWorkspaceChange() {
   const snapshot = undoHistory.pop();
   if (!snapshot) return;
   recordedHistoryGestureOwners = new WeakSet();
+  if (isComponentDeletionHistoryEntry(snapshot)) {
+    if (!restoreComponentDeletion(snapshot)) undoHistory.push(snapshot);
+    return;
+  }
   redoHistory.push(captureWorkspaceState());
   restoreWorkspaceState(snapshot);
 }
@@ -402,6 +483,10 @@ function redoWorkspaceChange() {
   const snapshot = redoHistory.pop();
   if (!snapshot) return;
   recordedHistoryGestureOwners = new WeakSet();
+  if (isComponentDeletionHistoryEntry(snapshot)) {
+    if (!replayComponentDeletion(snapshot)) redoHistory.push(snapshot);
+    return;
+  }
   undoHistory.push(captureWorkspaceState());
   restoreWorkspaceState(snapshot);
 }

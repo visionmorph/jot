@@ -13,9 +13,9 @@ async function setup(page) {
       name: "Icon", width: 24, height: 24,
       source: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M2 2h20v20H2z"/></svg>',
     }, 0, 0, frame, { select: false });
-    addVariantInstance();
-    addVariantInstance();
-    upsertLocalVariantOverride(variantModel.getInstances()[1], "text:1", "textContent", "Different label");
+    addVariant();
+    addVariant();
+    upsertLocalVariantOverride(variantModel.getVariants()[1], "text:1", "textContent", "Different label");
     renderTree();
   });
 }
@@ -24,14 +24,14 @@ for (const target of ["text:1", "frame:1", "vector:1", null]) {
   test(`matches canonical ${target ?? "component root"} across variants`, async ({ page }) => {
     await setup(page);
     const ids = await page.evaluate((target) => {
-      const ids = variantModel.getInstances().map((instance) => instance.id);
-      selectVariantInstance(ids[1], { render: false, layerTarget: target });
+      const ids = variantModel.getVariants().map((variant) => variant.id);
+      selectVariant(ids[1], { render: false, layerTarget: target });
       return ids;
     }, target);
     await page.locator(".variant-preview").nth(1).focus();
     await page.keyboard.press("Control+Alt+a");
-    expect(await page.evaluate(() => getSelectedVariantInstanceIds())).toEqual(ids);
-    expect(await page.evaluate(() => selectedVariantInstanceId)).toBe(ids[1]);
+    expect(await page.evaluate(() => getSelectedVariantIds())).toEqual(ids);
+    expect(await page.evaluate(() => selectedVariantId)).toBe(ids[1]);
     expect(await page.evaluate(() => getSelectedVariantLayerTargets())).toEqual(target ? [target] : []);
     const selector = target
       ? `.canvas-${target.split(":")[0]}.is-selected`
@@ -51,14 +51,14 @@ for (const target of ["text:1", "frame:1", "vector:1", null]) {
 test("matches Shift-clicked layers across variants and batch edits every match", async ({ page }) => {
   await setup(page);
   const ids = await page.evaluate(() => {
-    const ids = variantModel.getInstances().map((instance) => instance.id);
-    selectVariantInstance(ids[1], { render: false, layerTarget: "text:1" });
+    const ids = variantModel.getVariants().map((variant) => variant.id);
+    selectVariant(ids[1], { render: false, layerTarget: "text:1" });
     return ids;
   });
   await page.locator('.variant-preview').nth(1).locator('[data-text-id="2"]').click({ modifiers: ["Shift"] });
   expect(await page.evaluate(() => getSelectedVariantLayerTargets())).toEqual(["text:1", "text:2"]);
   await page.keyboard.press("Control+Alt+a");
-  expect(await page.evaluate(() => getSelectedVariantInstanceIds())).toEqual(ids);
+  expect(await page.evaluate(() => getSelectedVariantIds())).toEqual(ids);
   for (const id of ids) {
     expect(await page.evaluate((id) => getSelectedVariantLayerTargets(id), id)).toEqual(["text:1", "text:2"]);
   }
@@ -75,8 +75,8 @@ test("does nothing for multiple roots, canvas-only identities, or editing", asyn
   await setup(page);
   for (const mode of ["roots", "canvas", "component", "empty", "editing"]) {
     const before = await page.evaluate((mode) => {
-      const ids = variantModel.getInstances().map((instance) => instance.id);
-      if (mode === "roots") selectVariantInstancesState(ids.slice(0, 2));
+      const ids = variantModel.getVariants().map((variant) => variant.id);
+      if (mode === "roots") selectVariantsState(ids.slice(0, 2));
       if (mode === "canvas") selectLayerKeys(["text:1"]);
       if (mode === "component") selectComponentState();
       if (mode === "empty") selectCanvasState();

@@ -1,32 +1,49 @@
 /* Component variant-property option definitions, editing, and tag controls. */
 
 const DEFAULT_ENUM_OPTION = "Default";
-const INTERACTION_STATE_OPTIONS = ["enabled", "hover", "active", "focus-visible"];
+const INTERACTION_STATE_OPTIONS = ["default", "hover", "active"];
+const FOCUS_STATE_OPTIONS = ["none", "focus", "focus-visible"];
 
 const OPTION_COMPONENT_PROP_CONFIG = {
   enum: { label: "Enum", options: [DEFAULT_ENUM_OPTION] },
 };
 
 const ENUM_COMPONENT_PROPERTY_OPTIONS = [
-  { value: "size", label: "Size" },
-  { value: "kind", label: "Kind" },
-  { value: "state", label: "State" },
+  { value: "custom", label: "Basic variant" },
+  { value: "state", label: "Interaction" },
+  { value: "focus", label: "Focus" },
 ];
 
 const BOOLEAN_COMPONENT_PROPERTY_OPTIONS = [
+  { value: "custom", label: "Basic boolean" },
   { value: "visibility", label: "Visibility" },
+  { value: "selected", label: "Selected" },
+  { value: "checked", label: "Toggle" },
   { value: "disabled", label: "Disabled" },
   { value: "invalid", label: "Invalid" },
 ];
 
+const BOOLEAN_VALUE_LABELS = Object.freeze({
+  checked: ["Off", "On"],
+  visibility: ["Hidden", "Visible"],
+  selected: ["Unselected", "Selected"],
+  disabled: ["Enabled", "Disabled"],
+  invalid: ["Valid", "Invalid"],
+});
+
+function getBooleanComponentPropValueLabel(prop, value) {
+  const labels = BOOLEAN_VALUE_LABELS[prop?.property] ?? ["False", "True"];
+  return labels[value ? 1 : 0];
+}
+
 function getEnumComponentProperty(prop) {
   if (isStateComponentProp(prop)) return "state";
   const property = String(prop?.property ?? "").toLowerCase();
-  if (property === "type" || property === "variant") return "kind";
+  if (["size", "kind", "type", "variant"].includes(property)) return "custom";
   if (ENUM_COMPONENT_PROPERTY_OPTIONS.some((option) => option.value === property)) return property;
   const name = String(prop?.name ?? "").trim().toLowerCase();
-  if (name === "type" || name === "variant") return "kind";
-  return ENUM_COMPONENT_PROPERTY_OPTIONS.some((option) => option.value === name) ? name : "kind";
+  if (["size", "kind", "type", "variant"].includes(name)) return "custom";
+  return ENUM_COMPONENT_PROPERTY_OPTIONS.some((option) => option.value === name) ? name : "custom";
 }
 
 function isOptionComponentProp(propOrType) {
@@ -38,8 +55,21 @@ function isStateComponentProp(prop) {
   return prop?.type === "enum" && prop.variantSubtype === "state";
 }
 
+function isFocusComponentProp(prop) {
+  return prop?.type === "enum" && prop.variantSubtype === "focus";
+}
+
+function isCustomBooleanComponentProp(prop) {
+  return prop?.type === "boolean" && prop.property === "custom";
+}
+
+function hasFixedComponentPropOptions(prop) {
+  return isStateComponentProp(prop) || isFocusComponentProp(prop);
+}
+
 function getComponentPropOptions(prop) {
   if (isStateComponentProp(prop)) return [...INTERACTION_STATE_OPTIONS];
+  if (isFocusComponentProp(prop)) return [...FOCUS_STATE_OPTIONS];
   const fallbackOptions = OPTION_COMPONENT_PROP_CONFIG[prop.type]?.options ?? [DEFAULT_ENUM_OPTION];
   return Array.isArray(prop.options) && prop.options.length > 0 ? prop.options : fallbackOptions;
 }
@@ -49,8 +79,8 @@ function getAvailableEnumPropName(currentProp = null) {
     .filter((prop) => prop !== currentProp && isOptionComponentProp(prop))
     .map((prop) => prop.name.toLowerCase()));
   let index = 1;
-  let name = "Kind";
-  while (usedNames.has(name.toLowerCase())) name = `Kind ${index += 1}`;
+  let name = "Custom";
+  while (usedNames.has(name.toLowerCase())) name = `Custom ${index += 1}`;
   return name;
 }
 
@@ -65,7 +95,7 @@ function configureOptionComponentProp(prop, type) {
   prop.targetFrameId = null;
   prop.targetTextId = null;
   prop.targetVectorId = null;
-  prop.property = "kind";
+  prop.property = "custom";
 }
 
 function focusComponentPropValueControl(propId, selector = "") {
@@ -77,25 +107,25 @@ function focusComponentPropValueControl(propId, selector = "") {
 }
 
 function setActiveComponentPropOption(context, value) {
-  const { defaultCell, instance, prop } = context;
-  if (!instance) return;
+  const { defaultCell, variant, prop } = context;
+  if (!variant) return;
   if (prop.variantPropId == null) syncComponentPropVariantDefinition(prop);
   if (prop.variantPropId == null) return;
-  const selectedInstanceIds = new Set(getSelectedVariantInstanceIds());
-  const targetInstances = selectedInstanceIds.size > 0
-    ? variantModel.getInstances().filter((candidate) => selectedInstanceIds.has(candidate.id))
-    : [instance];
-  if (targetInstances.every((targetInstance) => (
-    targetInstance.propValues[prop.variantPropId] === value
+  const selectedVariantIds = new Set(getSelectedVariantIds());
+  const targetVariants = selectedVariantIds.size > 0
+    ? variantModel.getVariants().filter((candidate) => selectedVariantIds.has(candidate.id))
+    : [variant];
+  if (targetVariants.every((targetVariant) => (
+    targetVariant.propValues[prop.variantPropId] === value
   ))) return;
   recordHistory();
-  targetInstances.forEach((targetInstance) => {
-    setVariantInstancePropValue(targetInstance, prop.variantPropId, value);
+  targetVariants.forEach((targetVariant) => {
+    setVariantPropValue(targetVariant, prop.variantPropId, value);
   });
   defaultCell.querySelectorAll("[data-tag-value]").forEach((tagValue) => {
     tagValue.closest(".tag")?.classList.toggle("is-active", tagValue.value === value);
   });
-  renderVariantInstances();
+  renderVariants();
 }
 
 function renameComponentPropOption(prop, optionValue, nextValue) {
@@ -105,9 +135,9 @@ function renameComponentPropOption(prop, optionValue, nextValue) {
   prop.options = getComponentPropOptions(prop).map((value) => value === optionValue ? nextValue : value);
   if (prop.defaultValue === optionValue) prop.defaultValue = nextValue;
   if (prop.variantPropId != null) {
-    variantModel.getInstances().forEach((variantInstance) => {
-      if (variantInstance.propValues[prop.variantPropId] === optionValue) {
-        variantInstance.propValues[prop.variantPropId] = nextValue;
+    variantModel.getVariants().forEach((variant) => {
+      if (variant.propValues[prop.variantPropId] === optionValue) {
+        variant.propValues[prop.variantPropId] = nextValue;
       }
     });
     variantModel.getRules().forEach((rule) => {
@@ -124,22 +154,22 @@ function removeComponentPropOption(prop, options, optionValue) {
   recordHistory();
   prop.options = options.filter((value) => value !== optionValue);
   syncComponentPropVariantDefinition(prop);
-  renderVariantInstances();
+  renderVariants();
   renderComponentProps();
 }
 
 function createComponentPropOptionDismissControl(context, optionValue) {
-  const { isStateProp, options, prop } = context;
+  const { hasFixedOptions, options, prop } = context;
   const tooltip = document.createElement("span");
   const button = document.createElement("button");
   const tooltipContent = document.createElement("span");
   tooltip.className = "tooltip tooltip--top tooltip--align-center tooltip--fixed";
   tooltip.dataset.propValueDismissTooltip = "";
-  tooltip.hidden = isStateProp;
+  tooltip.hidden = hasFixedOptions;
   button.className = "icon-button icon-button--size-24 icon-button--circle";
   button.dataset.iconButton = "prop-value-dismiss";
   button.type = "button";
-  button.disabled = isStateProp || options.length <= 1;
+  button.disabled = hasFixedOptions || options.length <= 1;
   button.setAttribute("aria-label", `Dismiss ${optionValue}`);
   button.append(createSvgAssetIcon("close"));
   tooltipContent.className = "tooltip__content";
@@ -168,10 +198,10 @@ function finishComponentPropOptionEdit(context, input, optionValue) {
 }
 
 function createComponentPropOptionTag(context, optionValue, optionIndex) {
-  const { currentValue, isStateProp, prop } = context;
+  const { currentValue, hasFixedOptions, prop } = context;
   const tag = document.createElement("div");
   const input = document.createElement("input");
-  tag.className = isStateProp ? "tag" : "tag tag--dismissable";
+  tag.className = hasFixedOptions ? "tag" : "tag tag--dismissable";
   tag.tabIndex = 0;
   tag.classList.toggle("is-active", optionValue === currentValue);
   tag.classList.toggle("is-default", optionIndex === 0);
@@ -196,7 +226,7 @@ function createComponentPropOptionTag(context, optionValue, optionIndex) {
     tag.focus();
   });
   tag.addEventListener("dblclick", (event) => {
-    if (isStateProp) return;
+    if (hasFixedOptions) return;
     if (event.target instanceof Element && event.target.closest('[data-icon-button="prop-value-dismiss"]')) return;
     event.preventDefault();
     input.readOnly = false;
@@ -265,19 +295,20 @@ function createComponentPropAddOptionInput(context) {
 
 function populateOptionComponentPropDefaultCell(defaultCell, prop) {
   const options = getComponentPropOptions(prop);
-  const instance = getVariantInstance();
+  const variant = getVariant();
   const context = {
-    currentValue: instance && prop.variantPropId != null ? instance.propValues[prop.variantPropId] : options[0],
+    currentValue: variant && prop.variantPropId != null ? variant.propValues[prop.variantPropId] : options[0],
     defaultCell,
-    instance,
-    isStateProp: isStateComponentProp(prop),
+    variant,
+    hasFixedOptions: hasFixedComponentPropOptions(prop),
     options,
     prop,
     retainValueCellFocusAfterEdit: false,
   };
   options.forEach((optionValue, optionIndex) => {
+    if (isFocusComponentProp(prop) && optionValue === "focus-visible") return;
     defaultCell.append(createComponentPropOptionTag(context, optionValue, optionIndex));
   });
   const addValueInput = createComponentPropAddOptionInput(context);
-  if (!context.isStateProp) defaultCell.append(addValueInput);
+  if (!context.hasFixedOptions) defaultCell.append(addValueInput);
 }

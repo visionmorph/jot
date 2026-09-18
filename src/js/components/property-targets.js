@@ -2,9 +2,25 @@
 
 function getCompatibleDisabledTargets() {
   const componentFrame = currentComponent?.frameRecord;
-  return [componentFrame, ...frameRecords].filter((record) =>
-    record
-    && normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div") === "button");
+  return [componentFrame, ...frameRecords].filter((record) => {
+    if (!record) return false;
+    const htmlTag = normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div");
+    return ["a", "button", "input"].includes(htmlTag)
+      || normalizeFrameAriaRole(record.element.getAttribute("role")) === "tablist";
+  });
+}
+
+function getCompatibleActionTargets() {
+  return getCompatibleDisabledTargets().filter((record) =>
+    normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div") === "button");
+}
+
+function getCompatibleToggleTargets() {
+  return getCompatibleActionTargets();
+}
+
+function getCompatibleSelectedTargets() {
+  return getCompatibleActionTargets();
 }
 
 function getCompatiblePlaceholderTargets() {
@@ -12,6 +28,23 @@ function getCompatiblePlaceholderTargets() {
   return [componentFrame, ...frameRecords].filter((record) =>
     record
     && normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div") === "input");
+}
+
+function getCompatibleLinkTargets() {
+  const componentFrame = currentComponent?.frameRecord;
+  return [componentFrame, ...frameRecords].filter((record) =>
+    record
+    && normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div") === "a");
+}
+
+function getCompatibleAriaLabelTargets() {
+  const componentFrame = currentComponent?.frameRecord;
+  return [componentFrame, ...frameRecords].filter((record) => {
+    if (!record) return false;
+    return ["a", "button", "input"].includes(
+      normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div"),
+    );
+  });
 }
 
 function getCompatibleInvalidTargets() {
@@ -22,9 +55,9 @@ function getCompatibleInteractionTargets() {
   const componentFrame = currentComponent?.frameRecord;
   return [componentFrame, ...frameRecords].filter((record) => {
     if (!record) return false;
-    return ["button", "input"].includes(
+    return ["a", "button", "input"].includes(
       normalizeFrameHtmlTag(record.element.dataset.htmlTag || "div"),
-    );
+    ) || normalizeFrameAriaRole(record.element.getAttribute("role")) === "tablist";
   });
 }
 
@@ -57,24 +90,51 @@ function inferBooleanComponentPropDefault(prop) {
   const target = getBooleanPropTargetElement(prop);
   if (!(target instanceof HTMLElement)) return prop.property === "visibility";
   if (prop.property === "visibility") return isLayerVisible(target);
-  if (prop.property === "disabled") return Boolean(target.disabled || target.hasAttribute("disabled"));
+  if (prop.property === "disabled") {
+    return target.getAttribute("aria-disabled") === "true"
+      || Boolean(target.disabled || target.hasAttribute("disabled"));
+  }
   if (prop.property === "invalid") return target.dataset.invalid === "true";
+  if (prop.property === "checked") return target.getAttribute("aria-checked") === "true";
+  if (prop.property === "selected") return target.getAttribute("aria-selected") === "true";
   return false;
+}
+
+function clearToggleTargetSemantics(prop) {
+  if (prop?.type !== "boolean" || !["checked", "selected"].includes(prop.property)) return;
+  const target = getFrameRecord(prop.targetFrameId)?.element;
+  if (!(target instanceof HTMLElement)) return;
+  target.removeAttribute("role");
+  target.removeAttribute(prop.property === "selected" ? "aria-selected" : "aria-checked");
+}
+
+function syncToggleTargetSemantics(prop, checked = prop?.defaultValue) {
+  if (prop?.type !== "boolean" || !["checked", "selected"].includes(prop.property)) return;
+  const target = getFrameRecord(prop.targetFrameId)?.element;
+  if (!(target instanceof HTMLElement)) return;
+  if (normalizeFrameHtmlTag(target.dataset.htmlTag || "div") !== "button") {
+    target.removeAttribute("role");
+    target.removeAttribute(prop.property === "selected" ? "aria-selected" : "aria-checked");
+    return;
+  }
+  target.setAttribute("role", prop.property === "selected" ? "tab" : "switch");
+  target.setAttribute(prop.property === "selected" ? "aria-selected" : "aria-checked", String(Boolean(checked)));
 }
 
 function syncInferredBooleanComponentPropDefault(prop) {
   if (prop?.type !== "boolean") return;
   const nextDefault = inferBooleanComponentPropDefault(prop);
   prop.defaultValue = nextDefault;
+  syncToggleTargetSemantics(prop, nextDefault);
   syncComponentPropVariantDefinition(prop, { render: false });
   const variantProp = variantModel.getProps().find((entry) => entry.id === prop.variantPropId);
   if (variantProp) {
     setInferredVariantBooleanDefault(variantProp, nextDefault);
     // A tree visibility change edits the shared layer schema, so every variant
-    // must receive the same value instead of leaving stale per-instance values.
-    variantModel.getInstances().forEach((instance) => {
-      instance.propValues ??= {};
-      instance.propValues[variantProp.id] = nextDefault;
+    // must receive the same value instead of leaving stale per-variant values.
+    variantModel.getVariants().forEach((variant) => {
+      variant.propValues ??= {};
+      variant.propValues[variantProp.id] = nextDefault;
     });
   }
   renderVariantSystem();
@@ -92,13 +152,35 @@ function syncBooleanComponentPropDefaultsForTarget(type, recordId) {
 function setBooleanPropProperty(prop, property) {
   if (property === prop.property) return;
   recordHistory();
-  if (property === "visibility") {
+  clearToggleTargetSemantics(prop);
+  if (property === "custom") {
+    prop.name = "boolean";
+    prop.property = "custom";
+    prop.targetFrameId = null;
+    prop.targetTextId = null;
+    prop.targetVectorId = null;
+  } else if (property === "visibility") {
     const target = getAllTargetableLayers()[0];
     prop.name = "visible";
     prop.property = "visibility";
     prop.targetFrameId = target?.type === "frame" ? target.record.id : null;
     prop.targetTextId = target?.type === "text" ? target.record.id : null;
     prop.targetVectorId = target?.type === "vector" ? target.record.id : null;
+  } else if (property === "checked") {
+    const target = getCompatibleToggleTargets()[0];
+    prop.name = "checked";
+    prop.property = "checked";
+    prop.targetFrameId = target?.id ?? null;
+    prop.targetTextId = null;
+    prop.targetVectorId = null;
+  } else if (property === "selected") {
+    const target = getCompatibleSelectedTargets()[0];
+    prop.name = "selected";
+    prop.property = "selected";
+    prop.targetFrameId = target?.id ?? null;
+    prop.targetTextId = null;
+    prop.targetVectorId = null;
+    target?.element.removeAttribute("aria-selected");
   } else if (property === "disabled") {
     const target = getCompatibleDisabledTargets()[0];
     prop.name = "disabled";
@@ -121,7 +203,8 @@ function setBooleanPropProperty(prop, property) {
 function getComponentPropTargetConfig(prop, compatibleTargets) {
   const isStringProp = prop.type === "string";
   const isOptionProp = isOptionComponentProp(prop);
-  const isStateProp = isStateComponentProp(prop);
+  const isStateProp = isStateComponentProp(prop) || isFocusComponentProp(prop);
+  const isCustomBooleanProp = isCustomBooleanComponentProp(prop);
   const isVisibilityProp = prop.type === "boolean" && prop.property === "visibility";
   if (isStateProp) {
     const targets = getCompatibleInteractionTargets();
@@ -136,7 +219,7 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
       currentValue: hasCurrentTarget ? String(prop.targetFrameId) : "",
       targetsEmpty,
       options: targetsEmpty
-        ? [{ value: "", label: "No interaction target", disabled: true }]
+        ? [{ value: "", label: "No target", disabled: true }]
         : targets.map((record) => ({
             value: String(record.id),
             label: record.isComponent
@@ -147,11 +230,12 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
           })),
     };
   }
-  if (isOptionProp) {
+  if (isOptionProp || isCustomBooleanProp) {
     return {
       isStringProp,
       isOptionProp,
       isStateProp,
+      isComponentVariantProp: true,
       isVisibilityProp,
       hasCurrentTarget: true,
       currentValue: "component:0",
@@ -165,8 +249,14 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
   }
   if (isStringProp) {
     const isPlaceholderProp = prop.property === "placeholder";
-    const targets = isPlaceholderProp ? getCompatiblePlaceholderTargets() : textRecords;
-    const targetId = isPlaceholderProp ? prop.targetFrameId : prop.targetTextId;
+    const isAriaLabelProp = prop.property === "ariaLabel";
+    const isHrefProp = prop.property === "href";
+    const targets = isHrefProp
+      ? getCompatibleLinkTargets()
+      : isAriaLabelProp
+      ? getCompatibleAriaLabelTargets()
+      : isPlaceholderProp ? getCompatiblePlaceholderTargets() : textRecords;
+    const targetId = isPlaceholderProp || isAriaLabelProp || isHrefProp ? prop.targetFrameId : prop.targetTextId;
     const hasCurrentTarget = targets.some((record) => record.id === targetId);
     const targetsEmpty = targets.length === 0;
     return {
@@ -178,14 +268,18 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
       currentValue: hasCurrentTarget ? String(targetId) : "",
       targetsEmpty,
       options: targetsEmpty
-        ? [{ value: "", label: isPlaceholderProp ? "No input target" : "No text target", disabled: true }]
+        ? [{
+            value: "",
+            label: "No target",
+            disabled: true,
+          }]
         : targets.map((record) => ({
               value: String(record.id),
-              label: isPlaceholderProp && record.isComponent
+              label: (isPlaceholderProp || isAriaLabelProp || isHrefProp) && record.isComponent
                 ? currentComponent?.name || "Component"
-                : getTreeNodeName(isPlaceholderProp ? "frame" : "text", record),
-              iconType: isPlaceholderProp ? getTargetLayerIconType("frame", record) : "text",
-              iconRecord: isPlaceholderProp && !record.isComponent ? record : null,
+                : getTreeNodeName(isPlaceholderProp || isAriaLabelProp || isHrefProp ? "frame" : "text", record),
+              iconType: isPlaceholderProp || isAriaLabelProp || isHrefProp ? getTargetLayerIconType("frame", record) : "text",
+              iconRecord: (isPlaceholderProp || isAriaLabelProp || isHrefProp) && !record.isComponent ? record : null,
             })),
     };
   }
@@ -209,7 +303,7 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
       currentValue: hasCurrentTarget ? encodedTarget : "",
       targetsEmpty,
       options: targetsEmpty
-        ? [{ value: "", label: "No layer target", disabled: true }]
+        ? [{ value: "", label: "No target", disabled: true }]
         : allLayers.map((layer) => ({
               value: `${layer.type}:${layer.record.id}`,
               label: getVisibilityTargetLabel(layer.type, layer.record),
@@ -218,9 +312,15 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
             })),
     };
   }
-  const frameTargets = prop.type === "boolean" && prop.property === "invalid"
-    ? getCompatibleInvalidTargets()
-    : compatibleTargets;
+  const frameTargets = prop.type === "action"
+    ? getCompatibleActionTargets()
+    : prop.type === "boolean" && prop.property === "checked"
+      ? getCompatibleToggleTargets()
+    : prop.type === "boolean" && prop.property === "selected"
+      ? getCompatibleSelectedTargets()
+    : prop.type === "boolean" && prop.property === "invalid"
+      ? getCompatibleInvalidTargets()
+      : compatibleTargets;
   const hasCurrentTarget = frameTargets.some((record) => record.id === prop.targetFrameId);
   const targetsEmpty = frameTargets.length === 0;
   return {
@@ -231,10 +331,10 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
     hasCurrentTarget,
     currentValue: hasCurrentTarget ? String(prop.targetFrameId) : "",
     targetsEmpty,
-    options: targetsEmpty
+      options: targetsEmpty
       ? [{
           value: "",
-          label: prop.property === "invalid" ? "No input target" : "No button target",
+          label: "No target",
           disabled: true,
         }]
       : frameTargets.map((record) => ({
@@ -249,8 +349,10 @@ function getComponentPropTargetConfig(prop, compatibleTargets) {
 }
 
 function setComponentPropTarget(prop, value, config) {
-  if (!value || value === config.currentValue || (config.isOptionProp && !config.isStateProp)) return;
+  if (!value || value === config.currentValue
+    || config.isComponentVariantProp) return;
   recordHistory();
+  clearToggleTargetSemantics(prop);
   if (config.isStateProp) {
     prop.targetFrameId = Number(value);
     prop.targetTextId = null;
@@ -258,11 +360,18 @@ function setComponentPropTarget(prop, value, config) {
   } else if (config.isStringProp) {
     const targetId = Number(value);
     const isPlaceholderProp = prop.property === "placeholder";
-    const target = isPlaceholderProp ? getFrameRecord(targetId) : getTextRecord(targetId);
-    prop.targetTextId = isPlaceholderProp ? null : targetId;
-    prop.targetFrameId = isPlaceholderProp ? targetId : null;
+    const isAriaLabelProp = prop.property === "ariaLabel";
+    const isHrefProp = prop.property === "href";
+    const targetsFrame = isPlaceholderProp || isAriaLabelProp || isHrefProp;
+    const target = targetsFrame ? getFrameRecord(targetId) : getTextRecord(targetId);
+    prop.targetTextId = targetsFrame ? null : targetId;
+    prop.targetFrameId = targetsFrame ? targetId : null;
     prop.targetVectorId = null;
-    prop.defaultValue = isPlaceholderProp
+    prop.defaultValue = isHrefProp
+      ? target?.element.dataset.href ?? ""
+      : isAriaLabelProp
+      ? target?.element.getAttribute("aria-label") ?? ""
+      : isPlaceholderProp
       ? target?.element.dataset.placeholder ?? ""
       : target?.element.textContent ?? "";
   } else if (config.isVisibilityProp) {
@@ -284,7 +393,21 @@ function setComponentPropTarget(prop, value, config) {
 function setStringPropProperty(prop, property) {
   if (property === prop.property) return;
   recordHistory();
-  if (property === "placeholder") {
+  if (property === "href") {
+    const target = getCompatibleLinkTargets()[0];
+    prop.name = "href";
+    prop.property = "href";
+    prop.defaultValue = target?.element.dataset.href ?? "";
+    prop.targetFrameId = target?.id ?? null;
+    prop.targetTextId = null;
+  } else if (property === "ariaLabel") {
+    const target = getCompatibleAriaLabelTargets()[0];
+    prop.name = "ariaLabel";
+    prop.property = "ariaLabel";
+    prop.defaultValue = target?.element.getAttribute("aria-label") ?? "";
+    prop.targetFrameId = target?.id ?? null;
+    prop.targetTextId = null;
+  } else if (property === "placeholder") {
     const target = getCompatiblePlaceholderTargets()[0];
     prop.name = "placeholder";
     prop.property = "placeholder";
@@ -312,6 +435,7 @@ function createComponentPropTargetCell(prop, compatibleTargets) {
     "Target layer",
     (value) => setComponentPropTarget(prop, value, config),
     config.targetsEmpty,
+    "Select target",
   ));
   return { cell, hasCurrentTarget: config.hasCurrentTarget };
 }

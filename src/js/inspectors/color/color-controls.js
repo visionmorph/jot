@@ -5,6 +5,7 @@ const textColorControlRanges = new WeakMap();
 function captureTextColorControlRange(control) {
   if (!(control instanceof HTMLElement) || control.dataset.colorControl !== "text") return;
   const record = getSelectedTextRecord();
+  if (record?.isInstance) { textColorControlRanges.delete(control); return; }
   const rangeSelection = getActiveTextRangeSelection(record);
   if (record && rangeSelection) {
     textColorControlRanges.set(control, { record, rangeSelection: { ...rangeSelection } });
@@ -20,8 +21,8 @@ function releaseTextColorControlRange(control) {
 function getLayerTreeOrder() {
   const order = new Map();
   let nextIndex = 0;
-  const visit = (parentFrameId) => {
-    getLayerChildren(parentFrameId).forEach((layer) => {
+  const visit = (parentId) => {
+    getLayerChildren(parentId).forEach((layer) => {
       order.set(`${layer.type}:${layer.record.id}`, nextIndex);
       nextIndex += 1;
       if (layer.type === "frame") visit(layer.record.id);
@@ -32,11 +33,11 @@ function getLayerTreeOrder() {
 }
 
 function getSelectedFramesInLayerTreeOrder(records = getSelectedFrameRecords()) {
-  if (records.some((record) => record.isVariantInstance)) {
-    const instanceOrder = new Map(variantModel.getInstances().map((instance, index) => [instance.id, index]));
+  if (records.some((record) => record.isVariant)) {
+    const variantOrder = new Map(variantModel.getVariants().map((variant, index) => [variant.id, index]));
     return [...records].sort((left, right) => (
-      (instanceOrder.get(left.variantInstanceId) ?? Number.MAX_SAFE_INTEGER)
-      - (instanceOrder.get(right.variantInstanceId) ?? Number.MAX_SAFE_INTEGER)
+      (variantOrder.get(left.variantId) ?? Number.MAX_SAFE_INTEGER)
+      - (variantOrder.get(right.variantId) ?? Number.MAX_SAFE_INTEGER)
     ));
   }
   const order = getLayerTreeOrder();
@@ -181,19 +182,19 @@ function getCustomColorState(control) {
     const record = capturedRange?.record
       ?? (selectedRecord && !isHiddenFromSelectionColors(selectedRecord.element) ? selectedRecord : records[0]);
     if (!record) return null;
-    const rangeSelection = capturedRange?.rangeSelection
-      ?? (records.length === 1 ? getActiveTextRangeSelection(record) : null);
+    const rangeSelection = record.isInstance ? null : (capturedRange?.rangeSelection
+      ?? (records.length === 1 ? getActiveTextRangeSelection(record) : null));
     const rangeValues = rangeSelection
       ? getTextRangeSegments(record, rangeSelection).map(({ color, opacity, key }) => ({ color, opacity, key }))
       : [];
     const rangeValue = rangeValues[0];
     const uniformRunColor = getUniformTextRunColor(record);
-    const renderedColor = record.isVariantInstance ? getComputedStyle(record.element).color : "";
+    const renderedColor = record.isVariant ? getComputedStyle(record.element).color : "";
     const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
     const isTransparent = isTransparentColorValue(record.element.style.color)
       || renderedColor === "transparent"
       || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
-    const layerColor = record.isVariantInstance
+    const layerColor = record.isVariant
       ? isTransparent ? "" : cssColorToHex(renderedColor) || "#000000"
       : Object.prototype.hasOwnProperty.call(record.element.dataset, "textColor") ? record.element.dataset.textColor : "#000000";
     return {
@@ -202,7 +203,7 @@ function getCustomColorState(control) {
       records,
       rangeSelection,
       color: rangeValue?.color ?? uniformRunColor?.color ?? layerColor,
-      opacity: rangeValue?.opacity ?? uniformRunColor?.opacity ?? normalizeColorOpacity(record.isVariantInstance && rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : record.element.dataset.textColorOpacity || "100"),
+      opacity: rangeValue?.opacity ?? uniformRunColor?.opacity ?? normalizeColorOpacity(record.isVariant && rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : record.element.dataset.textColorOpacity || "100"),
       picker: textColorPicker,
     };
   }
@@ -211,8 +212,8 @@ function getCustomColorState(control) {
     const records = getVisibleColorRecords(getSelectedVectorRecords());
     const record = selectedRecord && !isHiddenFromSelectionColors(selectedRecord.element) ? selectedRecord : records[0];
     if (!record) return null;
-    const variantPaintProperties = record.isVariantInstance ? getVectorPaintProperties(record) : [];
-    const color = record.isVariantInstance
+    const variantPaintProperties = record.isVariant ? getVectorPaintProperties(record) : [];
+    const color = record.isVariant
       ? variantPaintProperties.length > 0 ? getVectorRenderedColor(record) : ""
       : Object.prototype.hasOwnProperty.call(record.element.dataset, "vectorColor")
         ? record.element.dataset.vectorColor
@@ -222,7 +223,7 @@ function getCustomColorState(control) {
       record,
       records,
       color,
-      opacity: record.isVariantInstance
+      opacity: record.isVariant
         ? getVectorRenderedOpacity(record)
         : normalizeColorOpacity(record.element.dataset.vectorColorOpacity || "100"),
       picker: vectorColorPicker,
@@ -261,7 +262,7 @@ function getCustomColorState(control) {
 
 function selectedTextRecordsMatchColor(records, color, opacity) {
   return records.every((record) => {
-    if (record.isVariantInstance) {
+    if (record.isVariant) {
       const renderedColor = getComputedStyle(record.element).color;
       const alpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
       const currentColor = renderedColor === "transparent" ? "" : normalizeHexColor(cssColorToHex(renderedColor));
@@ -300,6 +301,13 @@ function applyCustomColorValue(control, color, opacity) {
   if (state.property === "selection") {
     return applySelectionColorValue(control, state, normalizedColor, normalizedOpacity);
   }
+  if (state.property === "text" && state.record.isInstance) {
+    if (normalizedColor) control.dataset.lastColor = normalizedColor;
+    setNestedInstanceLayerOverride(state.record.instanceSelection, "color",
+      normalizedColor ? getColorWithOpacity(normalizedColor, normalizedOpacity) : "transparent", false, control);
+    syncCustomColorControl(state.picker, normalizedColor, normalizedColor ? normalizedOpacity : 0);
+    return true;
+  }
   if (state.property === "text" && state.rangeSelection) {
     const values = getTextRangeSegments(state.record, state.rangeSelection);
     if (values.length > 0 && values.every((value) => (
@@ -314,7 +322,7 @@ function applyCustomColorValue(control, color, opacity) {
     syncSelectionColorControls(false, true);
     return true;
   }
-  if (selectedVariantInstanceId !== null && state.property === "frame-background") {
+  if (selectedVariantId !== null && state.property === "frame-background") {
     const records = state.records.length > 0 ? state.records : [state.record];
     if (normalizedColor) control.dataset.lastColor = normalizedColor;
     if (!selectedFrameRecordsMatchColor(records, state.property, normalizedColor, normalizedOpacity)) {
@@ -331,7 +339,7 @@ function applyCustomColorValue(control, color, opacity) {
     syncSelectionColorControls(true, false);
     return true;
   }
-  if (selectedVariantInstanceId !== null && state.property === "frame-outline") {
+  if (selectedVariantId !== null && state.property === "frame-outline") {
     const records = state.records.length > 0 ? state.records : [state.record];
     if (normalizedColor) control.dataset.lastColor = normalizedColor;
     if (!selectedFrameRecordsMatchColor(records, state.property, normalizedColor, normalizedOpacity)) {
@@ -354,7 +362,7 @@ function applyCustomColorValue(control, color, opacity) {
     syncSelectionColorControls(true, false);
     return true;
   }
-  if (selectedVariantInstanceId !== null && state.property === "text" && state.record.isVariantInstance) {
+  if (selectedVariantId !== null && state.property === "text" && state.record.isVariant) {
     if (normalizedColor) control.dataset.lastColor = normalizedColor;
     const isTransparent = !normalizedColor;
     const renderedColor = isTransparent ? "transparent" : getColorWithOpacity(normalizedColor, normalizedOpacity);
@@ -371,15 +379,15 @@ function applyCustomColorValue(control, color, opacity) {
       record.element.dataset.textColor = normalizedColor;
       record.element.dataset.textColorOpacity = String(nextOpacity);
       record.element.style.color = renderedColor;
-      const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
-      if (instance) upsertLocalVariantOverride(instance, target, "color", renderedColor);
+      const variant = getVariant(record.variantId ?? selectedVariantId);
+      if (variant) upsertLocalVariantOverride(variant, target, "color", renderedColor);
       syncVariantLayerStylePreviews(target, "color", record.element);
     });
     syncCustomColorControl(state.picker, normalizedColor, nextOpacity);
     syncSelectionColorControls(false, true);
     return true;
   }
-  if (selectedVariantInstanceId !== null && state.property === "vector" && state.record.isVariantInstance) {
+  if (selectedVariantId !== null && state.property === "vector" && state.record.isVariant) {
     if (normalizedColor) control.dataset.lastColor = normalizedColor;
     const records = state.records.length > 0 ? state.records : [state.record];
     if (selectedVectorRecordsMatchColor(records, normalizedColor, normalizedOpacity)) {
@@ -394,12 +402,12 @@ function applyCustomColorValue(control, color, opacity) {
       record.element.dataset.vectorColorOpacity = String(normalizedOpacity);
       if (normalizedColor) applyVectorColor(record, renderedColor);
       else removeVectorColor(record);
-      const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
+      const variant = getVariant(record.variantId ?? selectedVariantId);
       const target = `vector:${record.id}`;
       const overrideProperties = paintProperties.length > 0 ? paintProperties : ["fill"];
       overrideProperties.forEach((property) => {
-        if (instance) upsertLocalVariantOverride(
-          instance, target, property, normalizedColor ? renderedColor : "none",
+        if (variant) upsertLocalVariantOverride(
+          variant, target, property, normalizedColor ? renderedColor : "none",
         );
         syncVariantLayerStylePreviews(target, property, record.element);
       });
@@ -452,7 +460,7 @@ function applyCustomColorValue(control, color, opacity) {
       record.element.dataset.textColorOpacity = String(isTransparent ? 0 : normalizedOpacity);
       record.element.style.color = isTransparent ? "transparent" : renderedColor;
     });
-    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getVariants().length > 0) scheduleVariantRender();
   } else if (state.property === "frame-background") {
     const records = state.records.length > 0 ? state.records : [state.record];
     records.forEach((record) => {
@@ -485,7 +493,7 @@ function applyCustomColorValue(control, color, opacity) {
         record.element.dataset.vectorColor = normalizedColor;
       } else removeVectorColor(record);
     });
-    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getVariants().length > 0) scheduleVariantRender();
   }
 
   syncCustomColorControl(state.picker, normalizedColor, normalizedOpacity);

@@ -7,18 +7,28 @@ function createCanvasFrame(x, y, parentRecord = null, options = {}) {
   );
 }
 
+function getNextFrameName() {
+  const highestFrameNumber = frameRecords.reduce((highest, record) => {
+    const match = String(record.name ?? "").match(/^Frame (\d+)$/i);
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  return `Frame ${highestFrameNumber + 1}`;
+}
+
 function createCanvasFrameRecord(x, y, parentRecord = null, options = {}) {
   if (!(canvas instanceof HTMLElement)) return;
 
   const frameId = nextFrameId;
   nextFrameId += 1;
+  const frameName = getNextFrameName();
   const frame = document.createElement("div");
   const record = {
+    type: "frame",
     id: frameId,
     parentId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
     element: frame,
     order: nextLayerOrder,
-    name: `Frame ${frameId}`,
+    name: frameName,
   };
   nextLayerOrder += 1;
 
@@ -26,7 +36,7 @@ function createCanvasFrameRecord(x, y, parentRecord = null, options = {}) {
   frame.draggable = true;
   frame.tabIndex = -1;
   frame.dataset.frameId = String(frameId);
-  frame.setAttribute("aria-label", `Frame ${frameId}`);
+  frame.setAttribute("aria-label", frameName);
   frame.setAttribute("aria-selected", "false");
   frame.dataset.paddingLeft = "10";
   frame.dataset.paddingTop = "10";
@@ -60,6 +70,26 @@ function createCanvasFrameRecord(x, y, parentRecord = null, options = {}) {
     frame.style.top = `${y}px`;
   }
 
+  bindCanvasFrameInteractions(record);
+
+  layerRecords.push(record);
+  if (parentRecord) {
+    parentRecord.element.append(frame);
+    if (!parentRecord.isComponent) expandedFrameIds.add(parentRecord.id);
+  } else {
+    if (canvasRootStack instanceof HTMLElement) canvasRootStack.append(frame);
+    else canvas.insertBefore(frame, toolbar);
+  }
+  applyFrameAlignment(frame);
+  applyFrameOutline(frame);
+  queueCanvasMutationEffects({ sizing: true, tree: true });
+  if (options.select !== false) selectCanvasFrame(frame);
+  return record;
+}
+
+function bindCanvasFrameInteractions(record) {
+  const frame = record.element;
+  const frameId = record.id;
   frame.addEventListener("click", (event) => {
     event.stopPropagation();
     const hit = resolveCanvasHit(event.target);
@@ -88,17 +118,4 @@ function createCanvasFrameRecord(x, y, parentRecord = null, options = {}) {
     startCanvasDragSession({ type: "frame", id: frameId }, true);
   });
 
-  frameRecords.push(record);
-  if (parentRecord) {
-    parentRecord.element.append(frame);
-    if (!parentRecord.isComponent) expandedFrameIds.add(parentRecord.id);
-  } else {
-    if (canvasRootStack instanceof HTMLElement) canvasRootStack.append(frame);
-    else canvas.insertBefore(frame, toolbar);
-  }
-  applyFrameAlignment(frame);
-  applyFrameOutline(frame);
-  queueCanvasMutationEffects({ sizing: true, tree: true });
-  if (options.select !== false) selectCanvasFrame(frame);
-  return record;
 }

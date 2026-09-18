@@ -98,7 +98,7 @@ function syncVariantActionOverlay() {
   const isComponentRootSelected = selectedComponentId === currentComponent?.id
     && selectedVariantPreviews.length === 0;
   const isVariantRootSelected = selectedVariantRoot instanceof HTMLElement;
-  const anchorElement = isComponentRootSelected && variantModel.getInstances().length > 0
+  const anchorElement = isComponentRootSelected && variantModel.getVariants().length > 0
     ? componentSet
     : selectedElement;
   if (!multiSelectionBounds && (
@@ -115,7 +115,7 @@ function syncVariantActionOverlay() {
   const canvasBounds = canvas.getBoundingClientRect();
   const bounds = multiSelectionBounds || anchorElement.getBoundingClientRect();
   const selectedBounds = multiSelectionBounds || selectedElement.getBoundingClientRect();
-  const fallbackVariantRoot = isComponentRootSelected && variantModel.getInstances().length > 0
+  const fallbackVariantRoot = isComponentRootSelected && variantModel.getVariants().length > 0
     ? componentSet?.querySelector(".variant-preview .canvas-root-stack")
     : null;
   const measurementElement = selectedBounds.width > 0 && selectedBounds.height > 0
@@ -124,7 +124,7 @@ function syncVariantActionOverlay() {
   const measurementBounds = multiSelectionBounds || measurementElement.getBoundingClientRect();
   const getDimensionLabel = (dimension) => {
     if (multiSelectionBounds) return `${Math.round(measurementBounds[dimension])}`;
-    const override = selectedVariantInstanceId !== null
+    const override = selectedVariantId !== null
       ? getSelectedVariantStyleOverride(dimension, "")
       : "";
     const defaultMode = measurementElement === selectedCanvasText ? "hug" : "fixed";
@@ -150,7 +150,7 @@ variantAddButton.addEventListener("click", (event) => {
 function syncElementSelectionStyles() {
   clearElementSelection();
   if (selectedComponentId === currentComponent?.id && canvasRootStack instanceof HTMLElement) {
-    const componentSelectionElement = variantModel.getInstances().length > 0 ? componentSet : canvasRootStack;
+    const componentSelectionElement = variantModel.getVariants().length > 0 ? componentSet : canvasRootStack;
     componentSelectionElement?.classList.add("is-selected");
     componentSelectionElement?.setAttribute("aria-selected", "true");
   }
@@ -160,9 +160,19 @@ function syncElementSelectionStyles() {
     element.classList.add("is-selected");
     element.setAttribute("aria-selected", "true");
   });
+  const nestedSelection = getSelectedNestedInstanceLayer();
+  const instanceWrapper = nestedSelection?.element.closest(".canvas-component-instance");
+  if (instanceWrapper instanceof HTMLElement) {
+    instanceWrapper.classList.remove("is-selected");
+    instanceWrapper.setAttribute("aria-selected", "false");
+  }
 }
 
 function clearElementSelection() {
+  layerRecords.filter(record => record.type === "component-instance").forEach(record => {
+    record.element.classList.remove("is-selected");
+    record.element.setAttribute("aria-selected", "false");
+  });
   componentSet?.querySelectorAll(".is-selection-hovered").forEach((element) => {
     element.classList.remove("is-selection-hovered");
   });
@@ -202,7 +212,7 @@ function selectCanvasText(textElement, additive = false) {
     clearActiveTextRangeSelection();
   }
   const record = textRecords.find((textRecord) => textRecord.element === textElement);
-  if (record) expandFramePath(record.parentFrameId);
+  if (record) expandFramePath(record.parentId);
   if (!record) return;
   const textKey = getLayerKey("text", record.id);
   selectLayerKey(textKey, additive);
@@ -211,7 +221,7 @@ function selectCanvasText(textElement, additive = false) {
 
 function selectCanvasVector(vectorElement, additive = false) {
   const record = vectorRecords.find((vectorRecord) => vectorRecord.element === vectorElement);
-  if (record) expandFramePath(record.parentFrameId);
+  if (record) expandFramePath(record.parentId);
   if (!record) return;
   const vectorKey = getLayerKey("vector", record.id);
   selectLayerKey(vectorKey, additive);
@@ -219,7 +229,7 @@ function selectCanvasVector(vectorElement, additive = false) {
 }
 
 function clearLayerSelection() {
-  if (selectedLayerKeys.size === 0 && selectedComponentId === null && selectedVariantInstanceId === null) return;
+  if (selectedLayerKeys.size === 0 && selectedComponentId === null && selectedVariantId === null) return;
   selectCanvasState();
   queueCanvasMutationEffects({ selection: true, tree: true });
 }
@@ -248,8 +258,8 @@ function doRectsIntersect(elementBounds, selectionBounds) {
     && elementBounds.top <= selectionBounds.bottom;
 }
 
-function getMarqueeLayerMatches(selectionBounds, parentFrameId = null) {
-  return getLayerChildren(parentFrameId).flatMap(({ type, record }) => {
+function getMarqueeLayerMatches(selectionBounds, parentId = null) {
+  return getLayerChildren(parentId).flatMap(({ type, record }) => {
     const bounds = record.element.getBoundingClientRect();
     const isMatch = doRectsIntersect(bounds, selectionBounds);
     const ownMatch = isMatch ? [getLayerKey(type, record.id)] : [];
@@ -262,11 +272,11 @@ function getMarqueeLayerMatches(selectionBounds, parentFrameId = null) {
 
 function applyMarqueeSelection(selectionBounds) {
   if (!selectionDrag || !currentComponent) return;
-  if (variantModel.getInstances().length > 0) {
+  if (variantModel.getVariants().length > 0) {
     const variantMatches = [];
-    const layerMatchesByInstance = new Map();
-    variantModel.getInstances().forEach((instance) => {
-      const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`);
+    const layerMatchesByVariant = new Map();
+    variantModel.getVariants().forEach((variant) => {
+      const preview = componentSet?.querySelector(`.variant-preview[data-variant-id="${CSS.escape(String(variant.id))}"]`);
       const root = preview?.querySelector(".canvas-root-stack");
       if (!(root instanceof HTMLElement)) return;
       const rootBounds = root.getBoundingClientRect();
@@ -275,46 +285,44 @@ function applyMarqueeSelection(selectionBounds) {
         ? isRectEnclosed(rootBounds, selectionBounds)
         : rootOverlaps;
       if (rootMatches) {
-        variantMatches.push(instance.id);
+        variantMatches.push(variant.id);
       }
       if (!selectionDrag.selectsChildren || rootMatches) return;
-      root.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((element) => {
-        const type = element.classList.contains("canvas-frame")
-          ? "frame"
-          : element.classList.contains("canvas-text") ? "text" : "vector";
-        const id = Number(element.dataset[`${type}Id`]);
+      root.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector, .canvas-component-instance").forEach((element) => {
+        if (element.closest("[data-identity-source]") !== root) return;
+        const { type, id } = getCanvasLayerDescriptor(element);
         if (!Number.isFinite(id)) return;
         const isMatch = doRectsIntersect(element.getBoundingClientRect(), selectionBounds);
         if (!isMatch) return;
-        const targets = layerMatchesByInstance.get(instance.id) ?? [];
+        const targets = layerMatchesByVariant.get(variant.id) ?? [];
         targets.push(`${type}:${id}`);
-        layerMatchesByInstance.set(instance.id, targets);
+        layerMatchesByVariant.set(variant.id, targets);
       });
     });
     if (selectionDrag.selectsChildren) {
       const rootIds = new Set(selectionDrag.additive ? selectionDrag.initialVariantRootIds : []);
-      const targetsByInstance = new Map(
+      const targetsByVariant = new Map(
         selectionDrag.additive
-          ? Object.entries(selectionDrag.initialVariantTargetsByInstance)
-            .map(([instanceId, targets]) => [Number(instanceId), [...targets]])
+          ? Object.entries(selectionDrag.initialVariantTargetsByVariant)
+            .map(([variantId, targets]) => [Number(variantId), [...targets]])
           : [],
       );
-      variantMatches.forEach((instanceId) => {
-        rootIds.add(instanceId);
-        targetsByInstance.delete(instanceId);
+      variantMatches.forEach((variantId) => {
+        rootIds.add(variantId);
+        targetsByVariant.delete(variantId);
       });
-      layerMatchesByInstance.forEach((targets, instanceId) => {
-        if (!rootIds.has(instanceId)) {
-          const existingTargets = targetsByInstance.get(instanceId) ?? [];
-          targetsByInstance.set(instanceId, [...new Set([...existingTargets, ...targets])]);
+      layerMatchesByVariant.forEach((targets, variantId) => {
+        if (!rootIds.has(variantId)) {
+          const existingTargets = targetsByVariant.get(variantId) ?? [];
+          targetsByVariant.set(variantId, [...new Set([...existingTargets, ...targets])]);
         }
       });
-      const matchedIds = [...variantMatches, ...layerMatchesByInstance.keys()];
-      if (rootIds.size > 0 || targetsByInstance.size > 0) {
+      const matchedIds = [...variantMatches, ...layerMatchesByVariant.keys()];
+      if (rootIds.size > 0 || targetsByVariant.size > 0) {
         selectVariantMarqueeState(
           rootIds,
-          targetsByInstance,
-          matchedIds[matchedIds.length - 1] ?? selectionDrag.initialVariantInstanceId,
+          targetsByVariant,
+          matchedIds[matchedIds.length - 1] ?? selectionDrag.initialVariantId,
         );
         clearMasterSelectionForVariant();
       } else if (!selectionDrag.additive) {
@@ -325,7 +333,7 @@ function applyMarqueeSelection(selectionBounds) {
       const nextIds = selectionDrag.additive
         ? [...new Set([...selectionDrag.initialVariantIds, ...variantMatches])]
         : variantMatches;
-      selectVariantInstancesState(nextIds, variantMatches[variantMatches.length - 1]);
+      selectVariantsState(nextIds, variantMatches[variantMatches.length - 1]);
       clearMasterSelectionForVariant();
     } else if (!selectionDrag.additive) {
       selectCanvasState();
@@ -377,13 +385,13 @@ canvas?.addEventListener("pointerdown", (event) => {
     additive: event.shiftKey || event.metaKey,
     selectsChildren: event.ctrlKey,
     initialKeys: [...selectedLayerKeys],
-    initialVariantIds: getSelectedVariantInstanceIds(),
-    initialVariantInstanceId: selectedVariantInstanceId,
-    initialVariantRootIds: getSelectedVariantInstanceIds().filter(isVariantRootSelected),
-    initialVariantTargetsByInstance: Object.fromEntries(
-      getSelectedVariantInstanceIds().map((instanceId) => [
-        String(instanceId),
-        getSelectedVariantLayerTargets(instanceId),
+    initialVariantIds: getSelectedVariantIds(),
+    initialVariantId: selectedVariantId,
+    initialVariantRootIds: getSelectedVariantIds().filter(isVariantRootSelected),
+    initialVariantTargetsByVariant: Object.fromEntries(
+      getSelectedVariantIds().map((variantId) => [
+        String(variantId),
+        getSelectedVariantLayerTargets(variantId),
       ]),
     ),
     initialHit: hit,
@@ -418,19 +426,19 @@ function finishMarqueeSelection(event) {
   if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
   if (wasDragged && event.type === "pointerup") {
     suppressCanvasClickForGesture(event);
-    const selectedVariantIds = getSelectedVariantInstanceIds();
+    const selectedVariantIds = getSelectedVariantIds();
     if (selectedVariantIds.length > 0) {
-      const focusInstanceId = selectedVariantInstanceId ?? selectedVariantIds[selectedVariantIds.length - 1];
+      const focusVariantId = selectedVariantId ?? selectedVariantIds[selectedVariantIds.length - 1];
       requestAnimationFrame(() => {
         const preview = componentSet?.querySelector(
-          `.variant-preview[data-variant-instance-id="${CSS.escape(String(focusInstanceId))}"]`,
+          `.variant-preview[data-variant-id="${CSS.escape(String(focusVariantId))}"]`,
         );
         if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
       });
     }
   } else if (event.type === "pointerup" && initialHit?.kind === "variant-layer") {
     const target = getLayerDescriptorKey(initialHit.layer);
-    selectVariantLayerTarget(initialHit.instanceId, target, true);
+    selectVariantLayerTarget(initialHit.variantId, target, true);
     clearMasterSelectionForVariant();
     renderTree();
   }

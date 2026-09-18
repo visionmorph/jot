@@ -72,15 +72,15 @@ function getTextColorMembers(element, target) {
   if (isHiddenFromSelectionColors(element)) return [];
   const textId = Number(element.dataset.textId);
   const sourceRecord = getTextRecord(textId);
-  const preview = element.closest(".variant-preview[data-variant-instance-id]");
-  const variantInstanceId = preview instanceof HTMLElement
-    ? Number(preview.dataset.variantInstanceId)
+  const preview = element.closest(".variant-preview[data-variant-id]");
+  const variantId = preview instanceof HTMLElement
+    ? Number(preview.dataset.variantId)
     : null;
   const record = sourceRecord
     ? {
         ...sourceRecord,
         element,
-        ...(Number.isFinite(variantInstanceId) ? { isVariantInstance: true, variantInstanceId } : {}),
+        ...(Number.isFinite(variantId) ? { isVariant: true, variantId } : {}),
       }
     : null;
   const runData = getCurrentTextRunData(record ?? element);
@@ -99,9 +99,9 @@ function getTextColorMembers(element, target) {
   }
   const styles = getComputedStyle(element);
   const renderedColor = String(styles.color || "").trim().toLowerCase();
-  const isVariantWithoutPaint = record?.isVariantInstance
+  const isVariantWithoutPaint = record?.isVariant
     && (isTransparentColorValue(element.style.color) || renderedColor === "transparent");
-  const isBaseWithoutPaint = record && !record.isVariantInstance
+  const isBaseWithoutPaint = record && !record.isVariant
     && !normalizeHexColor(element.dataset.textColor);
   if (isVariantWithoutPaint || isBaseWithoutPaint) return [];
   const value = getResolvedColorValue(styles.color, element.dataset.textColorOpacity || 100);
@@ -130,12 +130,12 @@ function getElementColorMembers(element) {
   } else if (element.classList.contains("canvas-text")) members = getTextColorMembers(element, target);
   else if (element.classList.contains("canvas-vector")) members = getVectorColorMembers(element, target);
   else members = getFrameColorMembers(element, target);
-  const preview = element.closest(".variant-preview[data-variant-instance-id]");
-  const variantInstanceId = preview instanceof HTMLElement
-    ? Number(preview.dataset.variantInstanceId)
+  const preview = element.closest(".variant-preview[data-variant-id]");
+  const variantId = preview instanceof HTMLElement
+    ? Number(preview.dataset.variantId)
     : null;
-  return Number.isFinite(variantInstanceId)
-    ? members.map((member) => ({ ...member, variantInstanceId }))
+  return Number.isFinite(variantId)
+    ? members.map((member) => ({ ...member, variantId }))
     : members;
 }
 
@@ -149,7 +149,7 @@ function groupPaintMembers(members) {
       color: member.color,
       opacity: member.opacity,
       members: [member],
-      variantInstanceId: member.variantInstanceId ?? null,
+      variantId: member.variantId ?? null,
     });
   });
   return [...groups.values()];
@@ -167,20 +167,20 @@ function createTextRangeColorMembers(record, rangeSelection) {
     record,
     start: segment.start,
     end: segment.end,
-    variantInstanceId: rangeSelection.variantInstanceId ?? record.variantInstanceId ?? null,
+    variantId: rangeSelection.variantId ?? record.variantId ?? null,
   }));
 }
 
 function createPaintScope(element, includeDescendants, record = null, rangeSelection = null) {
   if (!(element instanceof HTMLElement)) return null;
-  const preview = element.closest(".variant-preview[data-variant-instance-id]");
-  const variantInstanceId = preview instanceof HTMLElement
-    ? Number(preview.dataset.variantInstanceId)
+  const preview = element.closest(".variant-preview[data-variant-id]");
+  const variantId = preview instanceof HTMLElement
+    ? Number(preview.dataset.variantId)
     : null;
   return {
     element,
     target: getLayerTargetForElement(element),
-    variantInstanceId: Number.isFinite(variantInstanceId) ? variantInstanceId : null,
+    variantId: Number.isFinite(variantId) ? variantId : null,
     includeDescendants,
     ...(record ? { record } : {}),
     ...(rangeSelection ? { rangeSelection } : {}),
@@ -188,14 +188,14 @@ function createPaintScope(element, includeDescendants, record = null, rangeSelec
 }
 
 function getSelectedPaintScopes(isFrameSelected, isTextSelected, isVectorSelected) {
-  if (getSelectedVariantInstanceIds().length > 1 && getSelectedVariantLayerTargets().length > 0) {
+  if (getSelectedVariantIds().length > 1 && getSelectedVariantLayerTargets().length > 0) {
     const scopes = [];
-    for (const instanceId of getSelectedVariantInstanceIds()) {
+    for (const variantId of getSelectedVariantIds()) {
       const root = componentSet?.querySelector(
-        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"] .canvas-root-stack`,
+        `.variant-preview[data-variant-id="${CSS.escape(String(variantId))}"] .canvas-root-stack`,
       );
       if (!(root instanceof HTMLElement)) continue;
-      for (const target of getSelectedVariantLayerTargets(instanceId)) {
+      for (const target of getSelectedVariantLayerTargets(variantId)) {
         const element = findVariantTarget(root, target);
         const scope = createPaintScope(element, target.startsWith("frame:"));
         if (scope) scopes.push(scope);
@@ -237,7 +237,9 @@ function collectPaintMembers(scopes) {
     elements.add(scope.element);
     if (scope.includeDescendants) {
       scope.element.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector")
-        .forEach((descendant) => elements.add(descendant));
+        .forEach((descendant) => {
+          if (descendant.closest("[data-identity-source]") === scope.element.closest("[data-identity-source]")) elements.add(descendant);
+        });
     }
   });
   members.push(...[...elements].flatMap(getElementColorMembers));
@@ -250,16 +252,16 @@ function shouldShowPaintGroups(scopes, members, groups) {
   if (scopes.some((scope) => scope.rangeSelection)) return false;
 
   const variantIds = new Set(scopes
-    .map((scope) => scope.variantInstanceId)
+    .map((scope) => scope.variantId)
     .filter(Number.isFinite));
   const targetTypes = new Set(scopes.map((scope) => scope.target?.split(":")[0]).filter(Boolean));
-  if (variantIds.size > 1 && targetTypes.size === 1) return false;
   if (targetTypes.size > 1) return true;
   if (scopes.every((scope) => !scope.includeDescendants)) return false;
 
   const hasDescendantPaint = scopes.some((scope) => scope.includeDescendants
     && members.some((member) => member.element !== scope.element && scope.element.contains(member.element)));
   if (hasDescendantPaint) return true;
+  if (variantIds.size > 1 && targetTypes.size === 1) return false;
 
   const rootSignatures = scopes.map((scope) => members
     .filter((member) => member.element === scope.element)
@@ -299,7 +301,7 @@ function createSelectionColorControl(group, index) {
 
 function syncSelectionColorControls(isFrameSelected, isTextSelected, isVectorSelected = false) {
   if (!(selectionColorSection instanceof HTMLElement)) return;
-  const showMultiVariantColors = getSelectedVariantInstanceIds().length > 1
+  const showMultiVariantColors = getSelectedVariantIds().length > 1
     && getSelectedVariantLayerTargets().length > 0;
   const showBulkTextColors = isTextSelected && !isFrameSelected;
   const showBulkVectorColors = isVectorSelected && !isFrameSelected && !isTextSelected
@@ -396,29 +398,29 @@ function getVariantSelectionColorMemberProperties(member) {
 function getSelectionColorEditedVariantIds(members) {
   const idsByProperty = new Map();
   members.forEach((member) => {
-    if (!Number.isFinite(member.variantInstanceId)) return;
+    if (!Number.isFinite(member.variantId)) return;
     getVariantSelectionColorMemberProperties(member).forEach((property) => {
       const key = `${member.target}\u0000${property}`;
       if (!idsByProperty.has(key)) idsByProperty.set(key, new Set());
-      idsByProperty.get(key).add(member.variantInstanceId);
+      idsByProperty.get(key).add(member.variantId);
     });
   });
   return (member, property) => idsByProperty.get(`${member.target}\u0000${property}`) ?? new Set();
 }
 
-function applyVariantSelectionColorMember(instance, member, color, opacity, getEditedInstanceIds) {
+function applyVariantSelectionColorMember(variant, member, color, opacity, getEditedVariantIds) {
   const renderedColor = getColorWithOpacity(color, opacity);
-  const writeOverride = (property, value) => upsertVariantOverrideForEditedInstances(
-    instance,
+  const writeOverride = (property, value) => upsertVariantOverrideForEditedVariants(
+    variant,
     member.target,
     property,
     value,
-    getEditedInstanceIds(member, property),
+    getEditedVariantIds(member, property),
   );
   if (member.kind === "text-range") {
     applyTextColorToOffsets(member.element, member.start, member.end, color, opacity);
     persistTextRangeColor(member.record, {
-      getEditedVariantInstanceIds: (property) => getEditedInstanceIds(member, property),
+      getEditedVariantIds: (property) => getEditedVariantIds(member, property),
     });
     return;
   }
@@ -472,12 +474,12 @@ function applySelectionColorValue(control, state, color, opacity) {
     return true;
   }
   recordHistoryForGesture(control);
-  const getEditedInstanceIds = getSelectionColorEditedVariantIds(state.group.members);
+  const getEditedVariantIds = getSelectionColorEditedVariantIds(state.group.members);
   state.group.members.forEach((member) => {
-    const variantInstanceId = member.variantInstanceId ?? state.group.variantInstanceId;
-    const instance = variantInstanceId == null ? null : getVariantInstance(variantInstanceId);
-    if (instance) applyVariantSelectionColorMember(
-      instance, member, color, opacity, getEditedInstanceIds,
+    const variantId = member.variantId ?? state.group.variantId;
+    const variant = variantId == null ? null : getVariant(variantId);
+    if (variant) applyVariantSelectionColorMember(
+      variant, member, color, opacity, getEditedVariantIds,
     );
     else applyBaseSelectionColorMember(member, color, opacity);
   });
@@ -488,7 +490,7 @@ function applySelectionColorValue(control, state, color, opacity) {
   if (frameInspector instanceof HTMLElement && !frameInspector.hidden) syncInspectorToSelectedFrame();
   if (vectorInspector instanceof HTMLElement && !vectorInspector.hidden) syncInspectorToSelectedVector();
   if (state.group.members.every((member) => (
-    member.variantInstanceId == null && state.group.variantInstanceId == null
-  )) && variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    member.variantId == null && state.group.variantId == null
+  )) && variantModel.getVariants().length > 0) scheduleVariantRender();
   return true;
 }

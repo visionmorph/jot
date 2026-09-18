@@ -5,59 +5,62 @@ let variantRenderFrame = null;
 function syncVariantTextPreviewContent(textId, editingElement = null) {
   const target = `text:${textId}`;
   const sourceElement = getTextRecord(textId)?.element;
-  const fallbackRunData = getCurrentTextRunData(sourceElement);
-  const fallbackValue = fallbackRunData.textContent;
-  const fallbackHtml = fallbackRunData.html;
   componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
-    const instance = getVariantInstance(Number(preview.dataset.variantInstanceId));
+    const variant = getVariant(Number(preview.dataset.variantId));
     const root = preview.querySelector(".canvas-root-stack");
     const text = root ? findVariantTarget(root, target) : null;
-    if (!instance || !(text instanceof HTMLElement) || text === editingElement) return;
-    const textOperation = resolveVariantOperations(instance)
-      .filter((operation) => operation.target === target && operation.property === "textContent")
-      .pop();
-    const richTextOperation = resolveVariantOperations(instance)
-      .filter((operation) => operation.target === target && operation.property === "richTextHtml")
-      .pop();
-    if (richTextOperation) text.innerHTML = String(richTextOperation.value ?? "");
-    else if (textOperation) text.textContent = String(textOperation.value ?? "");
-    else text.innerHTML = fallbackHtml || fallbackValue;
+    if (!variant || !(text instanceof HTMLElement) || text === editingElement) return;
+    const resolved = resolveVariantTextValue(variant, target, sourceElement);
+    if (resolved.kind === "html") text.innerHTML = resolved.value;
+    else text.textContent = resolved.value;
   });
 }
 
 function syncVariantLayerStylePreviews(target, property, editingElement = null) {
   componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
-    const instance = getVariantInstance(Number(preview.dataset.variantInstanceId));
+    const variant = getVariant(Number(preview.dataset.variantId));
     const root = preview.querySelector(".canvas-root-stack");
     const element = root ? findVariantTarget(root, target) : null;
-    if (!instance || !(element instanceof HTMLElement) || element === editingElement) return;
-    const operation = resolveVariantOperations(instance)
+    if (!variant || !(element instanceof HTMLElement) || element === editingElement) return;
+    const operation = resolveVariantOperations(variant)
       .filter((entry) => entry.target === target && entry.property === property)
       .pop();
-    if (operation) applyVariantOperation(root, operation);
+    if (operation) {
+      applyVariantOperation(root, operation);
+      if (property === "width" || property === "height" || property === "flexDirection") syncVariantFlexbox(root);
+    }
   });
   requestAnimationFrame(syncResizeOverlay);
 }
 
-function getVariantInstanceLabel(instance) {
+function getVariantCompactLabel(variant) {
+  if (variantModel.getVariants().length === 1) return currentComponent?.name || "Component";
   const values = variantModel.getProps()
     .filter((prop) => prop.type !== "action")
-    .map((prop) => `${prop.name}=${String(normalizeVariantPropValue(prop, instance.propValues?.[prop.id]))}`);
-  return values.length ? `${instance.name} · ${values.join(", ")}` : instance.name;
-}
-
-function getVariantPropSchemaTitle(instance) {
-  const values = variantModel.getProps()
-    .filter((prop) => prop.type !== "action")
-    .map((prop) => `${prop.name}=${String(normalizeVariantPropValue(prop, instance.propValues?.[prop.id]))}`);
-  return values.join(", ") || instance.name;
-}
-
-function getBaseVariantLabel() {
-  const values = variantModel.getProps()
-    .filter((prop) => prop.type !== "action")
-    .map((prop) => `${prop.name}=${String(getVariantPropDefaultValue(prop))}`);
-  return values.join(", ") || currentComponent?.name || "Component";
+    .filter((prop) => (
+      normalizeVariantPropValue(prop, variant.propValues?.[prop.id]) !== getVariantPropDefaultValue(prop)
+    ))
+    .map((prop) => {
+      const normalizedValue = normalizeVariantPropValue(prop, variant.propValues?.[prop.id]);
+      const sourceProp = componentProps.find((componentProp) => (
+        componentProp.id === prop.sourceComponentPropId
+        || componentProp.variantPropId === prop.id
+      )) ?? prop;
+      const displayValue = prop.type === "boolean"
+        ? getBooleanComponentPropValueLabel(sourceProp, normalizedValue)
+        : String(normalizedValue);
+      return displayValue.trim().toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    })
+    .filter(Boolean);
+  if (values.length) return values.join("-");
+  const baseVariant = getAuthoredDefaultVariant();
+  if (variant === baseVariant) return "Base component";
+  const position = variantModel.getVariants()
+    .filter((candidate) => candidate !== baseVariant)
+    .indexOf(variant);
+  return `Variant ${Math.max(0, position) + 1}`;
 }
 
 function setVariantLabelTooltip(label, fullLabel) {
@@ -74,15 +77,29 @@ function syncVariantFlexbox(root) {
       container.style.flexDirection = container.dataset.direction === "vertical" ? "column" : "row";
     }
     Array.from(container.children).forEach((child) => {
-      if (!(child instanceof HTMLElement) || !child.matches(".canvas-frame, .canvas-text, .canvas-vector")) return;
+      if (!(child instanceof HTMLElement) || !child.matches(".canvas-frame, .canvas-text, .canvas-vector, .canvas-component-instance")) return;
       child.style.position = "relative";
       child.style.left = "";
       child.style.top = "";
+      if (child.classList.contains("canvas-component-instance")) {
+        syncComponentInstanceSizing(child, container);
+        return;
+      }
+      const fallbackMode = child.classList.contains("canvas-text") ? "hug" : "fixed";
+      const widthMode = getLayerDimensionMode(child, "width", fallbackMode);
+      const heightMode = getLayerDimensionMode(child, "height", fallbackMode);
+      const vertical = container.style.flexDirection === "column" || container.dataset.direction === "vertical";
+      const mainMode = vertical ? heightMode : widthMode;
+      const crossMode = vertical ? widthMode : heightMode;
+      child.style.flex = mainMode === "fill" ? "1 1 0" : "0 0 auto";
+      child.style.alignSelf = crossMode === "fill" ? "stretch" : "";
+      child.style.minWidth = !vertical && widthMode === "fill" ? "0" : "";
+      child.style.minHeight = vertical && heightMode === "fill" ? "0" : "";
     });
   });
 }
 
-function namespaceVariantCloneIds(clone, instanceId) {
+function namespaceVariantCloneIds(clone, variantId) {
   const idMap = new Map();
   const identifiedElements = [
     ...(clone.matches("[id]") ? [clone] : []),
@@ -90,7 +107,7 @@ function namespaceVariantCloneIds(clone, instanceId) {
   ];
   identifiedElements.forEach((element) => {
     const previousId = element.id;
-    const nextId = `variant-${instanceId}-${previousId}`;
+    const nextId = `variant-${variantId}-${previousId}`;
     idMap.set(previousId, nextId);
     element.id = nextId;
   });
@@ -133,7 +150,7 @@ function namespaceVariantCloneIds(clone, instanceId) {
   });
 }
 
-function prepareVariantClone(clone, instanceId) {
+function prepareVariantClone(clone, variantId) {
   clone.removeAttribute("data-canvas-root-stack");
   clone.removeAttribute("aria-hidden");
   clone.removeAttribute("hidden");
@@ -147,14 +164,14 @@ function prepareVariantClone(clone, instanceId) {
   });
   clone.querySelectorAll("[contenteditable]").forEach((element) => element.setAttribute("contenteditable", "false"));
   clone.querySelectorAll("[draggable]").forEach((element) => element.setAttribute("draggable", "false"));
-  namespaceVariantCloneIds(clone, instanceId);
+  namespaceVariantCloneIds(clone, variantId);
 }
 
 function renderBaseComponentLabel() {
   if (!(canvasRootStack instanceof HTMLElement)) return;
   const label = canvasRootStack.querySelector("[data-component-preview-label]");
   if (!(label instanceof HTMLElement)) return;
-  const nextLabel = getBaseVariantLabel();
+  const nextLabel = currentComponent?.name || "Component";
   if (label.textContent !== nextLabel) label.textContent = nextLabel;
   setVariantLabelTooltip(label, label.textContent);
   label.onpointerdown = (event) => {
@@ -164,54 +181,60 @@ function renderBaseComponentLabel() {
   };
 }
 
-function renderVariantInstances() {
+function renderVariants() {
+  if (instanceTextEditing) return;
   if (!(componentSet instanceof HTMLElement) || !(canvasRootStack instanceof HTMLElement)) return;
-  const hasVariants = variantModel.getInstances().length > 0;
+  const hasVariants = variantModel.getVariants().length > 0;
   componentSet.classList.toggle("has-variants", hasVariants);
   canvasRootStack.setAttribute("aria-hidden", String(hasVariants));
   if (!hasVariants) renderBaseComponentLabel();
   componentSet.querySelectorAll(":scope > .variant-preview").forEach((preview) => preview.remove());
 
-  variantModel.getInstances().forEach((instance) => {
+  variantModel.getVariants().forEach((variant) => {
     const preview = document.createElement("div");
     const label = document.createElement("span");
     const content = document.createElement("div");
     const clone = canvasRootStack.cloneNode(true);
     preview.className = "variant-preview";
     preview.draggable = false;
-    const isSelectedInstance = isVariantInstanceSelected(instance.id);
-    preview.classList.toggle("is-selected", isSelectedInstance);
-    preview.dataset.variantInstanceId = String(instance.id);
+    const isSelectedVariant = isVariantSelected(variant.id);
+    preview.classList.toggle("is-selected", isSelectedVariant);
+    preview.dataset.variantId = String(variant.id);
     preview.setAttribute("role", "group");
     preview.setAttribute("tabindex", "0");
-    preview.setAttribute("aria-label", getVariantInstanceLabel(instance));
-    preview.setAttribute("aria-selected", String(isSelectedInstance));
+    const compactLabel = getVariantCompactLabel(variant);
+    preview.setAttribute("aria-label", compactLabel);
+    preview.setAttribute("aria-selected", String(isSelectedVariant));
     label.className = "variant-preview-label is-reorder-handle";
     label.draggable = false;
-    const schemaTitle = getVariantPropSchemaTitle(instance);
-    const isAuthoredDefault = instance === getAuthoredDefaultVariantInstance();
-    label.textContent = isAuthoredDefault ? `${schemaTitle} · Default` : schemaTitle;
+    label.textContent = compactLabel;
     content.className = "variant-preview-content";
-    prepareVariantClone(clone, instance.id);
-    resolveVariantOperations(instance).forEach((operation) => applyVariantOperation(clone, operation));
+    prepareVariantClone(clone, variant.id);
+    applyComponentVariant(clone, { ...getComponentDefinition(currentComponent.id), layers: captureWorkspaceState().layers,
+      variantProps: variantModel.getProps(), variantRules: variantModel.getRules(), variants: variantModel.getVariants(), componentProps }, variant,
+      { ownerComponentId: currentComponent.id, instancePath: [], ancestors: [currentComponent.id], readDefinition: getComponentDefinition });
+    clone.querySelectorAll(".canvas-component-instance").forEach(element => {
+      if (element.closest("[data-identity-source]") === clone) namespaceVariantCloneIds(element, variant.id);
+    });
     syncVariantFlexbox(clone);
-    const isSelectedRoot = isVariantRootSelected(instance.id);
+    const isSelectedRoot = isVariantRootSelected(variant.id);
     clone.classList.toggle("is-selected", isSelectedRoot);
     clone.setAttribute("aria-selected", String(isSelectedRoot));
     clone.addEventListener("click", (event) => {
       const hit = resolveCanvasHit(event.target);
-      if (hit.kind === "variant-root" && hit.instanceId === instance.id && hit.direct) {
-        handleVariantStructureToolClick(instance, "component:0", event);
+      if (hit.kind === "variant-root" && hit.variantId === variant.id && hit.direct) {
+        handleVariantStructureToolClick(variant, "component:0", event);
       }
     });
     clone.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector").forEach((layerElement) => {
+      if (layerElement.closest("[data-identity-source]") !== clone) return;
       const type = layerElement.classList.contains("canvas-frame")
         ? "frame"
         : layerElement.classList.contains("canvas-text") ? "text" : "vector";
       const id = Number(layerElement.dataset[`${type}Id`]);
       if (!Number.isFinite(id)) return;
       const target = `${type}:${id}`;
-      const isSelectedLayer = isVariantLayerTargetSelected(instance.id, target);
+      const isSelectedLayer = isVariantLayerTargetSelected(variant.id, target);
       layerElement.classList.toggle("is-selected", isSelectedLayer);
       layerElement.setAttribute("aria-selected", String(isSelectedLayer));
       layerElement.tabIndex = 0;
@@ -219,7 +242,7 @@ function renderVariantInstances() {
         layerElement.addEventListener("click", (event) => {
           const hit = resolveCanvasHit(event.target);
           if (hit.kind === "variant-layer" && hit.element === layerElement && hit.direct) {
-            handleVariantStructureToolClick(instance, target, event);
+            handleVariantStructureToolClick(variant, target, event);
           }
         });
       }
@@ -230,7 +253,7 @@ function renderVariantInstances() {
         if (activeTool !== "select") return;
         event.preventDefault();
         event.stopPropagation();
-        selectVariantState(instance.id, target);
+        selectVariantState(variant.id, target);
         beginHistoryGesture(text);
         text.classList.add("is-selected");
         text.setAttribute("aria-selected", "true");
@@ -243,83 +266,105 @@ function renderVariantInstances() {
       text.addEventListener("click", (event) => {
         if (activeTool !== "text") return;
         selectTool("select");
-        selectVariantInstance(instance.id, { render: false, layerTarget: target });
+        selectVariant(variant.id, { render: false, layerTarget: target });
         beginEditing(event);
       });
       text.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey
-          && !text.isContentEditable && getSelectedVariantInstanceIds().length <= 1
+          && !text.isContentEditable && getSelectedVariantIds().length <= 1
           && getSelectedVariantLayerTargets().length <= 1) beginEditing(event);
       });
       text.addEventListener("input", () => {
         recordHistoryForGesture(text);
         const runData = getCurrentTextRunData(text);
-        if (runData.hasRuns) {
-          upsertLocalVariantOverride(instance, target, "richTextHtml", runData.html);
+        const sourceRecord = getTextRecord(textId);
+        if (sourceRecord?.isNew) {
+          componentSet?.querySelectorAll(".variant-preview").forEach((preview) => {
+            const root = preview.querySelector(".canvas-root-stack");
+            const siblingText = root ? findVariantTarget(root, target) : null;
+            if (!(siblingText instanceof HTMLElement) || siblingText === text) return;
+            if (runData.hasRuns) siblingText.innerHTML = runData.html;
+            else siblingText.textContent = runData.textContent;
+          });
+        } else if (runData.hasRuns) {
+          setVariantTextOverride(variant, textId, runData.html, { render: false, format: "html" });
         } else {
-          setVariantTextOverride(instance, textId, text.textContent ?? "", { render: false });
+          setVariantTextOverride(variant, textId, text.textContent ?? "", { render: false });
         }
-        syncVariantTextPreviewContent(textId, text);
+        if (!sourceRecord?.isNew) syncVariantTextPreviewContent(textId, text);
+        renderLayerTree();
       });
       text.addEventListener("blur", () => {
         endHistoryGesture(text);
         const sourceRecord = getTextRecord(textId);
         if (sourceRecord?.isNew && (text.textContent ?? "").length === 0) {
           const deletedTarget = `text:${textId}`;
-          variantModel.getInstances().forEach((variantInstance) => {
-            variantInstance.overrides = (variantInstance.overrides ?? [])
+          variantModel.getVariants().forEach((variant) => {
+            variant.overrides = (variant.overrides ?? [])
               .filter((override) => override.target !== deletedTarget);
           });
           variantModel.replaceRules(
             variantModel.getRules().filter((rule) => rule.target !== deletedTarget),
           );
-          selectVariantState(instance.id);
+          selectVariantState(variant.id);
           removeCanvasText(sourceRecord.element);
-          scheduleVariantInstanceRender();
+          scheduleVariantRender();
           return;
         }
         if (sourceRecord?.isNew) {
+          const runData = getCurrentTextRunData(text);
+          if (runData.hasRuns) sourceRecord.element.innerHTML = runData.html;
+          else sourceRecord.element.textContent = runData.textContent;
+          syncTextRecordContent(sourceRecord, runData.textContent, { writeElement: false });
           sourceRecord.isNew = false;
           sourceRecord.element.classList.remove("is-new-empty");
         }
         text.contentEditable = "false";
-        scheduleVariantInstanceRender();
+        scheduleVariantRender();
       });
     });
     content.append(clone);
+    clone.querySelectorAll(".canvas-component-instance").forEach(element => {
+      if (element.closest("[data-identity-source]") !== clone) return;
+      const id = Number(element.dataset.componentInstanceId);
+      const selected = isVariantLayerTargetSelected(variant.id, `component-instance:${id}`);
+      element.classList.toggle("is-selected", selected);
+      element.setAttribute("aria-selected", String(selected));
+      bindComponentInstanceInteractions(element, id, variant.id);
+    });
     preview.append(label, content);
-    bindVariantReorderPointer(preview, instance);
+    bindVariantReorderPointer(preview, variant);
     preview.addEventListener("keydown", (event) => {
       if (event.target !== preview) return;
-      if (selectedVariantInstanceId === instance.id && selectedVariantLayerTargets.size > 0) return;
+      if (selectedVariantId === variant.id && selectedVariantLayerTargets.size > 0) return;
       const move = event.key === "ArrowLeft" || event.key === "ArrowUp"
         ? -1
         : event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : 0;
       if (move !== 0) {
         event.preventDefault();
-        reorderVariantInstance(instance.id, variantModel.getInstances().indexOf(instance) + move);
+        reorderVariant(variant.id, variantModel.getVariants().indexOf(variant) + move);
         return;
       }
       if (event.key !== " ") return;
       event.preventDefault();
-      selectVariantInstance(instance.id);
+      selectVariant(variant.id);
     });
     componentSet.append(preview);
-    setVariantLabelTooltip(label, label.textContent);
+    setVariantLabelTooltip(label, compactLabel);
   });
   requestAnimationFrame(syncResizeOverlay);
 }
 
-function scheduleVariantInstanceRender() {
+function scheduleVariantRender() {
   if (variantRenderFrame !== null) return;
   variantRenderFrame = requestAnimationFrame(() => {
     variantRenderFrame = null;
-    renderVariantInstances();
+    renderVariants();
   });
 }
 
 if (canvasRootStack instanceof HTMLElement) {
-  const variantSchemaObserver = new MutationObserver(() => scheduleVariantInstanceRender());
+  const variantSchemaObserver = new MutationObserver(() => scheduleVariantRender());
   variantSchemaObserver.observe(canvasRootStack, {
     subtree: true,
     childList: true,

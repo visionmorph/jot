@@ -1,45 +1,45 @@
 /* Determines canvas drop targets, insertion positions, and nesting decisions. */
 
-function getVariantPreviewRoot(instanceId) {
+function getVariantPreviewRoot(variantId) {
   const preview = componentSet?.querySelector(
-    `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
+    `.variant-preview[data-variant-id="${CSS.escape(String(variantId))}"]`,
   );
   const root = preview?.querySelector(".canvas-root-stack");
   return root instanceof HTMLElement ? root : null;
 }
 
-function getCanvasLayerElement(layer, variantInstanceId = null) {
-  if (variantInstanceId === null) return getLayerRecord(layer)?.element ?? null;
-  const root = getVariantPreviewRoot(variantInstanceId);
+function getCanvasLayerElement(layer, variantId = null) {
+  if (variantId === null) return getLayerRecord(layer)?.element ?? null;
+  const root = getVariantPreviewRoot(variantId);
   return root ? findVariantTarget(root, getLayerDescriptorKey(layer)) : null;
 }
 
-function getCanvasParentElement(parentFrameId, variantInstanceId = null) {
-  if (variantInstanceId !== null) {
-    const root = getVariantPreviewRoot(variantInstanceId);
+function getCanvasParentElement(parentId, variantId = null) {
+  if (variantId !== null) {
+    const root = getVariantPreviewRoot(variantId);
     if (!root) return null;
-    return parentFrameId === null ? root : findVariantTarget(root, `frame:${parentFrameId}`);
+    return parentId === null ? root : findVariantTarget(root, `frame:${parentId}`);
   }
-  return parentFrameId === null ? canvasRootStack : getFrameRecord(parentFrameId)?.element ?? null;
+  return parentId === null ? canvasRootStack : getFrameRecord(parentId)?.element ?? null;
 }
 
-function canMoveCanvasLayerToParent(layer, parentFrameId) {
-  return layer.type !== "frame" || parentFrameId === null || canNestFrame(layer.id, parentFrameId);
+function canMoveCanvasLayerToParent(layer, parentId) {
+  return layer.type !== "frame" || parentId === null || canNestFrame(layer.id, parentId);
 }
 
-function getCanvasInsertionIndex(parentFrameId, draggedLayers, clientX, clientY, variantInstanceId = null) {
-  const parentElement = getCanvasParentElement(parentFrameId, variantInstanceId);
+function getCanvasInsertionIndex(parentId, draggedLayers, clientX, clientY, variantId = null) {
+  const parentElement = getCanvasParentElement(parentId, variantId);
   if (!(parentElement instanceof HTMLElement)) return 0;
   const isVertical = parentElement.dataset.direction === "vertical";
   const pointerPosition = isVertical ? clientY : clientX;
-  const siblings = getLayerChildren(parentFrameId).filter(
+  const siblings = getLayerChildren(parentId).filter(
     (sibling) => !isCanvasDraggedLayer({ type: sibling.type, id: sibling.record.id }, draggedLayers),
   );
 
   const insertionIndex = siblings.findIndex((sibling) => {
     const element = getCanvasLayerElement(
       { type: sibling.type, id: sibling.record.id },
-      variantInstanceId,
+      variantId,
     );
     if (!(element instanceof HTMLElement)) return false;
     const bounds = element.getBoundingClientRect();
@@ -51,15 +51,15 @@ function getCanvasInsertionIndex(parentFrameId, draggedLayers, clientX, clientY,
   return insertionIndex < 0 ? siblings.length : insertionIndex;
 }
 
-function getCanvasDropIntent(event, draggedLayersInput, variantInstanceId = null) {
+function getCanvasDropIntent(event, draggedLayersInput, variantId = null) {
   if (!(canvasRootStack instanceof HTMLElement)) return null;
   const draggedLayers = normalizeCanvasDraggedLayers(draggedLayersInput);
   if (draggedLayers.length === 0) return null;
   const hit = resolveCanvasHit(event.target);
-  const expectedLayerKind = variantInstanceId === null ? "layer" : "variant-layer";
-  const expectedRootKind = variantInstanceId === null ? "component-root" : "variant-root";
+  const expectedLayerKind = variantId === null ? "layer" : "variant-layer";
+  const expectedRootKind = variantId === null ? "component-root" : "variant-root";
   const hitMatchesContext = hit.kind === expectedLayerKind
-    && (variantInstanceId === null || hit.instanceId === variantInstanceId);
+    && (variantId === null || hit.variantId === variantId);
   const targetElement = hitMatchesContext ? hit.element : null;
   const targetLayer = hitMatchesContext ? hit.layer : null;
 
@@ -77,10 +77,10 @@ function getCanvasDropIntent(event, draggedLayersInput, variantInstanceId = null
         draggedLayers,
         event.clientX,
         event.clientY,
-        variantInstanceId,
+        variantId,
       );
       return {
-        parentFrameId: targetLayer.id,
+        parentId: targetLayer.id,
         targetIndex,
         mode: "within",
         targetElement: null,
@@ -100,7 +100,7 @@ function getCanvasDropIntent(event, draggedLayersInput, variantInstanceId = null
         (sibling) => !isCanvasDraggedLayer({ type: sibling.type, id: sibling.record.id }, draggedLayers),
       ).length;
       return {
-        parentFrameId: targetLayer.id,
+        parentId: targetLayer.id,
         targetIndex,
         mode: "inside",
         targetElement,
@@ -108,12 +108,12 @@ function getCanvasDropIntent(event, draggedLayersInput, variantInstanceId = null
       };
     }
 
-    const parentFrameId = getLayerParentId(targetLayer);
-    if (!draggedLayers.every((layer) => canMoveCanvasLayerToParent(layer, parentFrameId))) return null;
-    const parentElement = getCanvasParentElement(parentFrameId, variantInstanceId);
+    const parentId = getLayerParentId(targetLayer);
+    if (!draggedLayers.every((layer) => canMoveCanvasLayerToParent(layer, parentId))) return null;
+    const parentElement = getCanvasParentElement(parentId, variantId);
     const isVertical = parentElement?.dataset.direction === "vertical";
     const targetRatio = isVertical ? verticalRatio : horizontalRatio;
-    const siblings = getLayerChildren(parentFrameId).filter(
+    const siblings = getLayerChildren(parentId).filter(
       (sibling) => !isCanvasDraggedLayer({ type: sibling.type, id: sibling.record.id }, draggedLayers),
     );
     const targetIndex = siblings.findIndex(
@@ -123,37 +123,37 @@ function getCanvasDropIntent(event, draggedLayersInput, variantInstanceId = null
     const mode = targetRatio < 0.5 ? "before" : "after";
     const insertionIndex = targetIndex + (mode === "after" ? 1 : 0);
     return {
-      parentFrameId,
+      parentId,
       targetIndex: insertionIndex,
       mode,
       targetElement,
-      key: `${parentFrameId ?? "root"}:${insertionIndex}:${mode}`,
+      key: `${parentId ?? "root"}:${insertionIndex}:${mode}`,
     };
   }
 
   const parentElement = hit.kind === expectedRootKind
-    && (variantInstanceId === null || hit.instanceId === variantInstanceId)
+    && (variantId === null || hit.variantId === variantId)
     ? hit.element
     : event.target instanceof Element
       ? event.target.closest(".canvas-frame, [data-canvas-root-stack]")
       : null;
-  if (variantInstanceId !== null && !getVariantPreviewRoot(variantInstanceId)?.contains(parentElement)) return null;
-  const parentFrameId = parentElement instanceof HTMLElement && parentElement.classList.contains("canvas-frame")
+  if (variantId !== null && !getVariantPreviewRoot(variantId)?.contains(parentElement)) return null;
+  const parentId = parentElement instanceof HTMLElement && parentElement.classList.contains("canvas-frame")
     ? Number(parentElement.dataset.frameId)
     : null;
-  if (!draggedLayers.every((layer) => canMoveCanvasLayerToParent(layer, parentFrameId))) return null;
+  if (!draggedLayers.every((layer) => canMoveCanvasLayerToParent(layer, parentId))) return null;
   const targetIndex = getCanvasInsertionIndex(
-    parentFrameId,
+    parentId,
     draggedLayers,
     event.clientX,
     event.clientY,
-    variantInstanceId,
+    variantId,
   );
   return {
-    parentFrameId,
+    parentId,
     targetIndex,
     mode: "inside",
-    targetElement: getCanvasParentElement(parentFrameId, variantInstanceId),
-    key: `${parentFrameId ?? "root"}:${targetIndex}:inside`,
+    targetElement: getCanvasParentElement(parentId, variantId),
+    key: `${parentId ?? "root"}:${targetIndex}:inside`,
   };
 }

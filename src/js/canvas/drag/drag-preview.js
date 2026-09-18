@@ -61,14 +61,14 @@ function captureCanvasItemPositions(elements, getKey = (element) => element, get
 
 function captureCanvasLayerPositions(
   usePlaceholderForDraggedLayer = false,
-  variantInstanceId = canvasDragSession?.variantInstanceId ?? null,
+  variantId = canvasDragSession?.variantId ?? null,
 ) {
-  const root = variantInstanceId === null ? canvasRootStack : getVariantPreviewRoot(variantInstanceId);
+  const root = variantId === null ? canvasRootStack : getVariantPreviewRoot(variantId);
   if (!(root instanceof HTMLElement)) return new Map();
   const elements = Array.from(root.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector"));
   return captureCanvasItemPositions(
     elements,
-    (element) => variantInstanceId === null
+    (element) => variantId === null
       ? element
       : getLayerDescriptorKey(getCanvasLayerDescriptor(element)),
     (element) => {
@@ -158,14 +158,14 @@ function animateCanvasItemReflow(previousPositions, elements, {
   });
 }
 
-function animateCanvasLayerReflow(previousPositions, variantInstanceId = null) {
-  const root = variantInstanceId === null ? canvasRootStack : getVariantPreviewRoot(variantInstanceId);
+function animateCanvasLayerReflow(previousPositions, variantId = null) {
+  const root = variantId === null ? canvasRootStack : getVariantPreviewRoot(variantId);
   if (!(root instanceof HTMLElement)) return;
   animateCanvasItemReflow(
     previousPositions,
     Array.from(root.querySelectorAll(".canvas-frame, .canvas-text, .canvas-vector")),
     {
-      getKey: (element) => variantInstanceId === null
+      getKey: (element) => variantId === null
         ? element
         : getLayerDescriptorKey(getCanvasLayerDescriptor(element)),
       getAnimatedAncestor: (element) => element.parentElement?.closest(".canvas-frame"),
@@ -186,18 +186,18 @@ function previewCanvasDropIntent(intent) {
   const previousPositions = captureCanvasLayerPositions();
   clearCanvasDropTarget();
   const parentElement = getCanvasParentElement(
-    intent.parentFrameId,
-    canvasDragSession.variantInstanceId,
+    intent.parentId,
+    canvasDragSession.variantId,
   );
   if (!(parentElement instanceof HTMLElement)) return;
   syncCanvasDragGroupLayout(canvasDragSession.placeholder, parentElement);
   const shouldLockInsideTarget = intent.mode === "inside"
     && intent.targetElement?.classList.contains("canvas-frame")
-    && canvasDragSession.originalParentId !== intent.parentFrameId;
+    && canvasDragSession.originalParentId !== intent.parentId;
   const insideTargetBounds = shouldLockInsideTarget
     ? intent.targetElement.getBoundingClientRect()
     : null;
-  const siblings = getLayerChildren(intent.parentFrameId).filter(
+  const siblings = getLayerChildren(intent.parentId).filter(
     (sibling) => !isCanvasDraggedLayer(
       { type: sibling.type, id: sibling.record.id },
       canvasDragSession.draggedLayers,
@@ -207,7 +207,7 @@ function previewCanvasDropIntent(intent) {
   const referenceElement = referenceLayer
     ? getCanvasLayerElement(
         { type: referenceLayer.type, id: referenceLayer.record.id },
-        canvasDragSession.variantInstanceId,
+        canvasDragSession.variantId,
       )
     : null;
   parentElement.insertBefore(canvasDragSession.placeholder, referenceElement);
@@ -223,7 +223,7 @@ function previewCanvasDropIntent(intent) {
       }
     : null;
   canvasDragSession.targetElement?.classList.add("is-canvas-drop-inside");
-  animateCanvasLayerReflow(previousPositions, canvasDragSession.variantInstanceId);
+  animateCanvasLayerReflow(previousPositions, canvasDragSession.variantId);
   requestAnimationFrame(syncResizeOverlay);
 }
 
@@ -233,7 +233,7 @@ function restoreCanvasDragPreview() {
   clearCanvasDropTarget();
   const parentElement = getCanvasParentElement(
     canvasDragSession.originalParentId,
-    canvasDragSession.variantInstanceId,
+    canvasDragSession.variantId,
   );
   if (!(parentElement instanceof HTMLElement)) return;
   syncCanvasDragGroupLayout(canvasDragSession.placeholder, parentElement);
@@ -247,10 +247,10 @@ function restoreCanvasDragPreview() {
   const referenceElement = referenceLayer
     ? getCanvasLayerElement(
         { type: referenceLayer.type, id: referenceLayer.record.id },
-        canvasDragSession.variantInstanceId,
+        canvasDragSession.variantId,
       )
     : null;
   parentElement.insertBefore(canvasDragSession.placeholder, referenceElement);
   canvasDragSession.intent = null;
-  animateCanvasLayerReflow(previousPositions, canvasDragSession.variantInstanceId);
+  animateCanvasLayerReflow(previousPositions, canvasDragSession.variantId);
 }

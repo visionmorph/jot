@@ -18,13 +18,13 @@ document.addEventListener("copy", (event) => {
     event.preventDefault();
     return;
   }
-  const instances = captureSelectedVariantCopies();
-  if (instances.length === 0) return;
+  const variants = captureSelectedVariantCopies();
+  if (variants.length === 0) return;
   const token = `Jot variants ${crypto.randomUUID()}`;
   copiedVariantSelection = {
     token,
     component: currentComponent,
-    instances,
+    variants,
   };
   event.clipboardData.setData("text/plain", token);
   event.preventDefault();
@@ -42,7 +42,7 @@ document.addEventListener("paste", (event) => {
     || copiedVariantSelection.component !== currentComponent
     || event.clipboardData?.getData("text/plain") !== copiedVariantSelection.token) return;
   event.preventDefault();
-  insertVariantCopies(copiedVariantSelection.instances);
+  insertVariantCopies(copiedVariantSelection.variants);
 });
 
 document.addEventListener("keydown", (event) => {
@@ -78,7 +78,7 @@ document.addEventListener("keydown", (event) => {
       activeText.blur();
     } else if (selectedCanvasText) {
       clearLayerSelection();
-    } else if (selectedVariantInstanceId !== null) {
+    } else if (selectedVariantId !== null) {
       clearLayerSelection();
     }
     return;
@@ -104,12 +104,12 @@ document.addEventListener("keydown", (event) => {
   }
 
   if (!isTyping && event.key === "Tab" && !isCommandShortcut && !event.altKey) {
-    if (getSelectedVariantInstanceIds().length > 0 && getSelectedVariantLayerTargets().length === 0) {
+    if (getSelectedVariantIds().length > 0 && getSelectedVariantLayerTargets().length === 0) {
       event.preventDefault();
       cycleSelectedVariant(event.shiftKey ? -1 : 1);
       return;
     }
-    if (getPrimaryLayerDescriptor() || (!event.shiftKey && getSelectedVariantInstanceIds().length > 1)) {
+    if (getPrimaryLayerDescriptor() || (!event.shiftKey && getSelectedVariantIds().length > 1)) {
       event.preventDefault();
       selectSiblingLayer(event.shiftKey ? -1 : 1);
       return;
@@ -119,7 +119,7 @@ document.addEventListener("keydown", (event) => {
   if (!isTyping && event.key === "Enter" && !isCommandShortcut && !event.altKey) {
     const selectedLayer = getPrimaryLayerDescriptor();
     if (!event.shiftKey && selectedLayer?.type === "text"
-      && getSelectedVariantInstanceIds().length <= 1
+      && getSelectedVariantIds().length <= 1
       && getSelectedVariantLayerTargets().length <= 1 && selectedLayerKeys.size <= 1) {
       event.preventDefault();
       startEditingText(selectedLayer.record.element);
@@ -144,8 +144,10 @@ document.addEventListener("keydown", (event) => {
   }
 
   if (!isTyping && (event.key === "]" || event.key === "[") && !event.altKey) {
+    const hasVariantSelection = getSelectedVariantIds().length > 0
+      && getSelectedVariantLayerTargets().length === 0;
     const hasLayerSelection = Boolean(getPrimaryLayerDescriptor() && selectedComponentId === null);
-    if (hasLayerSelection) {
+    if (hasVariantSelection || hasLayerSelection) {
       event.preventDefault();
       if (isCommandShortcut) reorderPrimaryLayer(event.key === "]" ? 1 : -1);
       else if (!event.shiftKey) reorderPrimaryLayer(0, event.key === "]" ? "front" : "back");
@@ -155,6 +157,10 @@ document.addEventListener("keydown", (event) => {
 
   if (!isTyping && ["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key)
     && !isCommandShortcut && !event.shiftKey && !event.altKey) {
+    if (getSelectedNestedInstanceLayer()) {
+      event.preventDefault();
+      return;
+    }
     const layer = getPrimaryLayerDescriptor();
     if (layer && layer.type !== "component") {
       event.preventDefault();
@@ -187,10 +193,18 @@ document.addEventListener("keydown", (event) => {
     (target instanceof HTMLElement && (target.isContentEditable || Boolean(target.closest(".props-panel"))))
   ) return;
 
+  const nestedInstanceLayer = getSelectedNestedInstanceLayer();
+  if (nestedInstanceLayer) {
+    event.preventDefault();
+    setNestedInstanceLayerOverride(nestedInstanceLayer, "visibility", "hidden");
+    renderTree();
+    return;
+  }
+
   let activeVariantLayerTarget = selectedVariantLayerTarget;
-  let activeVariantInstanceId = selectedVariantInstanceId;
+  let activeVariantId = selectedVariantId;
   let activeVariantLayerTargets = [...selectedVariantLayerTargets];
-  const eventVariantLayer = target instanceof HTMLElement
+  const eventVariantLayer = target instanceof HTMLElement && !target.closest(".canvas-component-instance")
     ? target.closest(".variant-preview .canvas-frame, .variant-preview .canvas-text, .variant-preview .canvas-vector")
     : null;
   if (eventVariantLayer instanceof HTMLElement) {
@@ -199,15 +213,15 @@ document.addEventListener("keydown", (event) => {
       : eventVariantLayer.classList.contains("canvas-text") ? "text" : "vector";
     const id = Number(eventVariantLayer.dataset[`${type}Id`]);
     if (Number.isFinite(id)) activeVariantLayerTarget = `${type}:${id}`;
-    const previewId = Number(eventVariantLayer.closest(".variant-preview")?.dataset.variantInstanceId);
-    if (Number.isFinite(previewId)) activeVariantInstanceId = previewId;
-    if (activeVariantInstanceId !== null
-      && !isVariantLayerTargetSelected(activeVariantInstanceId, activeVariantLayerTarget)) {
+    const previewId = Number(eventVariantLayer.closest(".variant-preview")?.dataset.variantId);
+    if (Number.isFinite(previewId)) activeVariantId = previewId;
+    if (activeVariantId !== null
+      && !isVariantLayerTargetSelected(activeVariantId, activeVariantLayerTarget)) {
       activeVariantLayerTargets = activeVariantLayerTarget === null ? [] : [activeVariantLayerTarget];
-      selectVariantState(activeVariantInstanceId, activeVariantLayerTarget);
+      selectVariantState(activeVariantId, activeVariantLayerTarget);
     }
   }
-  if (activeVariantInstanceId !== null && activeVariantLayerTarget === null) {
+  if (activeVariantId !== null && activeVariantLayerTarget === null) {
     const selectedLayer = componentSet?.querySelector(
       ".canvas-frame.is-selected, .canvas-text.is-selected, .canvas-vector.is-selected",
     );
@@ -220,19 +234,19 @@ document.addEventListener("keydown", (event) => {
     }
   }
 
-  if (activeVariantInstanceId !== null && activeVariantLayerTarget === null) {
+  if (activeVariantId !== null && activeVariantLayerTarget === null) {
     event.preventDefault();
-    removeSelectedVariantInstances();
+    removeSelectedVariants();
     return;
   }
 
-  if (activeVariantInstanceId !== null && activeVariantLayerTarget !== null) {
+  if (activeVariantId !== null && activeVariantLayerTarget !== null) {
     const targets = activeVariantLayerTargets.length > 0
       ? activeVariantLayerTargets
       : [activeVariantLayerTarget];
     if (targets.some((entry) => {
       const [type, rawId] = entry.split(":");
-      return !["frame", "text", "vector"].includes(type) || !Number.isFinite(Number(rawId));
+      return !LAYER_TYPES.includes(type) || !Number.isFinite(Number(rawId));
     })) return;
     selectLayerKeys(targets, activeVariantLayerTarget);
   }
@@ -246,83 +260,14 @@ document.addEventListener("keydown", (event) => {
   if (selectedLayerKeys.size === 0) return;
 
   event.preventDefault();
-  recordHistory();
-  const frameIdsToDelete = new Set();
-  const textIdsToDelete = new Set();
-  const vectorIdsToDelete = new Set();
-  selectedLayerKeys.forEach((key) => {
-    const [type, rawId] = key.split(":");
-    const id = Number(rawId);
-    if (type === "frame") {
-      collectFrameAndDescendantIds(id).forEach((frameId) => frameIdsToDelete.add(frameId));
-    } else if (type === "text") textIdsToDelete.add(id);
-    else if (type === "vector") vectorIdsToDelete.add(id);
-  });
-  textRecords.forEach((record) => {
-    if (record.parentFrameId !== null && frameIdsToDelete.has(record.parentFrameId)) {
-      textIdsToDelete.add(record.id);
-    }
-  });
-  vectorRecords.forEach((record) => {
-    if (record.parentFrameId !== null && frameIdsToDelete.has(record.parentFrameId)) {
-      vectorIdsToDelete.add(record.id);
-    }
-  });
-
-  const deletedTargets = new Set([
-    ...[...frameIdsToDelete].map((id) => `frame:${id}`),
-    ...[...textIdsToDelete].map((id) => `text:${id}`),
-    ...[...vectorIdsToDelete].map((id) => `vector:${id}`),
-  ]);
-  variantModel.getInstances().forEach((instance) => {
-    instance.overrides = (instance.overrides ?? []).filter((override) => !deletedTargets.has(override.target));
-  });
-  variantModel.replaceRules(variantModel.getRules().filter((rule) => !deletedTargets.has(rule.target)));
-
-  const removedComponentProps = componentProps.filter((prop) => (
-    (prop.targetFrameId != null && frameIdsToDelete.has(prop.targetFrameId))
-    || (prop.targetTextId != null && textIdsToDelete.has(prop.targetTextId))
-    || (prop.targetVectorId != null && vectorIdsToDelete.has(prop.targetVectorId))
-  ));
-  const removedVariantPropIds = new Set(removedComponentProps
-    .map((prop) => prop.variantPropId)
-    .filter((id) => id != null));
-  componentProps = componentProps.filter((prop) => !removedComponentProps.includes(prop));
-  if (removedVariantPropIds.size > 0) {
-    variantModel.replaceProps(
-      variantModel.getProps().filter((prop) => !removedVariantPropIds.has(prop.id)),
-    );
-    variantModel.getInstances().forEach((instance) => {
-      removedVariantPropIds.forEach((id) => { delete instance.propValues[id]; });
-    });
-    variantModel.getRules().forEach((rule) => {
-      removedVariantPropIds.forEach((id) => { delete rule.conditions[id]; });
-    });
-    variantModel.replaceRules(
-      variantModel.getRules().filter((rule) => Object.keys(rule.conditions).length > 0),
-    );
-  }
-
-  frameRecords.forEach((record) => {
-    if (frameIdsToDelete.has(record.id)) record.element.remove();
-  });
-  textRecords.forEach((record) => {
-    if (textIdsToDelete.has(record.id)) record.element.remove();
-  });
-  vectorRecords.forEach((record) => {
-    if (vectorIdsToDelete.has(record.id)) record.element.remove();
-  });
-  frameRecords = frameRecords.filter((record) => !frameIdsToDelete.has(record.id));
-  textRecords = textRecords.filter((record) => !textIdsToDelete.has(record.id));
-  vectorRecords = vectorRecords.filter((record) => !vectorIdsToDelete.has(record.id));
-  frameIdsToDelete.forEach((frameId) => expandedFrameIds.delete(frameId));
-  applyAllLayerSizing();
-  selectCanvasState();
-  syncElementSelectionStyles();
-  renderTree();
+  deleteLayers([...selectedLayerKeys].map((key) => {
+    const [type, id] = key.split(":");
+    return { type, id: Number(id) };
+  }));
 });
 
 initializeComponents();
+observeCanvasComponentData();
 
 loadGoogleFont(DEFAULT_FONT_FAMILY, DEFAULT_FONT_WEIGHT);
 

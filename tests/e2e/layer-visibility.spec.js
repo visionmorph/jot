@@ -25,12 +25,12 @@ for (const type of ["frame", "text", "vector"]) {
         beginEditing: false, isNew: false, textContent: "Sibling",
       });
       sibling.element.dataset.testSibling = "true";
-      addVariantInstance();
+      addVariant();
       if (type === "text") {
-        variantModel.getInstances().forEach((instance) => {
-          upsertLocalVariantOverride(instance, "text:1", "display", "flow-root");
+        variantModel.getVariants().forEach((variant) => {
+          upsertLocalVariantOverride(variant, "text:1", "display", "flow-root");
         });
-        selectVariantState(variantModel.getInstances()[0].id, "text:1");
+        selectVariantState(variantModel.getVariants()[0].id, "text:1");
       } else selectComponentState();
       renderTree();
     }, type);

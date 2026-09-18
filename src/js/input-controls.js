@@ -5,6 +5,51 @@ document.addEventListener("focusin", (event) => {
   if (input instanceof HTMLInputElement && input.matches(".text-input[data-select-on-focus], .dropdown__input[data-select-on-focus]")) input.select();
 });
 
+const keyboardSteppableInputSelector = [
+  "[data-frame-size]",
+  "[data-text-layer-size]",
+  "[data-vector-size]",
+  "[data-frame-padding]",
+  "[data-frame-padding-axis]",
+  "#frame-radius",
+  "#frame-gap",
+  "#frame-outline-weight",
+  "#text-size",
+  "[data-color-opacity]",
+  "[data-picker-opacity-input]",
+].join(", ");
+
+function stepNumericInputWithKeyboard(input, event) {
+  if (!(input instanceof HTMLInputElement) || !["ArrowUp", "ArrowDown"].includes(event.key)) return false;
+  const parts = input.value.split(",");
+  const parsedParts = parts.map((part) => part.trim().match(/^(-?\d+(?:\.\d+)?)(.*)$/));
+  if (parsedParts.some((match) => !match)) return false;
+
+  const direction = event.key === "ArrowUp" ? 1 : -1;
+  const amount = event.shiftKey ? 10 : 1;
+  const isLayerSize = input.matches("[data-frame-size], [data-text-layer-size], [data-vector-size]");
+  const isOpacity = input.matches("[data-color-opacity], [data-picker-opacity-input]");
+  const isNonNegative = input.matches("#frame-gap");
+  const minimumValue = isLayerSize ? MIN_INTERACTIVE_LAYER_SIZE : isOpacity || isNonNegative ? 0 : input.min || input.dataset.min;
+  const maximumValue = isOpacity ? 100 : input.max || input.dataset.max;
+  const minimum = minimumValue == null || minimumValue === "" ? -Infinity : Number(minimumValue);
+  const maximum = maximumValue == null || maximumValue === "" ? Infinity : Number(maximumValue);
+  input.value = parsedParts.map((match) => {
+    const value = Math.min(maximum, Math.max(minimum, Number(match[1]) + direction * amount));
+    return `${value}${match[2]}`;
+  }).join(", ");
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+}
+
+document.addEventListener("keydown", (event) => {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement) || !input.matches(keyboardSteppableInputSelector)) return;
+  if (!stepNumericInputWithKeyboard(input, event)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+}, true);
+
 document.querySelectorAll("[data-text-input-prefix]").forEach((prefix) => {
   if (!(prefix instanceof HTMLElement)) return;
   const shell = prefix.closest(".text-input-shell, .size-mode-combobox");
@@ -94,12 +139,14 @@ function setDropdownOpen(dropdown, isOpen) {
   }
 }
 
-document.querySelectorAll("[data-dropdown]").forEach((dropdown) => {
+function bindDropdown(dropdown) {
   if (!(dropdown instanceof HTMLElement)) return;
+  if (dropdown.dataset.dropdownBound === "true") return;
   const input = dropdown.querySelector(".dropdown__input");
   const toggle = dropdown.querySelector("[data-dropdown-toggle]");
   const menu = dropdown.querySelector("[data-dropdown-menu]");
   if (!(input instanceof HTMLInputElement) || !(menu instanceof HTMLElement)) return;
+  dropdown.dataset.dropdownBound = "true";
   toggle?.addEventListener("click", () => setDropdownOpen(dropdown, menu.hidden));
   input.addEventListener("click", () => { if (input.readOnly) setDropdownOpen(dropdown, menu.hidden); });
   input.addEventListener("keydown", (event) => {
@@ -118,7 +165,9 @@ document.querySelectorAll("[data-dropdown]").forEach((dropdown) => {
     input.focus();
     if (input.hasAttribute("data-select-on-focus")) input.select();
   });
-});
+}
+
+document.querySelectorAll("[data-dropdown]").forEach(bindDropdown);
 
 document.addEventListener("pointerdown", (event) => {
   if (!(event.target instanceof Node)) return;

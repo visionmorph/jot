@@ -128,7 +128,7 @@ document.addEventListener("selectionchange", () => {
     textId: record.id,
     start: Math.min(firstOffset, secondOffset),
     end: Math.max(firstOffset, secondOffset),
-    variantInstanceId: record.isVariantInstance ? selectedVariantInstanceId : null,
+    variantId: record.isVariant ? selectedVariantId : null,
   };
   scheduleTextRangeInspectorSync();
 });
@@ -245,33 +245,33 @@ function persistTextRangeColor(record, options = {}) {
     record.element.dataset.textColorOpacity = String(uniformRunColor.opacity);
     record.element.style.color = getColorWithOpacity(uniformRunColor.color, uniformRunColor.opacity);
   }
-  if (record.isVariantInstance) {
-    const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
-    if (instance) {
+  if (record.isVariant) {
+    const variant = getVariant(record.variantId ?? selectedVariantId);
+    if (variant) {
       const target = `text:${record.id}`;
-      upsertVariantOverrideForEditedInstances(
-        instance,
+      upsertVariantOverrideForEditedVariants(
+        variant,
         target,
         "richTextHtml",
         runData.html,
-        options.getEditedVariantInstanceIds?.("richTextHtml"),
+        options.getEditedVariantIds?.("richTextHtml"),
       );
       syncVariantLayerStylePreviews(target, "richTextHtml", record.element);
       if (uniformRunColor) {
         const renderedColor = getColorWithOpacity(uniformRunColor.color, uniformRunColor.opacity);
-        upsertVariantOverrideForEditedInstances(
-          instance,
+        upsertVariantOverrideForEditedVariants(
+          variant,
           target,
           "color",
           renderedColor,
-          options.getEditedVariantInstanceIds?.("color"),
+          options.getEditedVariantIds?.("color"),
         );
         syncVariantLayerStylePreviews(target, "color", record.element);
       }
     }
     return;
   }
-  if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+  if (variantModel.getVariants().length > 0) scheduleVariantRender();
 }
 
 function applyTextRangeColor(record, rangeSelection, color, opacity) {

@@ -37,14 +37,12 @@ function createCanvasTextRecord(parentRecord, x, y, options = {}) {
   const text = document.createElement("div");
   const initialTextContent = options.textContent == null ? "" : String(options.textContent);
   const record = {
+    type: "text",
     id: textId,
-    parentFrameId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
+    parentId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
     element: text,
     order: nextLayerOrder,
     isNew: options.isNew !== false,
-    name: options.useDefaultName === true
-      ? `Text ${textId}`
-      : options.name == null ? undefined : String(options.name),
   };
   nextLayerOrder += 1;
 
@@ -56,7 +54,7 @@ function createCanvasTextRecord(parentRecord, x, y, options = {}) {
   text.textContent = initialTextContent;
   text.contentEditable = "false";
   text.spellcheck = false;
-  text.setAttribute("aria-label", `Text ${textId}`);
+  text.setAttribute("aria-label", initialTextContent || `Text ${textId}`);
   text.setAttribute("aria-selected", "false");
   text.dataset.fontFamily = DEFAULT_FONT_FAMILY;
   text.dataset.fontWeight = String(DEFAULT_FONT_WEIGHT);
@@ -83,6 +81,16 @@ function createCanvasTextRecord(parentRecord, x, y, options = {}) {
     canvasRootStack?.append(text);
   }
 
+  bindCanvasTextInteractions(record);
+
+  layerRecords.push(record);
+  queueCanvasMutationEffects({ sizing: true, tree: true });
+  return record;
+}
+
+function bindCanvasTextInteractions(record) {
+  const text = record.element;
+  const textId = record.id;
   text.addEventListener("click", (event) => {
     event.stopPropagation();
     const hit = resolveCanvasHit(event.target);
@@ -107,7 +115,7 @@ function createCanvasTextRecord(parentRecord, x, y, options = {}) {
       removeLayerKeyFromSelection(textKey);
       syncElementSelectionStyles();
     }
-    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getVariants().length > 0) scheduleVariantRender();
     redoHistory.length = 0;
     renderTree();
     renderComponentProps();
@@ -140,7 +148,4 @@ function createCanvasTextRecord(parentRecord, x, y, options = {}) {
     startCanvasDragSession({ type: "text", id: textId }, true);
   });
 
-  textRecords.push(record);
-  queueCanvasMutationEffects({ sizing: true, tree: true });
-  return record;
 }

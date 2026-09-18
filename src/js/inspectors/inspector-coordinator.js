@@ -23,7 +23,45 @@ function cssColorToHex(value) {
 }
 
 function updateInspector() {
-  const isVariantSelected = selectedVariantInstanceId !== null;
+  const nestedSelection = getSelectedNestedInstanceLayer();
+  document.querySelectorAll(".is-instance-child-selected").forEach(element => element.classList.remove("is-instance-child-selected"));
+  if (nestedSelection) {
+    nestedSelection.element.classList.add("is-instance-child-selected");
+    componentInstanceInspector.hidden = true;
+    const type = nestedSelection.target.type;
+    const isText = type === "text";
+    const isFrame = type === "frame";
+    const isVector = type === "vector";
+    const isComponentInstance = type === "component-instance";
+    pageInspector.hidden = true;
+    frameInspector.hidden = !isFrame && !isComponentInstance;
+    textInspector.hidden = !isText;
+    vectorInspector.hidden = !isVector;
+    frameInspector.inert = isFrame || isComponentInstance;
+    vectorInspector.inert = isVector;
+    frameInspector.classList.toggle("is-instance-inspector", isComponentInstance);
+    if (isComponentInstance) syncNestedComponentInstanceHeading(nestedSelection);
+    if (isText) syncInspectorToSelectedText();
+    if (isFrame) syncInspectorToSelectedFrame();
+    if (isVector) syncInspectorToSelectedVector();
+    if (isComponentInstance && getSelectedFrameRecord()) syncInspectorToSelectedFrame();
+    syncSelectionColorControls(false, false, false);
+    requestAnimationFrame(syncResizeOverlay);
+    return;
+  }
+  frameInspector.inert = false;
+  vectorInspector.inert = false;
+  const instanceSelected = syncComponentInstanceInspector();
+  frameInspector.classList.toggle("is-instance-inspector", instanceSelected);
+  if (instanceSelected) {
+    [pageInspector, textInspector, vectorInspector].forEach(panel => { if (panel) panel.hidden = true; });
+    frameInspector.hidden = false;
+    syncInspectorToSelectedFrame();
+    syncSelectionColorControls(false, false, false);
+    requestAnimationFrame(syncResizeOverlay);
+    return;
+  }
+  const isVariantSelected = selectedVariantId !== null;
   const variantTargetType = isVariantSelected ? getVariantTargetType(selectedVariantLayerTarget) : null;
   const isVariantTextSelected = variantTargetType === "text";
   const isVariantFrameSelected = variantTargetType === "frame";

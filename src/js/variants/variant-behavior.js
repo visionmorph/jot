@@ -1,19 +1,11 @@
 /* Variant target lookup, rule matching, behavior calculation, and application. */
 
 function getVariantTargetType(target) {
-  return String(target || "component:0").split(":")[0];
+  return getSourceLayerIdentity(target || "component:0", currentComponent.id).type;
 }
 
 function findVariantTarget(root, target) {
-  if (!(root instanceof HTMLElement)) return null;
-  const [type, rawId] = String(target || "component:0").split(":");
-  if (type === "component") return root;
-  const selector = type === "frame"
-    ? `[data-frame-id="${CSS.escape(rawId)}"]`
-    : type === "text"
-      ? `[data-text-id="${CSS.escape(rawId)}"]`
-      : `[data-vector-id="${CSS.escape(rawId)}"]`;
-  return root.querySelector(selector);
+  return findLayerElementByIdentity(root, target || "component:0");
 }
 
 function variantBoolean(value) {
@@ -21,8 +13,35 @@ function variantBoolean(value) {
   return !["false", "0", "off", "hidden", "none", ""].includes(String(value).trim().toLowerCase());
 }
 
+function getTextContentFromHtml(value) {
+  const template = document.createElement("template");
+  template.innerHTML = String(value ?? "");
+  return template.content.textContent ?? "";
+}
+
+function resolveVariantTextValue(variant, target, sourceElement) {
+  let resolved = {
+    kind: "html",
+    value: sourceElement?.innerHTML ?? "",
+    textContent: sourceElement?.textContent ?? "",
+  };
+  resolveVariantOperations(variant).forEach((operation) => {
+    if (operation.target !== target) return;
+    if (operation.property === "textContent") {
+      const value = String(operation.value ?? "");
+      resolved = { kind: "text", value, textContent: value };
+    } else if (operation.property === "richTextHtml") {
+      const value = String(operation.value ?? "");
+      resolved = { kind: "html", value, textContent: getTextContentFromHtml(value) };
+    }
+  });
+  return resolved;
+}
+
 function applyVariantOperation(root, operation) {
-  const target = findVariantTarget(root, operation.target);
+  if (isInstanceSettingProperty(operation.property)) return;
+  let target = findVariantTarget(root, operation.target);
+  if (target?.classList.contains("canvas-component-instance") && operation.property !== "visibility") target = target.firstElementChild;
   if (!(target instanceof HTMLElement)) return;
   const property = operation.property;
   const value = operation.value;
@@ -38,13 +57,22 @@ function applyVariantOperation(root, operation) {
   if (property === "visibility") {
     // Keep visibility separate from display overrides used for text alignment
     // and frame layout, which may be applied later in the same render.
-    target.classList.toggle("is-layer-hidden", !isLayerVisible(target) || !variantBoolean(value));
+    const isVisible = variantBoolean(value);
+    target.dataset.layerVisibility = isVisible ? "visible" : "hidden";
+    target.classList.toggle("is-layer-hidden", !isVisible);
+    if (isVisible) target.removeAttribute("aria-hidden");
+    else target.setAttribute("aria-hidden", "true");
     return;
   }
   if (property === "disabled") {
     const isDisabled = variantBoolean(value);
-    if ("disabled" in target) target.disabled = isDisabled;
-    target.toggleAttribute("disabled", isDisabled);
+    const isTabList = target.getAttribute("role") === "tablist";
+    if (!isTabList) {
+      if ("disabled" in target) target.disabled = isDisabled;
+      target.toggleAttribute("disabled", isDisabled);
+    } else {
+      target.removeAttribute("disabled");
+    }
     target.setAttribute("aria-disabled", String(isDisabled));
     return;
   }
@@ -52,6 +80,17 @@ function applyVariantOperation(root, operation) {
     const isInvalid = variantBoolean(value);
     target.dataset.invalid = String(isInvalid);
     target.setAttribute("aria-invalid", String(isInvalid));
+    return;
+  }
+  if (property === "checked") {
+    const isChecked = variantBoolean(value);
+    target.setAttribute("role", "switch");
+    target.setAttribute("aria-checked", String(isChecked));
+    return;
+  }
+  if (property === "selected") {
+    target.setAttribute("role", "tab");
+    target.setAttribute("aria-selected", String(variantBoolean(value)));
     return;
   }
   if ((property === "fill" || property === "stroke") && target.classList.contains("canvas-vector")) {
@@ -69,6 +108,12 @@ function applyVariantOperation(root, operation) {
     applyFrameOutline(target);
     return;
   }
+  if (property === "width" || property === "height") {
+    const normalizedValue = String(value ?? "").trim().toLowerCase();
+    target.dataset[`${property}Mode`] = normalizedValue === "100%"
+      ? "fill"
+      : ["auto", "max-content", "fit-content"].includes(normalizedValue) ? "hug" : "fixed";
+  }
   if (property === "backgroundColor") {
     target.style.backgroundColor = String(value ?? "");
     if (isTransparentColorValue(value)) {
@@ -85,19 +130,19 @@ function applyVariantOperation(root, operation) {
   target.style[property] = String(value ?? "");
 }
 
-function variantRuleMatches(rule, instance) {
+function variantRuleMatches(rule, variant, props = variantModel.getProps()) {
   const entries = Object.entries(rule.conditions ?? {});
   if (entries.length === 0) return false;
   return entries.every(([propId, expected]) => {
-    const prop = variantModel.getProps().find((entry) => String(entry.id) === String(propId));
+    const prop = props.find((entry) => String(entry.id) === String(propId));
     if (!prop) return false;
-    return normalizeVariantPropValue(prop, instance.propValues?.[prop.id]) === normalizeVariantPropValue(prop, expected);
+    return normalizeVariantPropValue(prop, variant.propValues?.[prop.id]) === normalizeVariantPropValue(prop, expected);
   });
 }
 
 function getComponentPropVariantTarget(componentProp) {
   if (componentProp.targetFrameId != null) {
-    return componentProp.targetFrameId === currentComponent?.frameRecord?.id
+    return componentProp.targetFrameId === 0
       ? "component:0"
       : `frame:${componentProp.targetFrameId}`;
   }
@@ -106,38 +151,53 @@ function getComponentPropVariantTarget(componentProp) {
   return "component:0";
 }
 
-function getBooleanComponentPropOperations(instance) {
-  return componentProps
+function getBooleanComponentPropOperations(variant, authoredProps = componentProps, props = variantModel.getProps()) {
+  return authoredProps
     .filter((prop) => (
       prop.type === "boolean"
-      && ["visibility", "disabled", "invalid"].includes(prop.property)
+      && ["visibility", "disabled", "invalid", "checked", "selected"].includes(prop.property)
       && prop.variantPropId != null
     ))
     .map((prop) => {
-      const variantProp = variantModel.getProps().find((entry) => entry.id === prop.variantPropId);
+      const variantProp = props.find((entry) => entry.id === prop.variantPropId);
       return variantProp
         ? {
             target: getComponentPropVariantTarget(prop),
             property: prop.property,
-            value: normalizeVariantPropValue(variantProp, instance.propValues?.[variantProp.id]),
+            value: normalizeVariantPropValue(variantProp, variant.propValues?.[variantProp.id]),
           }
         : null;
     })
     .filter(Boolean);
 }
 
-function resolveVariantOperations(instance) {
-  const matchingRules = variantModel.getRules()
-    .map((rule, row) => ({ rule, row, specificity: Object.keys(rule.conditions ?? {}).length }))
-    .filter(({ rule }) => variantRuleMatches(rule, instance));
-  const individuals = matchingRules.filter(({ specificity }) => specificity === 1);
+function resolveVariantOperations(variant, definition = null) {
+  const props = definition?.variantProps ?? variantModel.getProps();
+  const axisOrder = new Map(getOrderedVariantAxes(props).map((axis, index) => [String(axis.id), index]));
+  const matchingRules = (definition?.variantRules ?? variantModel.getRules())
+    .map((rule, row) => {
+      const conditionIds = Object.keys(rule.conditions ?? {});
+      return {
+        rule,
+        row,
+        specificity: conditionIds.length,
+        axisIndex: conditionIds.length === 1
+          ? axisOrder.get(String(conditionIds[0])) ?? Number.MAX_SAFE_INTEGER
+          : Number.MAX_SAFE_INTEGER,
+      };
+    })
+    .filter(({ rule }) => variantRuleMatches(rule, variant, props));
+  const individuals = matchingRules
+    .filter(({ specificity }) => specificity === 1)
+    .sort((first, second) => first.axisIndex - second.axisIndex || first.row - second.row);
   const compounds = matchingRules
     .filter(({ specificity }) => specificity > 1)
     .sort((first, second) => first.specificity - second.specificity || first.row - second.row);
   return [
     ...individuals.map(({ rule }) => rule),
     ...compounds.map(({ rule }) => rule),
-    ...getBooleanComponentPropOperations(instance),
-    ...getCascadedVariantOverrides(instance),
+    ...getBooleanComponentPropOperations(variant, definition?.componentProps ?? componentProps, props),
+    ...(definition ? getVariantInheritanceChain(variant, id => definition.variants.find(entry => entry.id === id))
+      .flatMap(entry => entry.overrides ?? []) : getCascadedVariantOverrides(variant)),
   ];
 }

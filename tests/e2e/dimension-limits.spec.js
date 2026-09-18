@@ -7,8 +7,8 @@ for (const type of ["frame", "text"]) {
       await openApp(page);
       await page.evaluate((type) => {
         createCanvasText(currentComponent.frameRecord, 0, 0, { beginEditing: false, isNew: false, textContent: "Label" });
-        addVariantInstance();
-        selectVariantInstance(variantModel.getInstances()[0].id, { render: false, layerTarget: type === "text" ? "text:1" : null });
+        addVariant();
+        selectVariant(variantModel.getVariants()[0].id, { render: false, layerTarget: type === "text" ? "text:1" : null });
       }, type);
       const input = page.locator(`[data-${type === "text" ? "text-layer" : "frame"}-size="${dimension}"]`);
       await input.fill("-20");
@@ -25,7 +25,7 @@ for (const type of ["frame", "text"]) {
       await expect(input).toHaveValue("1");
       expect(await page.evaluate(({ type, dimension }) => {
         const target = type === "text" ? "text:1" : "component:0";
-        return getEffectiveVariantOverride(variantModel.getInstances()[0], target, dimension)?.value;
+        return getEffectiveVariantOverride(variantModel.getVariants()[0], target, dimension)?.value;
       }, { type, dimension })).toBe("1px");
     });
   }

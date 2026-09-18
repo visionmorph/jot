@@ -26,8 +26,8 @@ function getOrderedCanvasDragLayers(anchorLayer) {
   const selectedKeys = new Set(getSelectedLayerKeys());
   const anchorKey = getLayerDescriptorKey(anchorLayer);
   if (selectedKeys.size < 2 || !selectedKeys.has(anchorKey)) return [anchorLayer];
-  const parentFrameId = getLayerParentId(anchorLayer);
-  return getLayerChildren(parentFrameId)
+  const parentId = getLayerParentId(anchorLayer);
+  return getLayerChildren(parentId)
     .map((sibling) => ({ type: sibling.type, id: sibling.record.id }))
     .filter((layer) => selectedKeys.has(getLayerDescriptorKey(layer)));
 }
@@ -50,8 +50,17 @@ function resolveCanvasHit(target) {
   }
 
   const variantPreview = target.closest(".variant-preview");
+  if (target.closest(".canvas-component-instance")) {
+    const root = variantPreview?.querySelector(".canvas-root-stack") ?? canvasRootStack;
+    const element = [...root.querySelectorAll(".canvas-component-instance")]
+      .find(node => node.closest("[data-identity-source]") === root && node.contains(target));
+    if (!element) return { kind: "canvas-ui", target };
+    return { kind: variantPreview ? "variant-layer" : "layer", target, element,
+      layer: getCanvasLayerDescriptor(element), variantId: variantPreview ? Number(variantPreview.dataset.variantId) : undefined,
+      preview: variantPreview, direct: true };
+  }
   if (variantPreview instanceof HTMLElement && componentSet?.contains(variantPreview)) {
-    const instanceId = Number(variantPreview.dataset.variantInstanceId);
+    const variantId = Number(variantPreview.dataset.variantId);
     const layerElement = target.closest(".canvas-frame, .canvas-text, .canvas-vector");
     const layer = getCanvasLayerDescriptor(layerElement);
     if (layerElement instanceof HTMLElement && layer && variantPreview.contains(layerElement)) {
@@ -60,7 +69,7 @@ function resolveCanvasHit(target) {
         target,
         element: layerElement,
         layer,
-        instanceId,
+        variantId,
         preview: variantPreview,
         direct: target === layerElement,
       };
@@ -70,7 +79,7 @@ function resolveCanvasHit(target) {
       kind: "variant-root",
       target,
       element: root instanceof HTMLElement ? root : variantPreview,
-      instanceId,
+      variantId,
       preview: variantPreview,
       direct: target === root,
     };
@@ -105,7 +114,7 @@ function startCanvasDragSession(
   draggedLayer,
   deferDraggingStyle = false,
   draggedLayersInput = null,
-  variantInstanceId = null,
+  variantId = null,
 ) {
   const requestedLayers = normalizeCanvasDraggedLayers(
     draggedLayersInput ?? getOrderedCanvasDragLayers(draggedLayer),
@@ -114,7 +123,7 @@ function startCanvasDragSession(
   if (!record || !(record.element instanceof HTMLElement) || requestedLayers.length === 0) return null;
   if (
     canvasDragSession
-    && canvasDragSession.variantInstanceId === variantInstanceId
+    && canvasDragSession.variantId === variantId
     && isSameLayerDescriptor(canvasDragSession.draggedLayer, draggedLayer)
     && canvasDragSession.draggedLayers.length === requestedLayers.length
     && canvasDragSession.draggedLayers.every(
@@ -135,7 +144,7 @@ function startCanvasDragSession(
   const draggedLayers = movingSiblings.map((sibling) => ({ type: sibling.type, id: sibling.record.id }));
   const elements = movingSiblings.map((sibling) => getCanvasLayerElement(
     { type: sibling.type, id: sibling.record.id },
-    variantInstanceId,
+    variantId,
   ));
   if (elements.some((element) => !(element instanceof HTMLElement))) return null;
   const firstMovingIndex = originalSiblings.findIndex(
@@ -145,7 +154,7 @@ function startCanvasDragSession(
     .slice(0, Math.max(0, firstMovingIndex))
     .filter((sibling) => !requestedKeys.has(getLayerDescriptorKey({ type: sibling.type, id: sibling.record.id })))
     .length;
-  const parentElement = getCanvasParentElement(originalParentId, variantInstanceId);
+  const parentElement = getCanvasParentElement(originalParentId, variantId);
   if (!(parentElement instanceof HTMLElement)) return null;
   const { placeholder, placeholderItems } = createCanvasDragPlaceholder(elements, parentElement);
   elements[0].insertAdjacentElement("beforebegin", placeholder);
@@ -154,7 +163,7 @@ function startCanvasDragSession(
     draggedLayers,
     element: elements[0],
     elements,
-    variantInstanceId,
+    variantId,
     placeholder,
     placeholderItems,
     preview: null,
@@ -177,13 +186,13 @@ function startCanvasDragSession(
 function commitCanvasLayerDrop(draggedLayer, intent) {
   const draggedLayers = canvasDragSession?.draggedLayers
     ?? normalizeCanvasDraggedLayers(draggedLayer);
-  const variantInstanceId = canvasDragSession?.variantInstanceId ?? null;
+  const variantId = canvasDragSession?.variantId ?? null;
   const previousPositions = captureCanvasLayerPositions(true);
   clearCanvasDragSession();
   const didMove = draggedLayers.length > 1
-    ? moveLayers(draggedLayers, intent.parentFrameId, intent.targetIndex)
-    : moveLayer(draggedLayers[0], intent.parentFrameId, intent.targetIndex);
-  animateCanvasLayerReflow(previousPositions, variantInstanceId);
+    ? moveLayers(draggedLayers, intent.parentId, intent.targetIndex)
+    : moveLayer(draggedLayers[0], intent.parentId, intent.targetIndex);
+  animateCanvasLayerReflow(previousPositions, variantId);
   return didMove;
 }
 

@@ -42,20 +42,53 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false,
   menu.setAttribute("role", "listbox");
   menu.hidden = true;
 
+  const clearMenuPosition = (targetMenu = menu) => {
+    targetMenu.classList.remove("is-viewport-positioned");
+    ["--prop-menu-left", "--prop-menu-top", "--prop-menu-width"].forEach((property) => {
+      targetMenu.style.removeProperty(property);
+    });
+  };
+  const positionMenu = () => {
+    if (menu.hidden) return;
+    wrap.classList.remove("is-dropup");
+    menu.classList.add("is-viewport-positioned");
+    const triggerBounds = trigger.getBoundingClientRect();
+    const viewportPadding = 8;
+    const menuHeight = Math.min(menu.scrollHeight, 176);
+    const spaceBelow = window.innerHeight - triggerBounds.bottom - viewportPadding;
+    const spaceAbove = triggerBounds.top - viewportPadding;
+    const opensAbove = menuHeight > spaceBelow && spaceAbove > spaceBelow;
+    const top = opensAbove
+      ? Math.max(viewportPadding, triggerBounds.top - menuHeight)
+      : Math.min(triggerBounds.bottom, window.innerHeight - viewportPadding - menuHeight);
+    const width = triggerBounds.width;
+    const left = Math.max(viewportPadding, Math.min(
+      triggerBounds.left,
+      window.innerWidth - viewportPadding - width,
+    ));
+    wrap.classList.toggle("is-dropup", opensAbove);
+    menu.style.setProperty("--prop-menu-left", `${left}px`);
+    menu.style.setProperty("--prop-menu-top", `${Math.max(viewportPadding, top)}px`);
+    menu.style.setProperty("--prop-menu-width", `${width}px`);
+  };
+
   const setOpen = (isOpen) => {
     if (disabled) return;
+    if (wrap.classList.contains("is-open") === isOpen) {
+      if (isOpen) positionMenu();
+      return;
+    }
     if (isOpen) {
       document.querySelectorAll(".prop-select-wrap.is-open").forEach((otherWrap) => {
         if (otherWrap === wrap) return;
-        otherWrap.classList.remove("is-open");
-        const otherMenu = otherWrap.querySelector(".prop-select-menu");
-        const otherTrigger = otherWrap.querySelector(".prop-select");
-        if (otherMenu instanceof HTMLElement) otherMenu.hidden = true;
-        if (otherTrigger instanceof HTMLButtonElement) otherTrigger.setAttribute("aria-expanded", "false");
+        otherWrap.dispatchEvent(new Event("prop-select-close"));
       });
       wrap.classList.add("is-open");
       menu.hidden = false;
       trigger.setAttribute("aria-expanded", "true");
+      positionMenu();
+      window.addEventListener("resize", positionMenu);
+      window.addEventListener("scroll", positionMenu, true);
       if (!outsidePointerListener) {
         outsidePointerListener = (event) => {
           if (event.target instanceof Node && wrap.contains(event.target)) return;
@@ -66,13 +99,18 @@ function createPropSelect(options, value, ariaLabel, onChange, disabled = false,
       return;
     }
     wrap.classList.remove("is-open");
+    wrap.classList.remove("is-dropup");
     menu.hidden = true;
+    clearMenuPosition();
+    window.removeEventListener("resize", positionMenu);
+    window.removeEventListener("scroll", positionMenu, true);
     trigger.setAttribute("aria-expanded", "false");
     if (outsidePointerListener) {
       document.removeEventListener("pointerdown", outsidePointerListener);
       outsidePointerListener = null;
     }
   };
+  wrap.addEventListener("prop-select-close", () => setOpen(false));
 
   options.forEach((optionRecord) => {
     const option = document.createElement("button");
@@ -141,10 +179,16 @@ function createComponentPropNameCell(prop) {
   const commitName = () => {
     const fallbackName = isStateComponentProp(prop)
       ? "Interaction"
-      : isOptionComponentProp(prop)
-        ? "Variant"
-        : prop.type === "string"
-          ? "label"
+      : isFocusComponentProp(prop)
+        ? "Focus"
+        : isOptionComponentProp(prop)
+          ? "Variant"
+          : prop.type === "string"
+          ? prop.property === "ariaLabel"
+            ? "ariaLabel"
+            : prop.property === "href"
+              ? "href"
+              : prop.property === "placeholder" ? "placeholder" : "label"
           : prop.type === "action"
             ? "onClick"
             : prop.property === "visibility" ? "visible" : prop.property;
@@ -164,6 +208,7 @@ function createComponentPropNameCell(prop) {
 function setComponentPropType(prop, value, compatibleTargets) {
   if (value === prop.type) return;
   recordHistory();
+  clearToggleTargetSemantics(prop);
   const wasVariantBoundProp = isVariantBoundComponentProp(prop);
   if (wasVariantBoundProp && value !== "enum" && value !== "boolean") unlinkComponentPropVariantDefinition(prop);
   if (isOptionComponentProp(value)) {
@@ -183,7 +228,7 @@ function setComponentPropType(prop, value, compatibleTargets) {
     prop.targetVectorId = null;
     prop.property = usesPlaceholder ? "placeholder" : "textContent";
   } else if (value === "action") {
-    const target = getCompatibleDisabledTargets()[0];
+    const target = getCompatibleActionTargets()[0];
     prop.name = "onClick";
     prop.type = "action";
     prop.defaultValue = "";
@@ -243,6 +288,7 @@ function createComponentPropActionCell(prop) {
   button.append(icon);
   button.addEventListener("click", () => {
     recordHistory();
+    clearToggleTargetSemantics(prop);
     if (isVariantBoundComponentProp(prop)) unlinkComponentPropVariantDefinition(prop);
     componentProps = componentProps.filter((componentProp) => componentProp.id !== prop.id);
     renderComponentProps();
@@ -253,10 +299,10 @@ function createComponentPropActionCell(prop) {
   return cell;
 }
 
-function setEnumComponentPropProperty(prop, value, currentProperty) {
-  if (value === currentProperty) return;
+function setEnumComponentPropProperty(prop, value) {
+  if (value === prop.property) return;
   recordHistory();
-  const wasStateProp = isStateComponentProp(prop);
+  const wasSpecialStateProp = isStateComponentProp(prop) || isFocusComponentProp(prop);
   if (value === "state") {
     const target = getCompatibleInteractionTargets()[0];
     prop.variantSubtype = "state";
@@ -267,10 +313,20 @@ function setEnumComponentPropProperty(prop, value, currentProperty) {
     prop.targetFrameId = target?.id ?? null;
     prop.targetTextId = null;
     prop.targetVectorId = null;
+  } else if (value === "focus") {
+    const target = getCompatibleInteractionTargets()[0];
+    prop.variantSubtype = "focus";
+    prop.name = "Focus";
+    prop.property = "focus";
+    prop.options = [...FOCUS_STATE_OPTIONS];
+    prop.defaultValue = prop.options[0];
+    prop.targetFrameId = target?.id ?? null;
+    prop.targetTextId = null;
+    prop.targetVectorId = null;
   } else {
     delete prop.variantSubtype;
     prop.property = value;
-    if (wasStateProp) {
+    if (wasSpecialStateProp) {
       prop.name = `${value[0].toUpperCase()}${value.slice(1)}`;
       prop.options = [DEFAULT_ENUM_OPTION];
       prop.defaultValue = prop.options[0];
@@ -291,7 +347,7 @@ function createComponentPropPropertyCell(prop, compatibleTargets, hasCurrentTarg
       ENUM_COMPONENT_PROPERTY_OPTIONS,
       enumProperty,
       "Variant property",
-      (value) => setEnumComponentPropProperty(prop, value, enumProperty),
+      (value) => setEnumComponentPropProperty(prop, value),
     ));
   } else if (prop.type === "boolean") {
     cell.append(createPropSelect(
@@ -299,6 +355,10 @@ function createComponentPropPropertyCell(prop, compatibleTargets, hasCurrentTarg
         ...option,
         disabled: option.value === "disabled"
           ? compatibleTargets.length === 0
+          : option.value === "checked"
+            ? getCompatibleToggleTargets().length === 0
+          : option.value === "selected"
+            ? getCompatibleSelectedTargets().length === 0
           : option.value === "invalid" && getCompatibleInvalidTargets().length === 0,
       })),
       prop.property,
@@ -310,6 +370,8 @@ function createComponentPropPropertyCell(prop, compatibleTargets, hasCurrentTarg
       [
         { value: "textContent", label: "Text content", disabled: textRecords.length === 0 },
         { value: "placeholder", label: "Placeholder", disabled: getCompatiblePlaceholderTargets().length === 0 },
+        { value: "ariaLabel", label: "ARIA label", disabled: getCompatibleAriaLabelTargets().length === 0 },
+        { value: "href", label: "Href", disabled: getCompatibleLinkTargets().length === 0 },
       ],
       prop.property,
       "Target property",
@@ -374,7 +436,7 @@ function addComponentProp(type = "enum") {
       name: getAvailableEnumPropName(),
       options,
       defaultValue: options[0],
-      property: "kind",
+      property: "custom",
     });
   } else if (type === "string") {
     const textTarget = textRecords[0];
@@ -391,7 +453,7 @@ function addComponentProp(type = "enum") {
       property: usesPlaceholder ? "placeholder" : "textContent",
     });
   } else if (type === "action") {
-    const target = getCompatibleDisabledTargets()[0];
+    const target = getCompatibleActionTargets()[0];
     Object.assign(prop, {
       name: "onClick",
       defaultValue: "",

@@ -42,7 +42,7 @@ RESIZE_HANDLE_DIRECTIONS.filter((direction) => direction.length === 2).forEach((
 function getGapHandleLayout(element) {
   const children = Array.from(element.children).filter((child) => (
     child instanceof HTMLElement
-    && child.matches(".canvas-frame, .canvas-text, .canvas-vector")
+    && child.matches(".canvas-frame, .canvas-text, .canvas-vector, .canvas-component-instance")
     && getComputedStyle(child).display !== "none"
   ));
   const overlayBounds = element.getBoundingClientRect();
@@ -105,10 +105,10 @@ if (canvas instanceof HTMLElement) {
 }
 
 function getSelectedResizeElement() {
-  if (getSelectedVariantInstanceIds().length > 1) return null;
-  if (selectedVariantInstanceId !== null) {
+  if (getSelectedVariantIds().length > 1) return null;
+  if (selectedVariantId !== null) {
     if (selectedVariantLayerTargets.size > 1) return null;
-    const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+    const preview = componentSet?.querySelector(`.variant-preview[data-variant-id="${CSS.escape(String(selectedVariantId))}"]`);
     const root = preview?.querySelector(".canvas-root-stack");
     if (!(root instanceof HTMLElement)) return null;
     return selectedVariantLayerTarget
@@ -121,17 +121,17 @@ function getSelectedResizeElement() {
 
 function isActiveResizeSelection(element) {
   if (!(element instanceof HTMLElement) || !element.classList.contains("is-selected")) return false;
-  const preview = element.closest(".variant-preview[data-variant-instance-id]");
+  const preview = element.closest(".variant-preview[data-variant-id]");
   if (!(preview instanceof HTMLElement)) return true;
-  const instanceId = Number(preview.dataset.variantInstanceId);
-  if (!Number.isFinite(instanceId) || !isVariantInstanceSelected(instanceId)) return false;
+  const variantId = Number(preview.dataset.variantId);
+  if (!Number.isFinite(variantId) || !isVariantSelected(variantId)) return false;
   const layer = getCanvasLayerDescriptor(element);
   const target = element.classList.contains("canvas-root-stack")
     ? "component:0"
     : layer ? `${layer.type}:${layer.id}` : null;
   return target === "component:0"
-    ? isVariantRootSelected(instanceId)
-    : Boolean(target && isVariantLayerTargetSelected(instanceId, target));
+    ? isVariantRootSelected(variantId)
+    : Boolean(target && isVariantLayerTargetSelected(variantId, target));
 }
 
 function syncResizeTargetHover(isHovered) {
@@ -163,7 +163,7 @@ resizeOverlay.addEventListener("pointerout", (event) => {
 });
 
 function getSelectedResizeRecord() {
-  if (selectedVariantInstanceId !== null && currentComponent?.frameRecord) {
+  if (selectedVariantId !== null && currentComponent?.frameRecord) {
     return {
       type: "variant",
       target: selectedVariantLayerTarget || "component:0",
@@ -175,9 +175,9 @@ function getSelectedResizeRecord() {
   const frameRecord = getSelectedFrameRecord();
   if (frameRecord) return { type: "frame", record: frameRecord, parentId: frameRecord.parentId };
   const textRecord = getSelectedTextRecord();
-  if (textRecord) return { type: "text", record: textRecord, parentId: textRecord.parentFrameId };
+  if (textRecord) return { type: "text", record: textRecord, parentId: textRecord.parentId };
   const vectorRecord = getSelectedVectorRecord();
-  if (vectorRecord) return { type: "vector", record: vectorRecord, parentId: vectorRecord.parentFrameId };
+  if (vectorRecord) return { type: "vector", record: vectorRecord, parentId: vectorRecord.parentId };
   return null;
 }
 
@@ -286,9 +286,9 @@ let paddingInteraction = null;
 
 function selectSpacingInteractionVariant(interaction) {
   if (interaction?.layer.type !== "variant" || interaction.hasRecordedHistory) return false;
-  const instanceId = selectedVariantInstanceId;
-  if (!Number.isFinite(instanceId)) return false;
-  selectVariantInstance(instanceId, { render: false, layerTarget: null });
+  const variantId = selectedVariantId;
+  if (!Number.isFinite(variantId)) return false;
+  selectVariant(variantId, { render: false, layerTarget: null });
   return true;
 }
 
@@ -347,7 +347,7 @@ function applyPaddingPointerPosition(clientX, clientY, coarse = false) {
   element.style[property] = `${value}px`;
   if (layer.type === "frame") {
     applyLayerSizing("frame", layer.record);
-    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getVariants().length > 0) scheduleVariantRender();
   }
   syncInspectorToSelectedFrame();
   positionResizeOverlay();
@@ -368,7 +368,7 @@ function finishPaddingInteraction(event) {
   applyPaddingPointerPosition(event.clientX, event.clientY, event.altKey);
   const interaction = paddingInteraction;
   event.target.releasePointerCapture(event.pointerId);
-  if (interaction?.layer.type === "variant" && interaction.hasRecordedHistory) renderVariantInstances();
+  if (interaction?.layer.type === "variant" && interaction.hasRecordedHistory) renderVariants();
   event.target.style.removeProperty(interaction?.side === "left" || interaction?.side === "right" ? "left" : "top");
   paddingInteraction = null;
   if (!selectSpacingInteractionVariant(interaction)) syncResizeOverlay();
@@ -381,7 +381,7 @@ resizeOverlay.addEventListener("pointercancel", (event) => {
     && event.target.hasPointerCapture(event.pointerId)) {
     event.target.releasePointerCapture(event.pointerId);
   }
-  if (paddingInteraction?.layer.type === "variant") renderVariantInstances();
+  if (paddingInteraction?.layer.type === "variant") renderVariants();
   if (paddingInteraction?.handle instanceof HTMLElement) {
     paddingInteraction.handle.style.removeProperty(
       paddingInteraction.side === "left" || paddingInteraction.side === "right" ? "left" : "top",
@@ -461,8 +461,8 @@ resizeOverlay.addEventListener("pointerup", (event) => {
   const interaction = gapInteraction;
   event.target.releasePointerCapture(event.pointerId);
   if (interaction?.layer.type === "variant") {
-    if (interaction.hasRecordedHistory) renderVariantInstances();
-  } else if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    if (interaction.hasRecordedHistory) renderVariants();
+  } else if (variantModel.getVariants().length > 0) scheduleVariantRender();
   gapInteraction = null;
   if (!selectSpacingInteractionVariant(interaction)) syncResizeOverlay();
 });
@@ -473,7 +473,7 @@ resizeOverlay.addEventListener("pointercancel", (event) => {
     && event.target.hasPointerCapture(event.pointerId)) {
     event.target.releasePointerCapture(event.pointerId);
   }
-  if (gapInteraction?.layer.type === "variant") renderVariantInstances();
+  if (gapInteraction?.layer.type === "variant") renderVariants();
   gapInteraction = null;
   syncResizeOverlay();
 });
@@ -562,7 +562,7 @@ function applyResizePointerPosition(clientX, clientY, proportional = false) {
   }
 
   applyLayerSizing(layer.type, layer.record);
-  if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+  if (variantModel.getVariants().length > 0) scheduleVariantRender();
   if (layer.type === "frame") syncInspectorToSelectedFrame();
   else if (layer.type === "text") syncSelectedTextSizeInputs();
   else syncInspectorToSelectedVector();
@@ -610,7 +610,7 @@ resizeOverlay.addEventListener("pointerup", (event) => {
   if (!(event.target instanceof HTMLButtonElement) || !event.target.hasPointerCapture(event.pointerId)) return;
   applyResizePointerPosition(event.clientX, event.clientY, event.shiftKey);
   event.target.releasePointerCapture(event.pointerId);
-  if (resizeInteraction?.layer.type === "variant") renderVariantInstances();
+  if (resizeInteraction?.layer.type === "variant") renderVariants();
   if (resizeInteraction?.layer.type === "text") resizeInteraction.element.draggable = true;
   resizeInteraction = null;
   syncResizeOverlay();
@@ -620,7 +620,7 @@ resizeOverlay.addEventListener("pointercancel", (event) => {
   if (event.target instanceof HTMLButtonElement && event.target.hasPointerCapture(event.pointerId)) {
     event.target.releasePointerCapture(event.pointerId);
   }
-  if (resizeInteraction?.layer.type === "variant") renderVariantInstances();
+  if (resizeInteraction?.layer.type === "variant") renderVariants();
   if (resizeInteraction?.layer.type === "text") resizeInteraction.element.draggable = true;
   resizeInteraction = null;
   syncResizeOverlay();
@@ -647,7 +647,7 @@ function setResizeEdgeDimensionMode(direction, mode) {
   } else {
     element.dataset[`${dimension}Mode`] = mode;
     applyLayerSizing(layer.type, layer.record);
-    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getVariants().length > 0) scheduleVariantRender();
   }
 
   if (isFrameTarget) syncInspectorToSelectedFrame();

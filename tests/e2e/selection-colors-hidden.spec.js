@@ -46,11 +46,11 @@ test("excludes a hidden matched layer from a uniform text selection", async ({ p
     });
     text.element.dataset.textColor = "#FF0000";
     text.element.style.color = "#FF0000";
-    addVariantInstance();
-    const instances = variantModel.getInstances();
-    upsertLocalVariantOverride(instances[1], "text:1", "color", "#0000FF");
-    upsertLocalVariantOverride(instances[1], "text:1", "visibility", false);
-    selectVariantInstancesLayerTargetsState(instances.map((instance) => instance.id), ["text:1"]);
+    addVariant();
+    const variants = variantModel.getVariants();
+    upsertLocalVariantOverride(variants[1], "text:1", "color", "#0000FF");
+    upsertLocalVariantOverride(variants[1], "text:1", "visibility", false);
+    selectVariantsLayerTargetsState(variants.map((variant) => variant.id), ["text:1"]);
     renderTree();
   });
 
@@ -66,9 +66,9 @@ test("keeps matching text with one shared color out of Selection colors", async 
     });
     text.element.dataset.textColor = "#336699";
     text.element.style.color = "#336699";
-    addVariantInstance();
-    const instances = variantModel.getInstances();
-    selectVariantInstancesLayerTargetsState(instances.map((instance) => instance.id), ["text:1"]);
+    addVariant();
+    const variants = variantModel.getVariants();
+    selectVariantsLayerTargetsState(variants.map((variant) => variant.id), ["text:1"]);
     renderTree();
   });
 
@@ -83,9 +83,9 @@ test("keeps matching SVG icons with one shared color out of Selection colors", a
       name: "Icon", width: 24, height: 24,
       source: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M2 2h20v20H2z" fill="#336699"/></svg>',
     }, 0, 0, currentComponent.frameRecord, { select: false });
-    addVariantInstance();
-    const instances = variantModel.getInstances();
-    selectVariantInstancesLayerTargetsState(instances.map((instance) => instance.id), ["vector:1"]);
+    addVariant();
+    const variants = variantModel.getVariants();
+    selectVariantsLayerTargetsState(variants.map((variant) => variant.id), ["vector:1"]);
     renderTree();
   });
 
@@ -100,10 +100,10 @@ test("shows Selection colors for matching SVG icons with different colors", asyn
       name: "Icon", width: 24, height: 24,
       source: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M2 2h20v20H2z" fill="#336699"/></svg>',
     }, 0, 0, currentComponent.frameRecord, { select: false });
-    addVariantInstance();
-    const instances = variantModel.getInstances();
-    upsertLocalVariantOverride(instances[1], "vector:1", "fill", "#CC5500");
-    selectVariantInstancesLayerTargetsState(instances.map((instance) => instance.id), ["vector:1"]);
+    addVariant();
+    const variants = variantModel.getVariants();
+    upsertLocalVariantOverride(variants[1], "vector:1", "fill", "#CC5500");
+    selectVariantsLayerTargetsState(variants.map((variant) => variant.id), ["vector:1"]);
     renderTree();
   });
 
@@ -119,11 +119,11 @@ test("ignores a hidden SVG match in the standard Fill control", async ({ page })
       name: "Icon", width: 24, height: 24,
       source: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><path d="M2 2h20v20H2z" fill="#336699"/></svg>',
     }, 0, 0, currentComponent.frameRecord, { select: false });
-    addVariantInstance();
-    const instances = variantModel.getInstances();
-    upsertLocalVariantOverride(instances[1], "vector:1", "fill", "#CC5500");
-    upsertLocalVariantOverride(instances[1], "vector:1", "visibility", false);
-    selectVariantInstancesLayerTargetsState(instances.map((instance) => instance.id), ["vector:1"]);
+    addVariant();
+    const variants = variantModel.getVariants();
+    upsertLocalVariantOverride(variants[1], "vector:1", "fill", "#CC5500");
+    upsertLocalVariantOverride(variants[1], "vector:1", "visibility", false);
+    selectVariantsLayerTargetsState(variants.map((variant) => variant.id), ["vector:1"]);
     renderTree();
   });
 
@@ -137,9 +137,9 @@ test("keeps uniformly painted matching frames in Fill and shows distinct frame c
     const frame = createCanvasFrame(0, 0, currentComponent.frameRecord, { select: false });
     frame.element.dataset.frameColor = "#336699";
     frame.element.style.backgroundColor = "#336699";
-    addVariantInstance();
-    const instances = variantModel.getInstances();
-    selectVariantInstancesLayerTargetsState(instances.map((instance) => instance.id), ["frame:1"]);
+    addVariant();
+    const variants = variantModel.getVariants();
+    selectVariantsLayerTargetsState(variants.map((variant) => variant.id), ["frame:1"]);
     renderTree();
   });
 
@@ -148,16 +148,16 @@ test("keeps uniformly painted matching frames in Fill and shows distinct frame c
   await expect(page.getByRole("textbox", { name: "Frame background hex value" })).toHaveValue("336699");
 
   await page.evaluate(() => {
-    const instance = variantModel.getInstances()[1];
-    upsertLocalVariantOverride(instance, "frame:1", "backgroundColor", "#CC5500");
-    upsertLocalVariantOverride(instance, "frame:1", "visibility", false);
+    const variant = variantModel.getVariants()[1];
+    upsertLocalVariantOverride(variant, "frame:1", "backgroundColor", "#CC5500");
+    upsertLocalVariantOverride(variant, "frame:1", "visibility", false);
     renderTree();
   });
   await expect(section).toBeHidden();
   await expect(page.getByRole("textbox", { name: "Frame background hex value" })).toHaveValue("336699");
 
   await page.evaluate(() => {
-    upsertLocalVariantOverride(variantModel.getInstances()[1], "frame:1", "visibility", true);
+    upsertLocalVariantOverride(variantModel.getVariants()[1], "frame:1", "visibility", true);
     renderTree();
   });
   const colors = await section.locator("[data-color-hex]").evaluateAll((inputs) => inputs.map((input) => input.value));

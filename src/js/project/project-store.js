@@ -155,13 +155,18 @@ let nextTextId = 1;
 
 let nextVectorId = 1;
 
+let nextComponentInstanceId = 1;
+
 let nextLayerOrder = 1;
 
-let frameRecords = [];
+let layerRecords = [];
 
-let textRecords = [];
-
-let vectorRecords = [];
+// Typed views for inspectors; all records are owned by the single layer list.
+Object.defineProperties(globalThis, {
+  frameRecords: { get: () => layerRecords.filter((record) => record.type === "frame") },
+  textRecords: { get: () => layerRecords.filter((record) => record.type === "text") },
+  vectorRecords: { get: () => layerRecords.filter((record) => record.type === "vector") },
+});
 
 let componentProps = [];
 
@@ -227,33 +232,33 @@ function getDefaultComponentFrameState() {
 
 function createEmptyWorkspaceState(componentId) {
   return {
+    schemaVersion: COMPONENT_SCHEMA_VERSION,
     componentId,
     componentFrame: getDefaultComponentFrameState(),
-    frames: [],
-    texts: [],
-    vectors: [],
+    layers: [],
     selection: { kind: "component", componentId },
     expandedFrameIds: [],
     nextFrameId: 1,
     nextTextId: 1,
     nextVectorId: 1,
+    nextComponentInstanceId: 1,
     nextLayerOrder: 1,
     componentProps: [],
     nextComponentPropId: 1,
     variantProps: [],
     variantRules: [],
-    variantInstances: [],
-    variantModelVersion: 3,
+    variants: [],
+    variantModelVersion: 4,
     nextVariantPropId: 1,
     nextVariantRuleId: 1,
-    nextVariantInstanceId: 1,
+    nextVariantId: 1,
     canvasColor: "#121619",
     canvasColorOpacity: 100,
     activeTool: "select",
   };
 }
 
-function createComponentDefinition(name) {
+function createComponentEditorState(name) {
   const id = nextComponentId;
   nextComponentId += 1;
   return {
@@ -269,7 +274,7 @@ function createComponentDefinition(name) {
       isComponent: true,
       name,
     },
-    workspace: createEmptyWorkspaceState(id),
+    workspace: { ...createEmptyWorkspaceState(id), componentName: name },
     undoHistory: [],
     redoHistory: [],
   };
@@ -277,7 +282,7 @@ function createComponentDefinition(name) {
 
 function initializeComponents() {
   if (components.length > 0) return;
-  const component = createComponentDefinition("Component 1");
+  const component = createComponentEditorState("Component 1");
   components.push(component);
   currentComponent = component;
   selectComponentState(component.id);
@@ -289,17 +294,16 @@ function initializeComponents() {
 
 function getFrameRecord(frameId) {
   if (frameId === 0 && currentComponent?.frameRecord) return currentComponent.frameRecord;
-  return frameRecords.find((record) => record.id === frameId);
+  return getLayerRecord({ type: "frame", id: frameId });
 }
 
 function getTextRecord(textId) {
-  return textRecords.find((record) => record.id === textId);
+  return getLayerRecord({ type: "text", id: textId });
 }
 
 function syncTextRecordContent(record, value, { writeElement = true } = {}) {
   if (!record?.element) return "";
   const text = String(value ?? "");
-  record.name = text;
   if (writeElement && record.element.textContent !== text) record.element.textContent = text;
   record.element.setAttribute("aria-label", text || `Text ${record.id}`);
   componentProps.forEach((prop) => {
@@ -309,7 +313,7 @@ function syncTextRecordContent(record, value, { writeElement = true } = {}) {
 }
 
 function getVectorRecord(vectorId) {
-  return vectorRecords.find((record) => record.id === vectorId);
+  return getLayerRecord({ type: "vector", id: vectorId });
 }
 
 function getLayerDimensionMode(element, dimension, fallback = "fixed") {
@@ -318,7 +322,7 @@ function getLayerDimensionMode(element, dimension, fallback = "fixed") {
 }
 
 function getLayerSizingContext(type, record) {
-  const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+  const parentId = record.parentId;
   const parentRecord = parentId === null && !record.isComponent
     ? currentComponent?.frameRecord ?? null
     : parentId === null ? null : getFrameRecord(parentId);
@@ -376,10 +380,71 @@ function activateComponent(componentId, options = {}) {
 
 function addComponent() {
   saveCurrentComponentWorkspace();
-  const component = createComponentDefinition(`Component ${nextComponentId}`);
+  const component = createComponentEditorState(`Component ${nextComponentId}`);
   components.push(component);
   activateComponent(component.id, { saveCurrent: false });
   return component;
+}
+
+function createComponentDeletionHistoryEntry(component, index, fallbackComponentId) {
+  return {
+    kind: "component-deletion",
+    component: structuredClone({
+      id: component.id,
+      name: component.name,
+      expanded: component.expanded,
+      expandedFrameIds: component.expandedFrameIds,
+      workspace: component.workspace,
+      undoHistory: component.undoHistory,
+      redoHistory: component.redoHistory,
+    }),
+    index,
+    fallbackComponentId,
+  };
+}
+
+function isComponentDeletionHistoryEntry(entry) {
+  return entry?.kind === "component-deletion"
+    && entry.component
+    && Number.isInteger(entry.index);
+}
+
+function restoreComponentDeletion(entry) {
+  if (!isComponentDeletionHistoryEntry(entry)
+    || components.some((component) => component.id === entry.component.id)) return false;
+
+  const insertionIndex = Math.max(0, Math.min(entry.index, components.length));
+  const restored = structuredClone(entry.component);
+  restored.frameRecord = {
+    id: 0, parentId: null, element: canvasRootStack, order: 0,
+    isComponent: true, name: restored.name,
+  };
+  components.splice(insertionIndex, 0, restored);
+  if (!activateComponent(entry.component.id)) {
+    components.splice(insertionIndex, 1);
+    return false;
+  }
+  redoHistory.push(entry);
+  if (redoHistory.length > HISTORY_LIMIT) redoHistory.shift();
+  return true;
+}
+
+function replayComponentDeletion(entry) {
+  if (!isComponentDeletionHistoryEntry(entry)) return false;
+  const componentIndex = components.findIndex((component) => component.id === entry.component.id);
+  if (componentIndex < 0 || components.length <= 1) return false;
+
+  if (currentComponent?.id === entry.component.id) saveCurrentComponentWorkspace();
+  components.splice(componentIndex, 1);
+  const nextComponent = components.find((component) => component.id === entry.fallbackComponentId)
+    ?? components[Math.min(componentIndex, components.length - 1)];
+  currentComponent = null;
+  selectCanvasState();
+  activateComponent(nextComponent.id, { saveCurrent: false });
+  undoHistory.push(entry);
+  if (undoHistory.length > HISTORY_LIMIT) undoHistory.shift();
+  redoHistory.length = 0;
+  return true;
 }
 
 function deleteSelectedComponent() {
@@ -387,21 +452,37 @@ function deleteSelectedComponent() {
   const componentIndex = components.findIndex((component) => component.id === selectedComponentId);
   if (componentIndex < 0) return false;
 
+  const deletedComponent = components[componentIndex];
+  if (currentComponent?.id === deletedComponent.id) saveCurrentComponentWorkspace();
   components.splice(componentIndex, 1);
   const nextComponent = components[Math.min(componentIndex, components.length - 1)];
+  const historyEntry = createComponentDeletionHistoryEntry(
+    deletedComponent,
+    componentIndex,
+    nextComponent.id,
+  );
   currentComponent = null;
   selectCanvasState();
   activateComponent(nextComponent.id, { saveCurrent: false });
+  undoHistory.push(historyEntry);
+  if (undoHistory.length > HISTORY_LIMIT) undoHistory.shift();
+  redoHistory.length = 0;
   return true;
 }
 
 function getSelectedTextRecord() {
-  if (selectedVariantInstanceId !== null && selectedVariantLayerTarget?.startsWith("text:")) {
+  const nested = getSelectedNestedInstanceLayer();
+  if (nested?.target.type === "text") return {
+    ...resolveLayerIdentity(nested.identity)?.node, id: nested.target.id, type: "text",
+    element: nested.element, isVariant: true, isInstance: true,
+    variantId: nested.parentVariantId, instanceSelection: nested,
+  };
+  if (selectedVariantId !== null && selectedVariantLayerTarget?.startsWith("text:")) {
     const textId = Number(selectedVariantLayerTarget.split(":")[1]);
     const sourceRecord = textRecords.find((record) => record.id === textId);
-    const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+    const preview = componentSet?.querySelector(`.variant-preview[data-variant-id="${CSS.escape(String(selectedVariantId))}"]`);
     const element = preview?.querySelector(`[data-text-id="${CSS.escape(String(textId))}"]`);
-    if (sourceRecord && element instanceof HTMLElement) return { ...sourceRecord, element, isVariantInstance: true };
+    if (sourceRecord && element instanceof HTMLElement) return { ...sourceRecord, element, isVariant: true };
   }
   return selectedCanvasText
     ? textRecords.find((record) => record.element === selectedCanvasText)
@@ -409,12 +490,14 @@ function getSelectedTextRecord() {
 }
 
 function getSelectedTextRecords() {
+  const nested = getSelectedNestedInstanceLayer();
+  if (nested?.target.type === "text") return [getSelectedTextRecord()];
   if (selectionState.kind === "variants") {
-    return getSelectedVariantInstanceIds().flatMap((instanceId) => {
-      const targets = getSelectedVariantLayerTargets(instanceId)
+    return getSelectedVariantIds().flatMap((variantId) => {
+      const targets = getSelectedVariantLayerTargets(variantId)
         .filter((target) => target.startsWith("text:"));
       const preview = componentSet?.querySelector(
-        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
+        `.variant-preview[data-variant-id="${CSS.escape(String(variantId))}"]`,
       );
       const root = preview?.querySelector(".canvas-root-stack");
       if (!(root instanceof HTMLElement)) return [];
@@ -423,14 +506,14 @@ function getSelectedTextRecords() {
         const sourceRecord = getTextRecord(textId);
         const element = findVariantTarget(root, target);
         return sourceRecord && element instanceof HTMLElement
-          ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: instanceId }
+          ? { ...sourceRecord, element, isVariant: true, variantId: variantId }
           : null;
       }).filter(Boolean);
     });
   }
   if (selectionState.kind === "variant") {
     const preview = componentSet?.querySelector(
-      `.variant-preview[data-variant-instance-id="${CSS.escape(String(selectionState.instanceId))}"]`,
+      `.variant-preview[data-variant-id="${CSS.escape(String(selectionState.variantId))}"]`,
     );
     const root = preview?.querySelector(".canvas-root-stack");
     if (!(root instanceof HTMLElement)) return [];
@@ -441,7 +524,7 @@ function getSelectedTextRecords() {
         const sourceRecord = getTextRecord(textId);
         const element = findVariantTarget(root, target);
         return sourceRecord && element instanceof HTMLElement
-          ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: selectionState.instanceId }
+          ? { ...sourceRecord, element, isVariant: true, variantId: selectionState.variantId }
           : null;
       })
       .filter(Boolean);
@@ -457,22 +540,35 @@ function getSelectedTextRecords() {
 }
 
 function getSelectedFrameRecord() {
-  if (selectedVariantInstanceId !== null) {
+  const nested = getSelectedNestedInstanceLayer();
+  if (nested?.target.type === "frame") return {
+    ...resolveLayerIdentity(nested.identity)?.node, id: nested.target.id, type: "frame",
+    element: nested.element, isComponent: false, isVariant: false, isInstance: true,
+    instanceSelection: nested,
+  };
+  if (nested?.target.type === "component-instance" && nested.element.firstElementChild?.classList.contains("component-instance-content")) return {
+    ...resolveLayerIdentity(nested.identity)?.node, id: nested.target.id, type: "component-instance",
+    element: nested.element.firstElementChild, isComponent: false, isVariant: false, isInstance: true,
+    instanceSelection: nested,
+  };
+  const instanceFrame = getInstanceInspectorFrameRecords()[0];
+  if (instanceFrame) return instanceFrame;
+  if (selectedVariantId !== null) {
     const target = selectedVariantLayerTarget || "component:0";
     if (target === "component:0") {
-      const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+      const preview = componentSet?.querySelector(`.variant-preview[data-variant-id="${CSS.escape(String(selectedVariantId))}"]`);
       const element = preview?.querySelector(".canvas-root-stack");
       if (currentComponent?.frameRecord && element instanceof HTMLElement) {
-        return { ...currentComponent.frameRecord, element, isVariantInstance: true };
+        return { ...currentComponent.frameRecord, element, isVariant: true };
       }
       return undefined;
     }
     if (target.startsWith("frame:")) {
       const frameId = Number(target.split(":")[1]);
       const sourceRecord = frameRecords.find((record) => record.id === frameId);
-      const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+      const preview = componentSet?.querySelector(`.variant-preview[data-variant-id="${CSS.escape(String(selectedVariantId))}"]`);
       const element = preview?.querySelector(`[data-frame-id="${CSS.escape(String(frameId))}"]`);
-      if (sourceRecord && element instanceof HTMLElement) return { ...sourceRecord, element, isVariantInstance: true };
+      if (sourceRecord && element instanceof HTMLElement) return { ...sourceRecord, element, isVariant: true };
     }
     return undefined;
   }
@@ -483,14 +579,18 @@ function getSelectedFrameRecord() {
 }
 
 function getSelectedFrameRecords() {
+  const nested = getSelectedNestedInstanceLayer();
+  if (["frame", "component-instance"].includes(nested?.target.type)) return [getSelectedFrameRecord()].filter(Boolean);
+  const instances = getInstanceInspectorFrameRecords();
+  if (instances.length) return instances;
   if (selectionState.kind === "variants") {
-    return getSelectedVariantInstanceIds().flatMap((instanceId) => {
-      const selectedTargets = getSelectedVariantLayerTargets(instanceId);
+    return getSelectedVariantIds().flatMap((variantId) => {
+      const selectedTargets = getSelectedVariantLayerTargets(variantId);
       const targets = selectedTargets.length > 0
         ? selectedTargets.filter((target) => target.startsWith("frame:"))
         : ["component:0"];
       const preview = componentSet?.querySelector(
-        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
+        `.variant-preview[data-variant-id="${CSS.escape(String(variantId))}"]`,
       );
       const root = preview?.querySelector(".canvas-root-stack");
       if (!(root instanceof HTMLElement)) return [];
@@ -500,7 +600,7 @@ function getSelectedFrameRecords() {
           : getFrameRecord(Number(target.split(":")[1]));
         const element = findVariantTarget(root, target);
         return sourceRecord && element instanceof HTMLElement
-          ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: instanceId }
+          ? { ...sourceRecord, element, isVariant: true, variantId: variantId }
           : null;
       }).filter(Boolean);
     });
@@ -512,7 +612,7 @@ function getSelectedFrameRecords() {
       return record ? [record] : [];
     }
     const preview = componentSet?.querySelector(
-      `.variant-preview[data-variant-instance-id="${CSS.escape(String(selectionState.instanceId))}"]`,
+      `.variant-preview[data-variant-id="${CSS.escape(String(selectionState.variantId))}"]`,
     );
     const root = preview?.querySelector(".canvas-root-stack");
     if (!(root instanceof HTMLElement)) return [];
@@ -521,7 +621,7 @@ function getSelectedFrameRecords() {
       const sourceRecord = getFrameRecord(frameId);
       const element = findVariantTarget(root, target);
       return sourceRecord && element instanceof HTMLElement
-        ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: selectionState.instanceId }
+        ? { ...sourceRecord, element, isVariant: true, variantId: selectionState.variantId }
         : null;
     }).filter(Boolean);
   }
@@ -536,17 +636,23 @@ function getSelectedFrameRecords() {
 }
 
 function getSelectedVectorRecord() {
-  if (selectedVariantInstanceId !== null && selectedVariantLayerTarget?.startsWith("vector:")) {
+  const nested = getSelectedNestedInstanceLayer();
+  if (nested?.target.type === "vector") return {
+    ...resolveLayerIdentity(nested.identity)?.node, id: nested.target.id, type: "vector",
+    element: nested.element, isVariant: false, isInstance: true,
+    instanceSelection: nested,
+  };
+  if (selectedVariantId !== null && selectedVariantLayerTarget?.startsWith("vector:")) {
     const vectorId = Number(selectedVariantLayerTarget.split(":")[1]);
     const sourceRecord = vectorRecords.find((record) => record.id === vectorId);
-    const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(selectedVariantInstanceId))}"]`);
+    const preview = componentSet?.querySelector(`.variant-preview[data-variant-id="${CSS.escape(String(selectedVariantId))}"]`);
     const element = preview?.querySelector(`[data-vector-id="${CSS.escape(String(vectorId))}"]`);
     if (sourceRecord && element instanceof HTMLElement) {
       return {
         ...sourceRecord,
         element,
-        isVariantInstance: true,
-        variantInstanceId: selectedVariantInstanceId,
+        isVariant: true,
+        variantId: selectedVariantId,
       };
     }
   }
@@ -556,12 +662,14 @@ function getSelectedVectorRecord() {
 }
 
 function getSelectedVectorRecords() {
+  const nested = getSelectedNestedInstanceLayer();
+  if (nested?.target.type === "vector") return [getSelectedVectorRecord()];
   if (selectionState.kind === "variants") {
-    return getSelectedVariantInstanceIds().flatMap((instanceId) => {
-      const targets = getSelectedVariantLayerTargets(instanceId)
+    return getSelectedVariantIds().flatMap((variantId) => {
+      const targets = getSelectedVariantLayerTargets(variantId)
         .filter((target) => target.startsWith("vector:"));
       const preview = componentSet?.querySelector(
-        `.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`,
+        `.variant-preview[data-variant-id="${CSS.escape(String(variantId))}"]`,
       );
       const root = preview?.querySelector(".canvas-root-stack");
       if (!(root instanceof HTMLElement)) return [];
@@ -570,14 +678,14 @@ function getSelectedVectorRecords() {
         const sourceRecord = getVectorRecord(vectorId);
         const element = findVariantTarget(root, target);
         return sourceRecord && element instanceof HTMLElement
-          ? { ...sourceRecord, element, isVariantInstance: true, variantInstanceId: instanceId }
+          ? { ...sourceRecord, element, isVariant: true, variantId: variantId }
           : null;
       }).filter(Boolean);
     });
   }
   if (selectionState.kind === "variant") {
     const preview = componentSet?.querySelector(
-      `.variant-preview[data-variant-instance-id="${CSS.escape(String(selectionState.instanceId))}"]`,
+      `.variant-preview[data-variant-id="${CSS.escape(String(selectionState.variantId))}"]`,
     );
     const root = preview?.querySelector(".canvas-root-stack");
     if (!(root instanceof HTMLElement)) return [];
@@ -591,8 +699,8 @@ function getSelectedVectorRecords() {
           ? {
               ...sourceRecord,
               element,
-              isVariantInstance: true,
-              variantInstanceId: selectionState.instanceId,
+              isVariant: true,
+              variantId: selectionState.variantId,
             }
           : null;
       })

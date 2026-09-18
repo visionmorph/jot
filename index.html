@@ -33,10 +33,14 @@
     <link rel="preload" href="src/icons/checkmark.svg" as="image" type="image/svg+xml" />
     <link rel="preload" href="src/icons/checkmark--toggle.svg" as="image" type="image/svg+xml" />
     <link rel="preload" href="src/icons/subtract.svg" as="image" type="image/svg+xml" />
+    <script src="src/js/project/layer-identity.js" defer></script>
     <script src="src/js/variants/variant-model.js" defer></script>
     <script src="src/js/project/project-store.js" defer></script>
     <script src="src/js/project/selection-model.js" defer></script>
     <script src="src/js/project/workspace-history.js" defer></script>
+    <script src="src/js/project/component-document.js" defer></script>
+    <script src="src/js/canvas/component-renderer.js" defer></script>
+    <script src="src/js/components/component-instance-controls.js" defer></script>
     <script src="src/js/input-controls.js" defer></script>
     <script src="src/js/layers/layer-structure.js" defer></script>
     <script src="src/js/canvas/canvas-coordinator.js" defer></script>
@@ -52,15 +56,18 @@
     <script src="src/js/canvas/canvas-actions.js" defer></script>
     <script src="src/js/layers/layer-controls.js" defer></script>
     <script src="src/js/layers/layer-view.js" defer></script>
-    <script src="src/js/inspectors/color-values.js" defer></script>
-    <script src="src/js/inspectors/rich-text-colors.js" defer></script>
-    <script src="src/js/inspectors/color-controls.js" defer></script>
-    <script src="src/js/inspectors/color-picker.js" defer></script>
+    <script src="src/js/layers/layer-context-menu.js" defer></script>
+    <script src="src/js/inspectors/color/color-values.js" defer></script>
+    <script src="src/js/inspectors/color/rich-text-colors.js" defer></script>
+    <script src="src/js/inspectors/color/color-controls.js" defer></script>
+    <script src="src/js/inspectors/color/color-picker.js" defer></script>
+    <script src="src/js/inspectors/color/color-picker-controls.js" defer></script>
     <script src="src/js/inspectors/size-controls.js" defer></script>
-    <script src="src/js/inspectors/frame-inspector.js" defer></script>
+    <script src="src/js/inspectors/frame/frame-inspector.js" defer></script>
+    <script src="src/js/inspectors/frame/frame-inspector-controls.js" defer></script>
     <script src="src/js/inspectors/vector-inspector.js" defer></script>
     <script src="src/js/inspectors/text-inspector.js" defer></script>
-    <script src="src/js/inspectors/selection-color-controls.js" defer></script>
+    <script src="src/js/inspectors/color/selection-color-controls.js" defer></script>
     <script src="src/js/components/property-targets.js" defer></script>
     <script src="src/js/components/property-options.js" defer></script>
     <script src="src/js/components/property-values.js" defer></script>
@@ -70,9 +77,16 @@
     <script src="src/js/variants/variant-order.js" defer></script>
     <script src="src/js/variants/variant-preview.js" defer></script>
     <script src="src/js/variants/variant-coordinator.js" defer></script>
+    <script src="src/js/export/export-model.js" defer></script>
     <script src="src/js/export/export-styles.js" defer></script>
-    <script src="src/js/export/export-svg.js" defer></script>
     <script src="src/js/export/export-variants.js" defer></script>
+    <script src="src/js/export/export-react-svg.js" defer></script>
+    <script src="src/js/export/export-react-instances.js" defer></script>
+    <script src="src/js/export/export-react-variants.js" defer></script>
+    <script src="src/js/export/export-react-render.js" defer></script>
+    <script src="src/js/export/export-react-tabs.js" defer></script>
+    <script src="src/js/export/export-react-tabs-runtime.js" defer></script>
+    <script src="src/js/export/export-react-component.js" defer></script>
     <script src="src/js/export/export.js" defer></script>
     <script src="src/js/app.js" defer></script>
   </head>
@@ -92,6 +106,7 @@
 
           <div class="tree-view" role="tree" aria-label="Components" data-tree-view></div>
 
+          <button class="export-button insert-component-button" type="button" data-insert-component>Insert Component</button>
           <button class="export-button" type="button" data-export-components>Export</button>
         </section>
 
@@ -366,15 +381,18 @@
               <h3 class="inspector-heading">Accessibility</h3>
             </div>
             <div class="field-input">
-              <label class="label" for="frame-html-tag">HTML tag</label>
+              <label class="label" for="frame-html-tag">Semantic element</label>
               <div class="dropdown dropdown--default frame-html-tag-dropdown" data-dropdown>
                 <input class="dropdown__input" id="frame-html-tag" type="text" value="div" data-value="div" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="frame-html-tag-menu" readonly />
-                <button class="dropdown__toggle" type="button" aria-label="Open HTML tag options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
+                <button class="dropdown__toggle" type="button" aria-label="Open semantic element options" aria-expanded="false" data-dropdown-toggle><span class="chevron inspector-select-chevron" aria-hidden="true"></span></button>
                 <div class="dropdown__menu" id="frame-html-tag-menu" role="listbox" data-dropdown-menu hidden>
                   <button class="dropdown__option" type="button" role="option" aria-selected="true" data-dropdown-value="div">div</button>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="a">a</button>
                   <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="button">button</button>
                   <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="input">input</button>
                   <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="label">label</button>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="tablist">Tab list</button>
+                  <button class="dropdown__option" type="button" role="option" aria-selected="false" data-dropdown-value="tabpanel">Tab panel</button>
                 </div>
               </div>
             </div>

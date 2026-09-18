@@ -9,17 +9,18 @@ function createComponentPropValueCell(prop) {
 }
 
 function createVariantBooleanDefaultControl(prop) {
-  const instance = getVariantInstance() ?? getDefaultVariantInstance();
-  const selectedInstanceIds = new Set(getSelectedVariantInstanceIds());
-  const targetInstances = selectedInstanceIds.size > 0
-    ? variantModel.getInstances().filter((candidate) => selectedInstanceIds.has(candidate.id))
-    : instance ? [instance] : [];
-  const currentValue = instance
+  const variant = getVariant() ?? getDefaultVariant();
+  const selectedVariantIds = new Set(getSelectedVariantIds());
+  const targetVariants = selectedVariantIds.size > 0
+    ? variantModel.getVariants().filter((candidate) => selectedVariantIds.has(candidate.id))
+    : variant ? [variant] : [];
+  const currentValue = variant
     ? normalizeVariantPropValue(
       variantModel.getProps().find((variantProp) => variantProp.id === prop.variantPropId),
-      instance.propValues[prop.variantPropId],
+      variant.propValues[prop.variantPropId],
     )
     : Boolean(prop.defaultValue);
+  syncToggleTargetSemantics(prop, currentValue);
   const toggle = document.createElement("button");
   const track = document.createElement("span");
   const handle = document.createElement("span");
@@ -35,7 +36,7 @@ function createVariantBooleanDefaultControl(prop) {
   handle.className = "toggle__handle";
   checkmark.className = "toggle__checkmark";
   label.className = "toggle__label";
-  label.textContent = currentValue ? "True" : "False";
+  label.textContent = getBooleanComponentPropValueLabel(prop, currentValue);
   handle.append(checkmark);
   track.append(handle);
   toggle.append(track, label);
@@ -45,14 +46,14 @@ function createVariantBooleanDefaultControl(prop) {
     const transitionDuration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 120;
     toggle.dataset.transitioning = "true";
     toggle.setAttribute("aria-checked", String(nextValue));
-    label.textContent = nextValue ? "True" : "False";
+    label.textContent = getBooleanComponentPropValueLabel(prop, nextValue);
     recordHistory();
-    if (targetInstances.length > 0) {
+    if (targetVariants.length > 0) {
       const variantProp = variantModel.getProps().find((entry) => entry.id === prop.variantPropId);
-      targetInstances.forEach((targetInstance) => {
-        setVariantBooleanValue(targetInstance, variantProp, nextValue);
+      targetVariants.forEach((targetVariant) => {
+        setVariantBooleanValue(targetVariant, variantProp, nextValue);
       });
-      renderVariantInstances();
+      renderVariants();
     } else {
       prop.defaultValue = nextValue;
       if (prop.property === "invalid") {
@@ -62,6 +63,7 @@ function createVariantBooleanDefaultControl(prop) {
           target.element.setAttribute("aria-invalid", String(nextValue));
         }
       }
+      if (["checked", "selected"].includes(prop.property)) syncToggleTargetSemantics(prop, nextValue);
       syncComponentPropVariantDefinition(prop, { render: false });
     }
     if (transitionDuration === 0) {
@@ -91,6 +93,8 @@ function createStringDefaultControl(prop) {
     if (didChange) recordHistoryForGesture(input);
     const textTarget = prop.property === "textContent" ? getTextRecord(prop.targetTextId) : null;
     const inputTarget = prop.property === "placeholder" ? getFrameRecord(prop.targetFrameId) : null;
+    const ariaLabelTarget = prop.property === "ariaLabel" ? getFrameRecord(prop.targetFrameId) : null;
+    const hrefTarget = prop.property === "href" ? getFrameRecord(prop.targetFrameId) : null;
     if (textTarget) {
       syncTextRecordContent(textTarget, input.value);
       applyLayerSizing("text", textTarget);
@@ -99,9 +103,14 @@ function createStringDefaultControl(prop) {
     } else if (inputTarget) {
       prop.defaultValue = input.value;
       inputTarget.element.dataset.placeholder = input.value;
+    } else if (ariaLabelTarget) {
+      prop.defaultValue = input.value;
+    } else if (hrefTarget) {
+      prop.defaultValue = input.value;
+      hrefTarget.element.dataset.href = input.value;
     }
     if (didChange) {
-      if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+      if (variantModel.getVariants().length > 0) scheduleVariantRender();
       redoHistory.length = 0;
     }
     if (renderPanel) renderComponentProps();
@@ -123,7 +132,7 @@ function createStaticDefaultControl(prop) {
   const value = document.createElement("span");
   value.className = "tag";
   if (prop.type === "boolean") {
-    value.textContent = Boolean(prop.defaultValue) ? "True" : "False";
+    value.textContent = getBooleanComponentPropValueLabel(prop, Boolean(prop.defaultValue));
     value.setAttribute("aria-label", `Default Boolean value: ${value.textContent}`);
   } else if (prop.type === "string") {
     const stringValue = String(prop.defaultValue);
@@ -143,7 +152,7 @@ function createComponentPropDefaultCell(prop) {
     populateOptionComponentPropDefaultCell(cell, prop);
   } else if (prop.type === "boolean" && prop.variantPropId != null) {
     cell.append(createVariantBooleanDefaultControl(prop));
-  } else if (prop.type === "string" && ["textContent", "placeholder"].includes(prop.property)) {
+  } else if (prop.type === "string" && ["textContent", "href", "placeholder", "ariaLabel"].includes(prop.property)) {
     cell.classList.add("props-table-value-cell--control");
     cell.append(createStringDefaultControl(prop));
   } else if (prop.type === "action" && prop.property === "onClick") {

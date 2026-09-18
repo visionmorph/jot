@@ -56,6 +56,7 @@ function flushCanvasMutationEffects() {
   if (effects.sizing) applyAllLayerSizing();
   if (effects.selection) syncElementSelectionStyles();
   if (effects.tree) renderTree();
+  commitCanvasComponentData();
 }
 
 function runCanvasMutation(callback, options = {}) {
@@ -81,7 +82,7 @@ function removeCanvasText(textElement) {
   textElement.remove();
   if (textRecord) {
     removeLayerKeyFromSelection(getLayerKey("text", textRecord.id));
-    textRecords = textRecords.filter((record) => record.id !== textRecord.id);
+    layerRecords = layerRecords.filter((record) => record !== textRecord);
   }
   if (selectedCanvasText === textElement) setPrimarySelectionToLatest();
   queueCanvasMutationEffects({ sizing: true, selection: true, tree: true });
@@ -89,6 +90,7 @@ function removeCanvasText(textElement) {
 
 function getCanvasLayerDescriptor(element) {
   if (!(element instanceof HTMLElement)) return null;
+  if (element.matches(".canvas-component-instance")) return { type: "component-instance", id: Number(element.dataset.componentInstanceId) };
   const frameId = Number(element.dataset.frameId);
   if (element.classList.contains("canvas-frame") && Number.isInteger(frameId)) {
     return { type: "frame", id: frameId };
@@ -156,7 +158,7 @@ canvasRootStack?.addEventListener("click", (event) => {
 componentSet?.addEventListener("pointerdown", (event) => {
   const hit = resolveCanvasHit(event.target);
   const isComponentSetSurface = hit.kind === "component-set";
-  const isVisibleBaseComponentSurface = variantModel.getInstances().length === 0
+  const isVisibleBaseComponentSurface = variantModel.getVariants().length === 0
     && hit.kind === "component-root";
   if (
     event.button !== 0
@@ -180,7 +182,7 @@ canvas?.addEventListener("click", (event) => {
   if (initialHitKind && !["canvas", "component-set"].includes(initialHitKind)) return;
 
   clearLayerSelection();
-  if (variantModel.getInstances().length > 0) return;
+  if (variantModel.getVariants().length > 0) return;
 
   const canvasBounds = canvas.getBoundingClientRect();
   const x = event.clientX - canvasBounds.left;

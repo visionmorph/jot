@@ -5,20 +5,21 @@ function getLayerKey(type, id) {
 }
 
 function getElementForLayerKey(key) {
-  const [type, rawId] = key.split(":");
+  const localKey = toLocalLayerKey(key, currentComponent?.id);
+  if (!localKey) return null;
+  const [type, rawId] = localKey.split(":");
   const id = Number(rawId);
-  if (type === "frame") return getFrameRecord(id)?.element ?? null;
-  if (type === "text") return getTextRecord(id)?.element ?? null;
-  if (type === "vector") return getVectorRecord(id)?.element ?? null;
-  return null;
+  return getLayerRecord({ type, id })?.element ?? null;
 }
 
 function getLayerParentKey(key) {
-  const [type, rawId] = String(key).split(":");
+  const localKey = toLocalLayerKey(key, currentComponent?.id);
+  if (!localKey) return null;
+  const [type, rawId] = localKey.split(":");
   const id = Number(rawId);
-  const record = type === "frame" ? getFrameRecord(id) : type === "text" ? getTextRecord(id) : getVectorRecord(id);
+  const record = getLayerRecord({ type, id });
   if (!record || record.isComponent) return null;
-  const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+  const parentId = record.parentId;
   return parentId === null ? "component:0" : `frame:${parentId}`;
 }
 
@@ -39,6 +40,8 @@ function getShallowestPrimaryLayerKey(keys) {
 }
 
 function normalizeLayerSelection(keys, primaryKey = null) {
+  keys = keys.map((key) => toLocalLayerKey(key, currentComponent?.id)).filter(Boolean);
+  primaryKey = primaryKey == null ? null : toLocalLayerKey(primaryKey, currentComponent?.id);
   const uniqueKeys = [...new Set(keys)].filter((key) => getElementForLayerKey(key) instanceof HTMLElement);
   const resolvedPrimary = uniqueKeys.includes(primaryKey) ? primaryKey : uniqueKeys[uniqueKeys.length - 1] ?? null;
   if (!resolvedPrimary) return { keys: [], primaryKey: null };
@@ -60,13 +63,17 @@ function selectComponentState(componentId = currentComponent?.id) {
   return true;
 }
 
-function selectVariantState(instanceId, target = null, componentId = currentComponent?.id) {
-  if (instanceId == null || componentId == null) return false;
+function selectVariantState(variantId, target = null, componentId = currentComponent?.id) {
+  if (variantId == null || componentId !== currentComponent?.id) return false;
+  if (target != null) {
+    target = toLocalLayerKey(target, componentId);
+    if (!target) return false;
+  }
   const normalizedTarget = target === null || getElementForLayerKey(target) instanceof HTMLElement ? target : null;
   selectionState = {
     kind: "variant",
     componentId,
-    instanceId,
+    variantId,
     targets: normalizedTarget === null ? [] : [normalizedTarget],
     anchorTarget: normalizedTarget,
     target: normalizedTarget,
@@ -75,12 +82,13 @@ function selectVariantState(instanceId, target = null, componentId = currentComp
 }
 
 function selectVariantLayerTargetsState(
-  instanceId,
+  variantId,
   targets,
   anchorTarget = null,
   componentId = currentComponent?.id,
 ) {
-  if (instanceId == null || componentId == null || !getVariantInstance(instanceId)) return false;
+  if (variantId == null || componentId !== currentComponent?.id || !getVariant(variantId)) return false;
+  if (targets.some((target) => !toLocalLayerKey(target, componentId))) return false;
   const normalized = normalizeLayerSelection(targets, anchorTarget);
   if (normalized.keys.length === 0) {
     selectCanvasState();
@@ -89,7 +97,7 @@ function selectVariantLayerTargetsState(
   selectionState = {
     kind: "variant",
     componentId,
-    instanceId,
+    variantId,
     targets: normalized.keys,
     anchorTarget: normalized.primaryKey,
     // Keep the singular field for inspectors and older snapshots. It is an
@@ -99,59 +107,64 @@ function selectVariantLayerTargetsState(
   return true;
 }
 
-function selectVariantLayerTarget(instanceId, target, additive = false, componentId = currentComponent?.id) {
-  const currentTargets = selectionState.kind === "variant" && selectionState.instanceId === instanceId
+function selectVariantLayerTarget(variantId, target, additive = false, componentId = currentComponent?.id) {
+  target = toLocalLayerKey(target, componentId);
+  if (!target || componentId !== currentComponent?.id) return false;
+  const currentTargets = selectionState.kind === "variant" && selectionState.variantId === variantId
     ? getSelectedVariantLayerTargets()
     : [];
-  if (!additive) return selectVariantLayerTargetsState(instanceId, [target], target, componentId);
+  if (!additive) return selectVariantLayerTargetsState(variantId, [target], target, componentId);
   const nextTargets = [...currentTargets];
   const existingIndex = nextTargets.indexOf(target);
   if (existingIndex >= 0) {
     nextTargets.splice(existingIndex, 1);
     return selectVariantLayerTargetsState(
-      instanceId,
+      variantId,
       nextTargets,
       nextTargets[nextTargets.length - 1] ?? null,
       componentId,
     );
   }
-  return selectVariantLayerTargetsState(instanceId, [...nextTargets, target], target, componentId);
+  return selectVariantLayerTargetsState(variantId, [...nextTargets, target], target, componentId);
 }
 
-function getSelectedVariantLayerTargets(instanceId = null) {
+function getSelectedVariantLayerTargets(variantId = null) {
   if (selectionState.kind === "variants") {
-    if (instanceId !== null && selectionState.targetsByInstance) {
-      return selectionState.targetsByInstance[String(instanceId)] ?? [];
+    if (variantId !== null && selectionState.targetsByVariant) {
+      return selectionState.targetsByVariant[String(variantId)] ?? [];
     }
     return selectionState.targets ?? [];
   }
   if (selectionState.kind !== "variant"
-    || (instanceId !== null && selectionState.instanceId !== instanceId)) return [];
+    || (variantId !== null && selectionState.variantId !== variantId)) return [];
   if (Array.isArray(selectionState.targets)) return selectionState.targets;
   return selectionState.target === null ? [] : [selectionState.target];
 }
 
-function isVariantLayerTargetSelected(instanceId, target) {
-  return isVariantInstanceSelected(instanceId)
-    && getSelectedVariantLayerTargets(instanceId).includes(target);
+function isVariantLayerTargetSelected(variantId, target) {
+  return isVariantSelected(variantId)
+    && getSelectedVariantLayerTargets(variantId).includes(target);
 }
 
-function isVariantRootSelected(instanceId) {
-  return isVariantInstanceSelected(instanceId)
-    && getSelectedVariantLayerTargets(instanceId).length === 0;
+function isVariantRootSelected(variantId) {
+  return isVariantSelected(variantId)
+    && getSelectedVariantLayerTargets(variantId).length === 0;
 }
 
-function selectVariantInstancesLayerTargetsState(instanceIds, targets, primaryInstanceId = null, componentId = currentComponent?.id) {
+function selectVariantsLayerTargetsState(variantIds, targets, primaryVariantId = null, componentId = currentComponent?.id) {
+  if (componentId !== currentComponent?.id) return false;
+  if (targets.some((target) => !toLocalLayerKey(target, componentId))) return false;
+  targets = targets.map((target) => toLocalLayerKey(target, componentId)).filter(Boolean);
   const keys = [...new Set(targets)].filter((key) => getElementForLayerKey(key) instanceof HTMLElement);
   const normalized = { keys, primaryKey: getShallowestPrimaryLayerKey(keys) };
-  if (!selectVariantInstancesState(instanceIds, primaryInstanceId, componentId)) return false;
-  const targetsByInstance = Object.fromEntries(
-    getSelectedVariantInstanceIds().map((instanceId) => [String(instanceId), [...normalized.keys]]),
+  if (!selectVariantsState(variantIds, primaryVariantId, componentId)) return false;
+  const targetsByVariant = Object.fromEntries(
+    getSelectedVariantIds().map((variantId) => [String(variantId), [...normalized.keys]]),
   );
   selectionState = {
     ...selectionState,
     targets: normalized.keys,
-    targetsByInstance,
+    targetsByVariant,
     anchorTarget: normalized.primaryKey,
     target: normalized.primaryKey,
   };
@@ -159,61 +172,61 @@ function selectVariantInstancesLayerTargetsState(instanceIds, targets, primaryIn
 }
 
 function selectVariantMarqueeState(
-  rootInstanceIds,
-  layerTargetsByInstance,
-  primaryInstanceId = null,
+  rootVariantIds,
+  layerTargetsByVariant,
+  primaryVariantId = null,
   componentId = currentComponent?.id,
 ) {
-  if (componentId == null) return false;
-  const validIds = new Set(variantModel.getInstances().map((instance) => instance.id));
-  const rootIds = new Set([...rootInstanceIds].filter((instanceId) => validIds.has(instanceId)));
-  const targetsByInstance = {};
+  if (componentId !== currentComponent?.id) return false;
+  const validIds = new Set(variantModel.getVariants().map((variant) => variant.id));
+  const rootIds = new Set([...rootVariantIds].filter((variantId) => validIds.has(variantId)));
+  const targetsByVariant = {};
   const childIds = [];
-  const entries = layerTargetsByInstance instanceof Map
-    ? [...layerTargetsByInstance.entries()]
-    : Object.entries(layerTargetsByInstance ?? {}).map(([instanceId, targets]) => [Number(instanceId), targets]);
-  entries.forEach(([instanceId, targets]) => {
-    if (!validIds.has(instanceId) || rootIds.has(instanceId)) return;
-    const keys = [...new Set(targets)].filter((key) => getElementForLayerKey(key) instanceof HTMLElement);
+  const entries = layerTargetsByVariant instanceof Map
+    ? [...layerTargetsByVariant.entries()]
+    : Object.entries(layerTargetsByVariant ?? {}).map(([variantId, targets]) => [Number(variantId), targets]);
+  entries.forEach(([variantId, targets]) => {
+    if (!validIds.has(variantId) || rootIds.has(variantId)) return;
+    const keys = [...new Set(targets.map((target) => toLocalLayerKey(target, componentId)))].filter((key) => key && getElementForLayerKey(key) instanceof HTMLElement);
     if (keys.length === 0) return;
-    targetsByInstance[String(instanceId)] = keys;
-    childIds.push(instanceId);
+    targetsByVariant[String(variantId)] = keys;
+    childIds.push(variantId);
   });
-  rootIds.forEach((instanceId) => { targetsByInstance[String(instanceId)] = []; });
+  rootIds.forEach((variantId) => { targetsByVariant[String(variantId)] = []; });
   const selectedIdSet = new Set([...rootIds, ...childIds]);
-  const instanceIds = variantModel.getInstances()
-    .map((instance) => instance.id)
-    .filter((instanceId) => selectedIdSet.has(instanceId));
-  if (instanceIds.length === 0) {
+  const variantIds = variantModel.getVariants()
+    .map((variant) => variant.id)
+    .filter((variantId) => selectedIdSet.has(variantId));
+  if (variantIds.length === 0) {
     selectCanvasState();
     return false;
   }
-  const resolvedPrimary = instanceIds.includes(primaryInstanceId)
-    ? primaryInstanceId
-    : instanceIds[instanceIds.length - 1];
-  if (instanceIds.length === 1) {
-    const instanceId = instanceIds[0];
-    const targets = targetsByInstance[String(instanceId)];
-    if (targets.length === 0) return selectVariantState(instanceId, null, componentId);
+  const resolvedPrimary = variantIds.includes(primaryVariantId)
+    ? primaryVariantId
+    : variantIds[variantIds.length - 1];
+  if (variantIds.length === 1) {
+    const variantId = variantIds[0];
+    const targets = targetsByVariant[String(variantId)];
+    if (targets.length === 0) return selectVariantState(variantId, null, componentId);
     const anchorTarget = getShallowestPrimaryLayerKey(targets);
     selectionState = {
       kind: "variant",
       componentId,
-      instanceId,
+      variantId,
       targets,
       anchorTarget,
       target: anchorTarget,
     };
     return true;
   }
-  const targets = [...new Set(Object.values(targetsByInstance).flat())];
+  const targets = [...new Set(Object.values(targetsByVariant).flat())];
   const anchorTarget = getShallowestPrimaryLayerKey(targets);
   selectionState = {
     kind: "variants",
     componentId,
-    instanceIds,
-    primaryInstanceId: resolvedPrimary,
-    targetsByInstance,
+    variantIds,
+    primaryVariantId: resolvedPrimary,
+    targetsByVariant,
     targets,
     anchorTarget,
     target: anchorTarget,
@@ -221,39 +234,40 @@ function selectVariantMarqueeState(
   return true;
 }
 
-function getSelectedVariantInstanceIds() {
-  if (selectionState.kind === "variants") return [...selectionState.instanceIds];
-  if (selectionState.kind === "variant") return [selectionState.instanceId];
+function getSelectedVariantIds() {
+  if (selectionState.kind === "variants") return [...selectionState.variantIds];
+  if (selectionState.kind === "variant") return [selectionState.variantId];
   return [];
 }
 
-function isVariantInstanceSelected(instanceId) {
-  return getSelectedVariantInstanceIds().includes(instanceId);
+function isVariantSelected(variantId) {
+  return getSelectedVariantIds().includes(variantId);
 }
 
-function selectVariantInstancesState(instanceIds, primaryInstanceId = null, componentId = currentComponent?.id) {
-  if (componentId == null) return false;
-  const validIds = new Set(variantModel.getInstances().map((instance) => instance.id));
-  const normalizedIds = [...new Set(instanceIds)].filter((instanceId) => validIds.has(instanceId));
+function selectVariantsState(variantIds, primaryVariantId = null, componentId = currentComponent?.id) {
+  if (componentId !== currentComponent?.id) return false;
+  const validIds = new Set(variantModel.getVariants().map((variant) => variant.id));
+  const normalizedIds = [...new Set(variantIds)].filter((variantId) => validIds.has(variantId));
   if (normalizedIds.length === 0) {
     selectCanvasState();
     return false;
   }
-  const resolvedPrimary = normalizedIds.includes(primaryInstanceId)
-    ? primaryInstanceId
+  const resolvedPrimary = normalizedIds.includes(primaryVariantId)
+    ? primaryVariantId
     : normalizedIds[normalizedIds.length - 1];
   if (normalizedIds.length === 1) return selectVariantState(normalizedIds[0], null, componentId);
   selectionState = {
     kind: "variants",
     componentId,
-    instanceIds: normalizedIds,
-    primaryInstanceId: resolvedPrimary,
+    variantIds: normalizedIds,
+    primaryVariantId: resolvedPrimary,
   };
   return true;
 }
 
 function selectLayerKeys(keys, primaryKey = null, componentId = currentComponent?.id) {
-  if (componentId == null) return false;
+  if (componentId !== currentComponent?.id) return false;
+  if (keys.some((key) => !toLocalLayerKey(key, componentId))) return false;
   const normalized = normalizeLayerSelection(keys, primaryKey);
   if (normalized.keys.length === 0) {
     selectCanvasState();
@@ -269,6 +283,8 @@ function selectLayerKeys(keys, primaryKey = null, componentId = currentComponent
 }
 
 function selectLayerKey(key, additive = false) {
+  key = toLocalLayerKey(key, currentComponent?.id);
+  if (!key) return false;
   const currentKeys = selectionState.kind === "layers" ? selectionState.keys : [];
   if (!additive) return selectLayerKeys([key], key);
   const nextKeys = [...currentKeys];
@@ -281,6 +297,7 @@ function selectLayerKey(key, additive = false) {
 }
 
 function removeLayerKeyFromSelection(key) {
+  key = toLocalLayerKey(key, currentComponent?.id);
   if (selectionState.kind !== "layers" || !selectionState.keys.includes(key)) return false;
   const nextKeys = selectionState.keys.filter((candidate) => candidate !== key);
   return selectLayerKeys(nextKeys, nextKeys[nextKeys.length - 1] ?? null);
@@ -302,59 +319,60 @@ function captureSelectionState() {
     return { ...selectionState, targets: [...getSelectedVariantLayerTargets()] };
   }
   if (selectionState.kind === "variants") {
-    const targetsByInstance = selectionState.targetsByInstance
-      ? Object.fromEntries(Object.entries(selectionState.targetsByInstance).map(([id, targets]) => [id, [...targets]]))
+    const targetsByVariant = selectionState.targetsByVariant
+      ? Object.fromEntries(Object.entries(selectionState.targetsByVariant).map(([id, targets]) => [id, [...targets]]))
       : undefined;
     return {
       ...selectionState,
-      instanceIds: [...selectionState.instanceIds],
+      variantIds: [...selectionState.variantIds],
       targets: [...getSelectedVariantLayerTargets()],
-      ...(targetsByInstance ? { targetsByInstance } : {}),
+      ...(targetsByVariant ? { targetsByVariant } : {}),
     };
   }
   return { ...selectionState };
 }
 
 function restoreSelectionState(snapshot) {
-  const savedSelection = snapshot.selection;
+  const savedSelection = mapSelectionLayerReferences(snapshot.selection,
+    (value) => toRuntimeLayerTarget(value, snapshot.componentId));
   if (savedSelection?.kind === "component" && savedSelection.componentId === currentComponent?.id) {
     selectComponentState(savedSelection.componentId);
     return;
   }
   if (savedSelection?.kind === "variant"
     && savedSelection.componentId === currentComponent?.id
-    && getVariantInstance(savedSelection.instanceId)) {
+    && getVariant(savedSelection.variantId)) {
     const savedTargets = Array.isArray(savedSelection.targets)
       ? savedSelection.targets
       : savedSelection.target == null ? [] : [savedSelection.target];
     if (savedTargets.length > 0) {
       selectVariantLayerTargetsState(
-        savedSelection.instanceId,
+        savedSelection.variantId,
         savedTargets,
         savedSelection.anchorTarget ?? savedSelection.target ?? null,
         savedSelection.componentId,
       );
     } else {
-      selectVariantState(savedSelection.instanceId, null, savedSelection.componentId);
+      selectVariantState(savedSelection.variantId, null, savedSelection.componentId);
     }
     return;
   }
   if (savedSelection?.kind === "variants" && savedSelection.componentId === currentComponent?.id) {
-    if (savedSelection.targetsByInstance) {
-      const roots = (savedSelection.instanceIds ?? []).filter(
-        (instanceId) => (savedSelection.targetsByInstance[String(instanceId)] ?? []).length === 0,
+    if (savedSelection.targetsByVariant) {
+      const roots = (savedSelection.variantIds ?? []).filter(
+        (variantId) => (savedSelection.targetsByVariant[String(variantId)] ?? []).length === 0,
       );
       if (selectVariantMarqueeState(
         roots,
-        savedSelection.targetsByInstance,
-        savedSelection.primaryInstanceId ?? null,
+        savedSelection.targetsByVariant,
+        savedSelection.primaryVariantId ?? null,
         savedSelection.componentId,
       )) return;
     }
-    if (selectVariantInstancesLayerTargetsState(
-      savedSelection.instanceIds ?? [],
+    if (selectVariantsLayerTargetsState(
+      savedSelection.variantIds ?? [],
       savedSelection.targets ?? [],
-      savedSelection.primaryInstanceId ?? null,
+      savedSelection.primaryVariantId ?? null,
       savedSelection.componentId,
     )) return;
   }
@@ -363,8 +381,8 @@ function restoreSelectionState(snapshot) {
   }
 
   // Migrate snapshots created before selection became a single state object.
-  if (snapshot.selectedVariantInstanceId != null && getVariantInstance(snapshot.selectedVariantInstanceId)) {
-    selectVariantState(snapshot.selectedVariantInstanceId, snapshot.selectedVariantLayerTarget ?? null);
+  if (snapshot.selectedVariantId != null && getVariant(snapshot.selectedVariantId)) {
+    selectVariantState(snapshot.selectedVariantId, snapshot.selectedVariantLayerTarget ?? null);
     return;
   }
   const legacyKeys = [...(snapshot.selectedLayerKeys ?? [])];
@@ -418,19 +436,19 @@ Object.defineProperties(globalThis, {
     configurable: true,
     get: () => selectionState.kind === "component" ? selectionState.componentId : null,
   },
-  selectedVariantInstanceId: {
+  selectedVariantId: {
     configurable: true,
     get: () => selectionState.kind === "variant"
-      ? selectionState.instanceId
-      : selectionState.kind === "variants" ? selectionState.primaryInstanceId : null,
+      ? selectionState.variantId
+      : selectionState.kind === "variants" ? selectionState.primaryVariantId : null,
   },
   selectedVariantLayerTarget: {
     configurable: true,
     get: () => ["variant", "variants"].includes(selectionState.kind) ? selectionState.target ?? null : null,
   },
-  selectedVariantInstanceIds: {
+  selectedVariantIds: {
     configurable: true,
-    get: () => getSelectedVariantInstanceIds(),
+    get: () => getSelectedVariantIds(),
   },
   selectedCanvasFrame: {
     configurable: true,

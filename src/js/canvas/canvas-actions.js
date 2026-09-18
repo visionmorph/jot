@@ -46,8 +46,7 @@ function duplicateTextRecord(
   duplicate.style.left = parentRecord ? "" : `${x}px`;
   duplicate.style.top = parentRecord ? "" : `${y}px`;
   duplicate.contentEditable = "false";
-  duplicateRecord.name = sourceRecord.name;
-  duplicate.setAttribute("aria-label", duplicateRecord.name || `Text ${duplicateRecord.id}`);
+  duplicate.setAttribute("aria-label", runData.textContent || `Text ${duplicateRecord.id}`);
   applyLayerSizing("text", duplicateRecord);
   targetMap?.set(`text:${sourceRecord.id}`, `text:${duplicateRecord.id}`);
   return duplicateRecord;
@@ -93,34 +92,59 @@ function duplicateFrameRecord(sourceRecord, parentRecord, offsetRoot = false, ta
   targetMap?.set(`frame:${sourceRecord.id}`, `frame:${duplicateRecord.id}`);
 
   childLayers.forEach((childLayer) => {
-    if (childLayer.type === "frame") {
-      duplicateFrameRecord(childLayer.record, duplicateRecord, false, targetMap);
-    } else if (childLayer.type === "text") {
-      duplicateTextRecord(childLayer.record, duplicateRecord, false, childLayer.record.element, targetMap);
-    } else duplicateVectorRecord(childLayer.record, duplicateRecord, false, targetMap);
+    duplicateLayerRecord(childLayer.record, duplicateRecord, false, targetMap);
   });
   return duplicateRecord;
 }
 
+function duplicateLayerRecord(record, parentRecord, offsetRoot = false, targetMap = null) {
+  const duplicate = {
+    frame: duplicateFrameRecord,
+    text: (source, parent, offset, targets) => duplicateTextRecord(source, parent, offset, source.element, targets),
+    vector: duplicateVectorRecord,
+    "component-instance": (source, parent, offset, targets) => {
+      const entry = captureWorkspaceState().layers.find((node) => node.type === source.type && node.id === source.id);
+      entry.id = nextComponentInstanceId++;
+      entry.parentId = parent?.isComponent ? null : parent?.id ?? null;
+      entry.order = nextLayerOrder++;
+      const [copy] = createWorkspaceLayerViews({ layers: [entry] }, { interactive: true });
+      layerRecords.push(copy);
+      (parent?.element ?? canvasRootStack).append(copy.element);
+      targets?.set(`component-instance:${source.id}`, `component-instance:${copy.id}`);
+      return copy;
+    },
+  }[record.type];
+  return duplicate?.(record, parentRecord, offsetRoot, targetMap) ?? null;
+}
+
 function cloneVariantDataForDuplicatedTargets(targetMap) {
   if (!(targetMap instanceof Map) || targetMap.size === 0) return;
-  variantModel.getInstances().forEach((instance) => {
-    const copiedOverrides = [...(instance.overrides ?? [])].flatMap((override) => {
-      const target = targetMap.get(override.target);
+  const remap = (target) => {
+    if (targetMap.has(target)) return targetMap.get(target);
+    const identity = normalizeLayerIdentity(target, currentComponent.id);
+    if (identity.kind !== "placed" || identity.ownerComponentId !== currentComponent.id || !identity.instancePath.length) return null;
+    const copy = targetMap.get(`component-instance:${identity.instancePath[0]}`);
+    if (!copy) return null;
+    return getLayerIdentityKey(createPlacedLayerIdentity(identity.ownerComponentId,
+      [Number(copy.split(":")[1]), ...identity.instancePath.slice(1)], identity.source));
+  };
+  variantModel.getVariants().forEach((variant) => {
+    const copiedOverrides = [...(variant.overrides ?? [])].flatMap((override) => {
+      const target = remap(override.target);
       return target ? [{ ...structuredClone(override), target }] : [];
     });
-    instance.overrides = [...(instance.overrides ?? []), ...copiedOverrides];
+    variant.overrides = [...(variant.overrides ?? []), ...copiedOverrides];
   });
   const copiedRules = variantModel.getRules().flatMap((rule) => {
-    const target = targetMap.get(rule.target);
+    const target = remap(rule.target);
     return target ? [{ ...structuredClone(rule), id: undefined, target }] : [];
   });
   copiedRules.forEach(({ id, ...rule }) => variantModel.addRule(rule));
 }
 
 function captureSelectedLayerCopies() {
-  const variantInstanceIds = getSelectedVariantInstanceIds();
-  const keys = variantInstanceIds.length > 0
+  const variantIds = getSelectedVariantIds();
+  const keys = variantIds.length > 0
     ? getSelectedVariantLayerTargets()
     : getSelectedLayerKeys();
   const layers = getSelectedTopLevelLayers(keys).map((layer) => ({
@@ -129,8 +153,8 @@ function captureSelectedLayerCopies() {
   }));
   return {
     layers,
-    variantInstanceIds,
-    primaryVariantInstanceId: selectedVariantInstanceId,
+    variantIds,
+    primaryVariantId: selectedVariantId,
   };
 }
 
@@ -145,13 +169,9 @@ function insertLayerCopies(copy) {
   return runCanvasMutation(() => {
     const targetMap = new Map();
     const duplicates = sourceLayers.map(({ type, record }) => {
-      const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+      const parentId = record.parentId;
       const parentRecord = parentId === null ? null : getFrameRecord(parentId);
-      const duplicate = type === "frame"
-        ? duplicateFrameRecord(record, parentRecord, parentId === null, targetMap)
-        : type === "text"
-          ? duplicateTextRecord(record, parentRecord, parentId === null, record.element, targetMap)
-          : duplicateVectorRecord(record, parentRecord, parentId === null, targetMap);
+      const duplicate = duplicateLayerRecord(record, parentRecord, parentId === null, targetMap);
       if (duplicate) {
         moveLayerRelative(
           { type, id: duplicate.id },
@@ -165,13 +185,13 @@ function insertLayerCopies(copy) {
 
     cloneVariantDataForDuplicatedTargets(targetMap);
     const duplicateKeys = duplicates.map(({ type, record }) => getLayerKey(type, record.id));
-    const validVariantIds = copy.variantInstanceIds.filter((id) => getVariantInstance(id));
+    const validVariantIds = copy.variantIds.filter((id) => getVariant(id));
     if (validVariantIds.length > 0) {
-      selectVariantInstancesLayerTargetsState(
+      selectVariantsLayerTargetsState(
         validVariantIds,
         duplicateKeys,
-        validVariantIds.includes(copy.primaryVariantInstanceId)
-          ? copy.primaryVariantInstanceId
+        validVariantIds.includes(copy.primaryVariantId)
+          ? copy.primaryVariantId
           : validVariantIds[validVariantIds.length - 1],
       );
       clearMasterSelectionForVariant();
@@ -192,6 +212,8 @@ function duplicateSelectedLayer() {
 }
 
 function getPrimaryLayerDescriptor() {
+  const instance = getSelectedComponentInstances().at(-1);
+  if (instance) return { type: "component-instance", record: instance };
   if (selectedComponentId === currentComponent?.id) return { type: "component", record: currentComponent.frameRecord };
   const frameRecord = getSelectedFrameRecord();
   if (frameRecord && !frameRecord.isComponent) return { type: "frame", record: frameRecord };
@@ -204,9 +226,9 @@ function getPrimaryLayerDescriptor() {
 
 function selectLayerDescriptor(layer) {
   if (!layer) return false;
-  const variantInstanceId = selectedVariantInstanceId;
-  if (variantInstanceId !== null) {
-    selectVariantInstance(variantInstanceId, {
+  const variantId = selectedVariantId;
+  if (variantId !== null) {
+    selectVariant(variantId, {
       render: false,
       layerTarget: layer.type === "component" ? null : getLayerKey(layer.type, layer.record.id),
     });
@@ -216,7 +238,8 @@ function selectLayerDescriptor(layer) {
     selectComponentTreeNode(currentComponent?.id);
     return true;
   }
-  if (layer.type === "frame") selectCanvasFrame(layer.record.element);
+  if (layer.type === "component-instance") selectComponentInstance(layer.record.id);
+  else if (layer.type === "frame") selectCanvasFrame(layer.record.element);
   else if (layer.type === "text") selectCanvasText(layer.record.element);
   else selectCanvasVector(layer.record.element);
   return true;
@@ -229,8 +252,8 @@ function getSelectedTopLevelLayers(keys = getSelectedLayerKeys()) {
     if (type === "frame") selectedFrameIds.add(Number(rawId));
   });
 
-  const hasSelectedFrameAncestor = (parentFrameId) => {
-    let ancestorId = parentFrameId;
+  const hasSelectedFrameAncestor = (parentId) => {
+    let ancestorId = parentId;
     while (ancestorId !== null) {
       if (selectedFrameIds.has(ancestorId)) return true;
       ancestorId = getFrameRecord(ancestorId)?.parentId ?? null;
@@ -241,9 +264,9 @@ function getSelectedTopLevelLayers(keys = getSelectedLayerKeys()) {
   return [...keys].flatMap((key) => {
     const [type, rawId] = key.split(":");
     const id = Number(rawId);
-    const record = type === "frame" ? getFrameRecord(id) : type === "text" ? getTextRecord(id) : getVectorRecord(id);
+    const record = getLayerRecord({ type, id });
     if (!record) return [];
-    const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+    const parentId = record.parentId;
     if (hasSelectedFrameAncestor(parentId)) return [];
     return [{ type, record, parentId }];
   }).sort((a, b) => a.record.order - b.record.order);
@@ -251,8 +274,8 @@ function getSelectedTopLevelLayers(keys = getSelectedLayerKeys()) {
 
 function wrapSelectedLayersInFrame() {
   if (selectedComponentId !== null || !currentComponent) return false;
-  const variantIds = getSelectedVariantInstanceIds();
-  const primaryVariantId = selectedVariantInstanceId;
+  const variantIds = getSelectedVariantIds();
+  const primaryVariantId = selectedVariantId;
   const layers = getSelectedTopLevelLayers(
     variantIds.length > 0 ? getSelectedVariantLayerTargets() : getSelectedLayerKeys(),
   );
@@ -315,7 +338,7 @@ function wrapSelectedLayersInFrame() {
     layers.forEach((layer, index) => moveLayer({ type: layer.type, id: layer.record.id }, wrapper.id, index));
     expandedFrameIds.add(wrapper.id);
     if (variantIds.length > 0) {
-      selectVariantInstancesLayerTargetsState(variantIds, [getLayerKey("frame", wrapper.id)], primaryVariantId);
+      selectVariantsLayerTargetsState(variantIds, [getLayerKey("frame", wrapper.id)], primaryVariantId);
       clearMasterSelectionForVariant();
       queueCanvasMutationEffects({ selection: true, tree: true });
     } else {
@@ -326,14 +349,17 @@ function wrapSelectedLayersInFrame() {
 }
 
 function reorderPrimaryLayer(step = 0, edge = null) {
+  if (getSelectedVariantIds().length > 0 && getSelectedVariantLayerTargets().length === 0) {
+    return reorderSelectedVariants(step, edge);
+  }
   const layer = getPrimaryLayerDescriptor();
   if (!layer || layer.type === "component") return false;
-  const parentId = layer.type === "frame" ? layer.record.parentId : layer.record.parentFrameId;
+  const parentId = layer.record.parentId;
   const siblings = getLayerChildren(parentId);
   const anchorLayer = { type: layer.type, id: layer.record.id };
-  const variantInstanceId = selectedVariantInstanceId;
+  const variantId = selectedVariantId;
   const selectedKeys = new Set(
-    variantInstanceId === null ? getSelectedLayerKeys() : getSelectedVariantLayerTargets(),
+    variantId === null ? getSelectedLayerKeys() : getSelectedVariantLayerTargets(),
   );
   const anchorKey = getLayerDescriptorKey(anchorLayer);
   const draggedLayers = selectedKeys.size > 1 && selectedKeys.has(anchorKey)
@@ -342,48 +368,40 @@ function reorderPrimaryLayer(step = 0, edge = null) {
       .filter((candidate) => selectedKeys.has(getLayerDescriptorKey(candidate)))
     : [anchorLayer];
   const draggedKeys = new Set(draggedLayers.map(getLayerDescriptorKey));
-  const firstMovingIndex = siblings.findIndex(
-    (sibling) => draggedKeys.has(getLayerDescriptorKey({ type: sibling.type, id: sibling.record.id })),
+  const targetIndex = getCollectionReorderIndex(
+    siblings,
+    draggedKeys,
+    step,
+    edge,
+    (sibling) => getLayerDescriptorKey({ type: sibling.type, id: sibling.record.id }),
   );
-  if (firstMovingIndex < 0) return false;
-  const remainingSiblings = siblings.filter(
-    (sibling) => !draggedKeys.has(getLayerDescriptorKey({ type: sibling.type, id: sibling.record.id })),
-  );
-  const currentInsertionIndex = siblings
-    .slice(0, firstMovingIndex)
-    .filter((sibling) => !draggedKeys.has(getLayerDescriptorKey({ type: sibling.type, id: sibling.record.id })))
-    .length;
-  const targetIndex = edge === "back"
-    ? 0
-    : edge === "front"
-      ? remainingSiblings.length
-      : Math.max(0, Math.min(remainingSiblings.length, currentInsertionIndex + step));
-  const previousPositions = captureCanvasLayerPositions(false, variantInstanceId);
+  if (targetIndex === null) return false;
+  const previousPositions = captureCanvasLayerPositions(false, variantId);
   const didMove = moveLayers(draggedLayers, parentId, targetIndex);
-  if (didMove) animateCanvasLayerReflow(previousPositions, variantInstanceId);
+  if (didMove) animateCanvasLayerReflow(previousPositions, variantId);
   return didMove;
 }
 
 function selectMatchingLayers() {
-  const instanceIds = getSelectedVariantInstanceIds();
-  // Canvas records have unique schema IDs. Only variant instances repeat those
+  const variantIds = getSelectedVariantIds();
+  // Canvas records have unique schema IDs. Only variants repeat those
   // IDs; a standalone canvas layer or component therefore has no other match.
-  if (instanceIds.length !== 1) return false;
-  const targets = getSelectedVariantLayerTargets(instanceIds[0]);
-  const instance = getVariantInstance(instanceIds[0]);
-  if (!instance || instance.componentId !== currentComponent?.id) return false;
-  const matchingIds = variantModel.getInstances()
-    .filter((candidate) => candidate.componentId === instance.componentId)
+  if (variantIds.length !== 1) return false;
+  const targets = getSelectedVariantLayerTargets(variantIds[0]);
+  const variant = getVariant(variantIds[0]);
+  if (!variant || variant.componentId !== currentComponent?.id) return false;
+  const matchingIds = variantModel.getVariants()
+    .filter((candidate) => candidate.componentId === variant.componentId)
     .map((candidate) => candidate.id);
   if (matchingIds.length < 2) return false;
 
-  // The delta target (type:id) is the canonical identity, shared by every
-  // instance, regardless of names, styling, or local property overrides.
+  // Local editor keys address the same qualified source in every variant of
+  // this definition, regardless of names, styling, or local overrides.
   if (targets.length > 0) {
     if (targets.some((target) => !getElementForLayerKey(target))) return false;
-    selectVariantInstancesLayerTargetsState(matchingIds, targets, instance.id);
+    selectVariantsLayerTargetsState(matchingIds, targets, variant.id);
   } else {
-    selectVariantInstancesState(matchingIds, instance.id);
+    selectVariantsState(matchingIds, variant.id);
   }
   clearMasterSelectionForVariant();
   renderTree();
@@ -391,32 +409,32 @@ function selectMatchingLayers() {
 }
 
 function selectHierarchyChild() {
-  if (selectedComponentId === currentComponent?.id && variantModel.getInstances().length > 0) {
-    selectVariantInstancesState(variantModel.getInstances().map((instance) => instance.id));
+  if (selectedComponentId === currentComponent?.id && variantModel.getVariants().length > 0) {
+    selectVariantsState(variantModel.getVariants().map((variant) => variant.id));
     clearMasterSelectionForVariant();
     renderTree();
     return true;
   }
-  if (selectedVariantInstanceId !== null && getSelectedVariantLayerTargets().length === 0) {
+  if (selectedVariantId !== null && getSelectedVariantLayerTargets().length === 0) {
     const targets = getLayerChildren(null).map((child) => getLayerKey(child.type, child.record.id));
     if (targets.length === 0) return false;
     expandFramePath(null);
-    selectVariantInstancesLayerTargetsState(getSelectedVariantInstanceIds(), targets, selectedVariantInstanceId);
+    selectVariantsLayerTargetsState(getSelectedVariantIds(), targets, selectedVariantId);
     clearMasterSelectionForVariant();
     renderTree();
     return true;
   }
-  if (selectedVariantInstanceId !== null) {
+  if (selectedVariantId !== null) {
     const frames = getSelectedVariantLayerTargets()
       .filter((target) => target.startsWith("frame:"))
       .map((target) => Number(target.split(":")[1]));
     const children = frames.flatMap((id) => getLayerChildren(id));
     if (children.length === 0) return false;
     frames.forEach(expandFramePath);
-    selectVariantInstancesLayerTargetsState(
-      getSelectedVariantInstanceIds(),
+    selectVariantsLayerTargetsState(
+      getSelectedVariantIds(),
       children.map((child) => getLayerKey(child.type, child.record.id)),
-      selectedVariantInstanceId,
+      selectedVariantId,
     );
     clearMasterSelectionForVariant();
     renderTree();
@@ -431,11 +449,11 @@ function selectHierarchyChild() {
 
   expandFramePath(layer.type === "frame" ? layer.record.id : null);
   const childKeys = children.map((child) => getLayerKey(child.type, child.record.id));
-  if (selectedVariantInstanceId !== null) {
-    selectVariantInstancesLayerTargetsState(
-      getSelectedVariantInstanceIds(),
+  if (selectedVariantId !== null) {
+    selectVariantsLayerTargetsState(
+      getSelectedVariantIds(),
       childKeys,
-      selectedVariantInstanceId,
+      selectedVariantId,
     );
     clearMasterSelectionForVariant();
   } else {
@@ -447,17 +465,17 @@ function selectHierarchyChild() {
 }
 
 function selectHierarchyParent() {
-  if (selectedVariantInstanceId !== null) {
+  if (selectedVariantId !== null) {
     const targets = getSelectedVariantLayerTargets();
     if (targets.length === 0) {
       selectComponentState(currentComponent.id);
       syncElementSelectionStyles();
     } else {
       const parentKeys = targets.map(getLayerParentKey).filter((key) => key?.startsWith("frame:"));
-      selectVariantInstancesLayerTargetsState(
-        getSelectedVariantInstanceIds(),
+      selectVariantsLayerTargetsState(
+        getSelectedVariantIds(),
         parentKeys,
-        selectedVariantInstanceId,
+        selectedVariantId,
       );
       clearMasterSelectionForVariant();
     }
@@ -466,17 +484,17 @@ function selectHierarchyParent() {
   }
   const layer = getPrimaryLayerDescriptor();
   if (!layer || layer.type === "component") return false;
-  const parentId = layer.type === "frame" ? layer.record.parentId : layer.record.parentFrameId;
+  const parentId = layer.record.parentId;
   if (parentId === null) return selectLayerDescriptor({ type: "component", record: currentComponent.frameRecord });
   const parentRecord = getFrameRecord(parentId);
   return parentRecord ? selectLayerDescriptor({ type: "frame", record: parentRecord }) : false;
 }
 
 function selectSiblingLayer(offset) {
-  const instanceIds = getSelectedVariantInstanceIds();
+  const variantIds = getSelectedVariantIds();
   const targets = getSelectedVariantLayerTargets();
-  if (offset > 0 && (instanceIds.length > 1 || (instanceIds.length > 0 && targets.length > 1))) {
-    selectVariantState(instanceIds[0], targets[0] ?? null);
+  if (offset > 0 && (variantIds.length > 1 || (variantIds.length > 0 && targets.length > 1))) {
+    selectVariantState(variantIds[0], targets[0] ?? null);
     clearMasterSelectionForVariant();
     renderTree();
     return true;
@@ -491,7 +509,7 @@ function selectSiblingLayer(offset) {
     selectComponentTreeNode(nextComponent.id);
     return true;
   }
-  const parentId = layer.type === "frame" ? layer.record.parentId : layer.record.parentFrameId;
+  const parentId = layer.record.parentId;
   const siblings = getLayerChildren(parentId);
   const currentIndex = siblings.findIndex(
     (sibling) => sibling.type === layer.type && sibling.record.id === layer.record.id,
@@ -518,5 +536,59 @@ function setSelectedLayersOpacity(percent) {
     element.style.opacity = normalizedPercent === 100 ? "" : String(normalizedPercent / 100);
   });
   requestAnimationFrame(syncResizeOverlay);
+  return true;
+}
+
+function deleteLayers(layers) {
+  const removed = new Set(layers.flatMap((layer) => getLayerNodeDescendants(layerRecords, layer)));
+  if (removed.size === 0) return false;
+  recordHistory();
+  const deletedTargets = new Set([...removed].map((record) => `${record.type}:${record.id}`));
+  const isDeleted = (target) => {
+    if (deletedTargets.has(target)) return true;
+    const identity = normalizeLayerIdentity(target, currentComponent.id);
+    return identity.kind === "placed" && identity.ownerComponentId === currentComponent.id
+      && deletedTargets.has(`component-instance:${identity.instancePath[0]}`);
+  };
+  variantModel.getVariants().forEach((variant) => {
+    variant.overrides = (variant.overrides ?? []).filter((override) => !isDeleted(override.target));
+  });
+  variantModel.replaceRules(variantModel.getRules().filter((rule) => !isDeleted(rule.target)));
+
+  const removedComponentProps = componentProps.filter((prop) => (
+    (prop.targetFrameId != null && deletedTargets.has(`frame:${prop.targetFrameId}`))
+    || (prop.targetTextId != null && deletedTargets.has(`text:${prop.targetTextId}`))
+    || (prop.targetVectorId != null && deletedTargets.has(`vector:${prop.targetVectorId}`))
+  ));
+  const removedVariantPropIds = new Set(removedComponentProps
+    .map((prop) => prop.variantPropId)
+    .filter((id) => id != null));
+  componentProps = componentProps.filter((prop) => !removedComponentProps.includes(prop));
+  if (removedVariantPropIds.size > 0) {
+    variantModel.replaceProps(
+      variantModel.getProps().filter((prop) => !removedVariantPropIds.has(prop.id)),
+    );
+    variantModel.getVariants().forEach((variant) => {
+      removedVariantPropIds.forEach((id) => { delete variant.propValues[id]; });
+    });
+    variantModel.getRules().forEach((rule) => {
+      removedVariantPropIds.forEach((id) => { delete rule.conditions[id]; });
+    });
+    variantModel.replaceRules(
+      variantModel.getRules().filter((rule) => Object.keys(rule.conditions).length > 0),
+    );
+  }
+
+  const parents = new Set([...removed].map((record) => record.parentId));
+  removed.forEach((record) => {
+    record.element.remove();
+    if (record.type === "frame") expandedFrameIds.delete(record.id);
+  });
+  layerRecords = layerRecords.filter((record) => !removed.has(record));
+  parents.forEach(normalizeSiblingOrder);
+  applyAllLayerSizing();
+  selectCanvasState();
+  syncElementSelectionStyles();
+  renderTree();
   return true;
 }

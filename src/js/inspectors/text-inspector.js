@@ -102,17 +102,18 @@ function syncSelectedTextSizeInputs() {
     const values = records.map((candidate) => {
       const { element } = candidate;
       const bounds = element.getBoundingClientRect();
-      const instance = candidate.isVariantInstance
-        ? getVariantInstance(candidate.variantInstanceId ?? selectedVariantInstanceId)
+      const variant = candidate.isVariant && !candidate.isInstance
+        ? getVariant(candidate.variantId ?? selectedVariantId)
         : null;
-      const override = instance
-        ? getEffectiveVariantOverride(instance, `text:${candidate.id}`, dimension)
+      const override = variant
+        ? getEffectiveVariantOverride(variant, `text:${candidate.id}`, dimension)
         : null;
       const overrideValue = override ? String(override.value ?? "") : "";
-      const mode = overrideValue
-        ? overrideValue === "100%" ? "fill" : overrideValue === "auto" ? "hug" : "fixed"
+      const instanceValue = candidate.isInstance ? element.style[dimension] : "";
+      const mode = instanceValue || overrideValue
+        ? (instanceValue || overrideValue) === "100%" ? "fill" : (instanceValue || overrideValue) === "auto" ? "hug" : "fixed"
         : getLayerDimensionMode(element, dimension, "hug");
-      const fixedValue = Number.parseFloat(overrideValue);
+      const fixedValue = Number.parseFloat(instanceValue || overrideValue);
       return {
         mode,
         value: mode === "fixed"
@@ -145,7 +146,7 @@ function syncSelectedTextSizeInputs() {
 
 function getTextInspectorValues(record) {
   const { element } = record;
-  const styles = record.isVariantInstance ? getComputedStyle(element) : null;
+  const styles = record.isVariant ? getComputedStyle(element) : null;
   const renderedFamily = styles?.fontFamily.split(",")[0].replace(/^['"]|['"]$/g, "").trim();
   const renderedLineHeight = styles?.lineHeight;
   const renderedLetterSpacing = styles?.letterSpacing;
@@ -157,22 +158,22 @@ function getTextInspectorValues(record) {
     : styles?.textAlign === "right" ? "right" : "left";
   return {
     styles,
-    family: record.isVariantInstance
+    family: record.isVariant
       ? renderedFamily || DEFAULT_FONT_FAMILY
       : element.dataset.fontFamily || DEFAULT_FONT_FAMILY,
-    weight: String(Number(record.isVariantInstance
+    weight: String(Number(record.isVariant
       ? styles.fontWeight
       : element.dataset.fontWeight || DEFAULT_FONT_WEIGHT)),
-    size: record.isVariantInstance
+    size: record.isVariant
       ? String(Number.parseFloat(styles.fontSize) || 14)
       : element.dataset.fontSize || "14",
-    lineHeight: record.isVariantInstance
+    lineHeight: record.isVariant
       ? renderedLineHeight === "normal" ? "Auto" : String(Number.parseFloat(renderedLineHeight))
       : element.dataset.lineHeight || "Auto",
-    letterSpacing: record.isVariantInstance
+    letterSpacing: record.isVariant
       ? renderedLetterSpacing === "normal" ? "0%" : renderedLetterSpacing
       : element.dataset.letterSpacing || "0%",
-    alignment: record.isVariantInstance
+    alignment: record.isVariant
       ? renderedVerticalAlignment === "center" && renderedHorizontalAlignment === "center"
         ? "center"
         : `${renderedVerticalAlignment}-${renderedHorizontalAlignment}`
@@ -233,19 +234,19 @@ function syncInspectorToSelectedText() {
     const colorRecord = !isHiddenFromSelectionColors(record.element) ? record : colorRecords[0];
     const colorElement = colorRecord?.element;
     const colorStyles = colorElement ? getComputedStyle(colorElement) : styles;
-    const rangeSelection = colorRecord && colorRecords.length === 1 ? getActiveTextRangeSelection(colorRecord) : null;
+    const rangeSelection = colorRecord && !colorRecord.isInstance && colorRecords.length === 1 ? getActiveTextRangeSelection(colorRecord) : null;
     const rangeValue = rangeSelection ? getActiveTextRangeColorValues(colorRecord)[0] : null;
     const uniformRunColor = colorRecord ? getUniformTextRunColor(colorRecord) : null;
-    const renderedColor = colorRecord?.isVariantInstance ? colorStyles.color : "";
+    const renderedColor = colorRecord?.isVariant ? colorStyles.color : "";
     const rgbaAlpha = renderedColor.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i);
     const isTransparent = isTransparentColorValue(colorElement?.style.color)
       || renderedColor === "transparent"
       || (rgbaAlpha && Number(rgbaAlpha[1]) === 0);
-    const layerColor = colorRecord?.isVariantInstance
+    const layerColor = colorRecord?.isVariant
       ? isTransparent ? "" : cssColorToHex(renderedColor) || "#000000"
       : colorElement && Object.prototype.hasOwnProperty.call(colorElement.dataset, "textColor")
         ? colorElement.dataset.textColor : colorElement ? "#000000" : "";
-    const layerOpacity = colorRecord?.isVariantInstance
+    const layerOpacity = colorRecord?.isVariant
       ? rgbaAlpha ? Number(rgbaAlpha[1]) * 100 : 100
       : colorElement?.dataset.textColorOpacity || "100";
     syncCustomColorControl(
@@ -263,17 +264,18 @@ function syncInspectorToSelectedText() {
   syncSelectedTextSizeInputs();
 }
 function persistVariantTextStyle(record, property, value) {
-  if (!record?.isVariantInstance) return;
-  const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
+  if (!record?.isVariant || record.isInstance) return;
+  const variant = getVariant(record.variantId ?? selectedVariantId);
   const target = `text:${record.id}`;
-  if (!instance) return;
-  upsertLocalVariantOverride(instance, target, property, value);
+  if (!variant) return;
+  upsertLocalVariantOverride(variant, target, property, value);
   syncVariantLayerStylePreviews(target, property, record.element);
 }
 
 function scheduleSelectedTextPreviewRender(records) {
-  if (records.some((record) => !record.isVariantInstance) && variantModel.getInstances().length > 0) {
-    scheduleVariantInstanceRender();
+  if (records.some(record => record.isInstance)) return;
+  if (records.some((record) => !record.isVariant) && variantModel.getVariants().length > 0) {
+    scheduleVariantRender();
   }
 }
 
@@ -283,11 +285,20 @@ fontSelect?.addEventListener("change", () => {
   if (!record || records.length === 0 || !(fontSelect instanceof HTMLInputElement)) return;
   const family = getDropdownValue(fontSelect);
   const font = getFontRecord(family);
-  const previousWeight = Number(record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
+  const previousWeight = Number(record.isInstance ? getTextInspectorValues(record).weight
+    : record.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT);
   populateWeightOptions(family, previousWeight);
   const weight = weightSelect instanceof HTMLInputElement
     ? Number(getDropdownValue(weightSelect))
     : DEFAULT_FONT_WEIGHT;
+  if (record.isInstance) {
+    setNestedInstanceLayerOverrides(record.instanceSelection, [
+      { property: "fontFamily", value: `${JSON.stringify(family)}, ${getFontFallback(font?.category || "Sans Serif")}` },
+      { property: "fontWeight", value: String(weight) },
+    ]);
+    loadGoogleFont(family, weight);
+    return;
+  }
   if (records.some((candidate) => (
     candidate.element.dataset.fontFamily !== family
     || Number(candidate.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT) !== weight
@@ -310,6 +321,11 @@ weightSelect?.addEventListener("change", () => {
   const records = getSelectedTextRecords();
   if (!record || records.length === 0 || !(weightSelect instanceof HTMLInputElement)) return;
   const weight = Number(getDropdownValue(weightSelect));
+  if (record.isInstance) {
+    setNestedInstanceLayerOverride(record.instanceSelection, "fontWeight", String(weight));
+    loadGoogleFont(getTextInspectorValues(record).family, weight);
+    return;
+  }
   if (records.some((candidate) => Number(candidate.element.dataset.fontWeight || DEFAULT_FONT_WEIGHT) !== weight)) {
     recordHistory();
   }
@@ -340,6 +356,12 @@ function applyTextSizeValue(rawValue = sizeSelect?.value, normalize = true) {
   if (!/^\d+(?:\.\d+)?$/.test(value)) return false;
   const numberValue = Math.max(0, Number(value));
   const normalizedValue = String(numberValue);
+  if (records[0].isInstance) {
+    setNestedInstanceLayerOverride(records[0].instanceSelection, "fontSize", `${normalizedValue}px`, false, sizeSelect);
+    if (normalize) sizeSelect.value = normalizedValue;
+    syncTextSizeCombobox(normalizedValue);
+    return true;
+  }
   if (records.some((record) => (record.element.dataset.fontSize || "14") !== normalizedValue)) {
     recordHistoryForGesture(sizeSelect);
   }
@@ -401,6 +423,13 @@ function applyLineHeightValue(normalizeDisplay = true) {
   const records = getSelectedTextRecords();
   if (records.length === 0 || !(lineHeightInput instanceof HTMLInputElement)) return false;
   const value = lineHeightInput.value.trim();
+  if (records[0].isInstance) {
+    const normalized = /^(?:a|auto)$/i.test(value) ? "Auto" : /^\d+(?:\.\d+)?$/.test(value) ? String(Math.max(0, Number(value))) : null;
+    if (normalized === null) return false;
+    setNestedInstanceLayerOverride(records[0].instanceSelection, "lineHeight", normalized === "Auto" ? "normal" : `${normalized}px`, false, lineHeightInput);
+    if (normalizeDisplay) lineHeightInput.value = normalized;
+    return true;
+  }
   if (/^(?:a|auto)$/i.test(value)) {
     if (records.some((record) => (record.element.dataset.lineHeight || "Auto") !== "Auto")) {
       recordHistoryForGesture(lineHeightInput);
@@ -454,7 +483,7 @@ lineHeightInput?.addEventListener("keydown", (event) => {
   const record = getSelectedTextRecord();
   if (!record) return;
   event.preventDefault();
-  const direction = event.key === "ArrowUp" ? 1 : -1;
+  const direction = (event.key === "ArrowUp" ? 1 : -1) * (event.shiftKey ? 10 : 1);
   const value = lineHeightInput.value.trim();
   let base = Number(value);
   if (/^auto$/i.test(value) || !Number.isFinite(base)) {
@@ -475,6 +504,12 @@ function applyLetterSpacingValue(normalizeDisplay = true) {
   if (!match) return false;
   const unit = match[2]?.toLowerCase() || "%";
   const value = `${Number(match[1])}${unit}`;
+  if (records[0].isInstance) {
+    setNestedInstanceLayerOverride(records[0].instanceSelection, "letterSpacing",
+      unit === "%" ? `${Number(match[1]) / 100}em` : value, false, letterSpacingInput);
+    if (normalizeDisplay) letterSpacingInput.value = value;
+    return true;
+  }
   if (records.some((record) => (record.element.dataset.letterSpacing || "0%") !== value)) {
     recordHistoryForGesture(letterSpacingInput);
   }
@@ -513,7 +548,7 @@ letterSpacingInput?.addEventListener("keydown", (event) => {
   const match = letterSpacingInput.value.trim().match(/^(-?\d+(?:\.\d+)?)(%|px)?$/i);
   if (!match) return;
   event.preventDefault();
-  const direction = event.key === "ArrowUp" ? 1 : -1;
+  const direction = (event.key === "ArrowUp" ? 1 : -1) * (event.shiftKey ? 10 : 1);
   letterSpacingInput.value = `${Number(match[1]) + direction}${match[2]?.toLowerCase() || "%"}`;
   applyLetterSpacingValue();
 });
@@ -525,6 +560,15 @@ textAlignmentOptions.forEach((option) => {
     const alignment = normalizeFrameAlignment(option.getAttribute("data-text-alignment") || "top-left");
     if (records.length === 0
       || records.every((record) => getTextInspectorValues(record).alignment === alignment)) return;
+    if (records[0].isInstance) {
+      const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
+      setNestedInstanceLayerOverrides(records[0].instanceSelection, [
+        { property: "display", value: "block" },
+        { property: "alignContent", value: vertical === "center" ? "center" : vertical === "bottom" ? "end" : "start" },
+        { property: "textAlign", value: horizontal === "center" ? "center" : horizontal === "right" ? "right" : "left" },
+      ]);
+      return;
+    }
     recordHistory();
     records.forEach((record) => {
       record.element.dataset.alignment = alignment;

@@ -11,21 +11,11 @@ function getTreeIndent(depth) {
   return Math.max(0, depth - 1) * 20;
 }
 
-function getComponentLayerChildren(component, parentFrameId) {
-  if (component.id === currentComponent?.id) return getLayerChildren(parentFrameId);
+function getComponentLayerChildren(component, parentId) {
+  if (component.id === currentComponent?.id) return getLayerChildren(parentId);
   const workspace = component.workspace;
   if (!workspace) return [];
-  return [
-    ...(workspace.frames ?? [])
-      .filter((entry) => entry.parentId === parentFrameId)
-      .map((entry) => ({ type: "frame", record: entry.record })),
-    ...(workspace.texts ?? [])
-      .filter((entry) => entry.parentFrameId === parentFrameId)
-      .map((entry) => ({ type: "text", record: entry.record })),
-    ...(workspace.vectors ?? [])
-      .filter((entry) => entry.parentFrameId === parentFrameId)
-      .map((entry) => ({ type: "vector", record: entry.record })),
-  ].sort((a, b) => a.record.order - b.record.order);
+  return getComponentDefinitionChildren(workspace, parentId);
 }
 
 function getComponentExpandedFrameIds(component) {
@@ -41,9 +31,7 @@ function componentHasChildLayers(component) {
   if (component.id === currentComponent?.id) return getLayerChildren(null).length > 0;
   const workspace = component.workspace;
   if (!workspace) return false;
-  return (workspace.frames ?? []).some((entry) => entry.parentId === null)
-    || (workspace.texts ?? []).some((entry) => entry.parentFrameId === null)
-    || (workspace.vectors ?? []).some((entry) => entry.parentFrameId === null);
+  return workspace.layers.some((entry) => entry.parentId === null);
 }
 
 function createSvgAssetIcon(name, className = "layer-type-icon") {
@@ -54,8 +42,9 @@ function createSvgAssetIcon(name, className = "layer-type-icon") {
 }
 
 function createFrameLayerIcon(record) {
-  const direction = record?.element?.dataset?.direction === "vertical" ? "vertical" : "horizontal";
-  const alignment = normalizeFrameAlignment(record?.element?.dataset?.alignment || "top-left");
+  const dataset = record?.element?.dataset ?? record?.dataset;
+  const direction = dataset?.direction === "vertical" ? "vertical" : "horizontal";
+  const alignment = normalizeFrameAlignment(dataset?.alignment || "top-left");
   const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
   return createSvgAssetIcon(`align-${direction}-${direction === "vertical" ? vertical : horizontal}`);
 }
@@ -66,6 +55,7 @@ function createSquareIcon(record) {
 
 function createLayerTypeIcon(type, record = null) {
   if (type === "component") return createSvgAssetIcon("diamond-group");
+  if (type === "component-instance") return createSvgAssetIcon("diamond-outline");
   if (type === "frame") return createFrameLayerIcon(record);
   if (type === "text") return createSvgAssetIcon("letter-t");
   if (type === "vector") {
@@ -115,8 +105,10 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
   const labelWrapper = document.createElement("div");
   const visibilityButton = document.createElement("button");
   const key = getTreeNodeKey(type, record.id, component.id);
-  const name = getTreeNodeName(type, record);
+  const name = getTreeNodeName(type, record, component);
   const isVisible = getTreeLayerVisibility(type, record, component);
+  const visibilityContext = getTreeVariantSelectionContext(component);
+  const isVisibilityEditingDisabled = visibilityContext.mode === "multiple";
   const disabledState = hasHiddenAncestor ? "child" : isVisible ? null : "top-level";
 
   content.className = "tree-node-content";
@@ -150,7 +142,7 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
         : input.value.trim();
       if (nextName !== originalName) {
         recordHistory();
-        applyTreeNodeName(type, record, nextName);
+        applyTreeNodeName(type, record, nextName, component);
       }
       treeRenameState = null;
       renderTree();
@@ -178,8 +170,11 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
     });
   } else {
     const label = document.createElement("span");
+    const instanceStatus = type === "component-instance" ? getComponentInstanceStatus(record).status : null;
     label.className = "tree-node-label";
-    label.textContent = name;
+    label.textContent = type === "component-instance"
+      ? `${name}${instanceStatus === "ready" ? "" : instanceStatus === "missing-variant" ? " · Missing variant" : " · Missing component"}`
+      : name;
     const startRename = (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -202,9 +197,13 @@ function createTreeNodeContent(node, iconGroup, type, record, depth, component, 
   visibilityButton.className = `icon-button icon-button--size-24 icon-button--rounded${isVisible ? "" : " is-layer-hidden"}${disabledState === "top-level" ? " is-top-level" : disabledState === "child" ? " is-child-layer" : ""}`;
   visibilityButton.dataset.iconButton = "layer-visibility";
   visibilityButton.type = "button";
+  visibilityButton.disabled = isVisibilityEditingDisabled;
   visibilityButton.draggable = false;
-  visibilityButton.setAttribute("aria-label", `${isVisible ? "Hide" : "Show"} ${name}`);
-  visibilityButton.title = `${isVisible ? "Hide" : "Show"} ${name}`;
+  const visibilityLabel = isVisibilityEditingDisabled
+    ? `${name} visibility is unavailable for multiple selected variants`
+    : `${isVisible ? "Hide" : "Show"} ${name}`;
+  visibilityButton.setAttribute("aria-label", visibilityLabel);
+  visibilityButton.title = visibilityLabel;
   visibilityButton.setAttribute("aria-pressed", String(!isVisible));
   visibilityButton.append(createLayerVisibilityGraphic(isVisible, disabledState));
   visibilityButton.addEventListener("pointerdown", (event) => event.stopPropagation());
@@ -334,7 +333,196 @@ function renderVectorTreeNode(record, depth, component, hasHiddenAncestor = fals
   return item;
 }
 
+const expandedInstanceTreeKeys = new Set();
+function getInstanceTreeBranchKey(componentId, instancePath, type, id) {
+  return `${componentId}/${instancePath.join("/")}/${type}:${id}`;
+}
+function setInstanceTreeBranchExpanded(component, key, expanded) {
+  if (expanded) expandedInstanceTreeKeys.add(key); else expandedInstanceTreeKeys.delete(key);
+  if (component.workspace) component.workspace.expandedInstanceTreeKeys = [...expandedInstanceTreeKeys]
+    .filter(value => value.startsWith(`${component.id}/`));
+  renderLayerTree();
+}
+
+function renderInstanceReferenceMessage(message, depth) {
+  const item = document.createElement("div");
+  const node = document.createElement("div");
+  item.className = "dynamic-tree-item";
+  node.className = "tree-node tree-node--dynamic tree-node--instance-reference";
+  node.setAttribute("role", "treeitem");
+  node.setAttribute("aria-level", String(depth));
+  node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
+  node.textContent = message;
+  item.append(node);
+  return item;
+}
+
+function renderInstanceOccurrenceLayer(record, depth, component, instancePath, definition, hasHiddenAncestor = false, ancestors = []) {
+  const source = createSourceLayerIdentity(definition.componentId, record.type, record.id);
+  const identity = createPlacedLayerIdentity(component.id, instancePath, source);
+  const branchKey = getInstanceTreeBranchKey(component.id, instancePath, record.type, record.id);
+  const children = record.type === "frame" ? getComponentDefinitionChildren(definition, record.id) : [];
+  const status = record.type === "component-instance" ? getComponentInstanceStatus(record) : null;
+  const circular = record.type === "component-instance" && ancestors.includes(record.sourceComponentId);
+  const branch = children.length > 0 || (record.type === "component-instance"
+    && (status.status !== "ready" || circular || status.definition.layers.length > 0));
+  const expanded = expandedInstanceTreeKeys.has(branchKey);
+  const item = document.createElement("div");
+  const node = document.createElement("div");
+  const iconGroup = document.createElement("span");
+  const content = document.createElement("div");
+  const labelWrapper = document.createElement("div");
+  const label = document.createElement("span");
+  const visibility = document.createElement("button");
+  const selected = getSelectedNestedInstanceLayer();
+  const isSelected = selected?.ownerId === component.id && sameLayerIdentity(selected.identity, identity);
+  const context = getTreeVariantSelectionContext(component);
+  const root = component.id === currentComponent?.id ? context.mode === "variant"
+    ? componentSet.querySelector(`.variant-preview[data-variant-id="${context.variant.id}"] .canvas-root-stack`)
+    : canvasRootStack : null;
+  const element = root && findLayerElementByIdentity(root, identity);
+  const isVisible = element ? !element.classList.contains("is-layer-hidden")
+    : record.dataset?.layerVisibility !== "hidden";
+  const hidden = hasHiddenAncestor || !isVisible;
+
+  item.className = "dynamic-tree-item";
+  node.className = "tree-node tree-node--dynamic tree-node--instance-child";
+  node.setAttribute("role", "treeitem");
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("aria-level", String(depth));
+  node.setAttribute("aria-selected", String(isSelected));
+  if (branch) node.setAttribute("aria-expanded", String(expanded));
+  node.dataset.selectionLayerIdentity = getLayerIdentityKey(identity);
+  node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
+  node.title = "Layer in component instance · source structure is read-only";
+  node.classList.toggle("is-selected", isSelected);
+  node.classList.toggle("is-disabled", hidden);
+  node.classList.toggle("is-disabled-child", hasHiddenAncestor);
+  node.classList.toggle("is-disabled-top-level", !hasHiddenAncestor && !isVisible);
+  const select = () => {
+    if (currentComponent?.id !== component.id && !activateComponent(component.id, { render: false })) return;
+    const variantId = getTreeVariantSelectionContext(component).mode === "variant" ? selectedVariantId : null;
+    selectNestedInstanceLayerIdentity(instancePath, source, variantId);
+  };
+  node.addEventListener("click", select);
+  node.addEventListener("keydown", event => {
+    if (event.target === node && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault(); select();
+    }
+  });
+
+  iconGroup.className = "branch-icon-group";
+  if (branch) {
+    const toggle = document.createElement("button");
+    const chevron = document.createElement("span");
+    toggle.className = "icon-cell branch-toggle";
+    toggle.type = "button";
+    toggle.setAttribute("aria-label", `${expanded ? "Collapse" : "Expand"} ${record.name ?? record.type}`);
+    toggle.setAttribute("aria-expanded", String(expanded));
+    chevron.className = `chevron ${expanded ? "chevron--down" : "chevron--right"}`;
+    chevron.setAttribute("aria-hidden", "true");
+    toggle.append(chevron);
+    toggle.addEventListener("click", event => {
+      event.stopPropagation();
+      setInstanceTreeBranchExpanded(component, branchKey, !expanded);
+    });
+    iconGroup.append(toggle);
+  }
+  iconGroup.append(createIconCell(record.type === "vector" ? createVectorLayerTreeIcon(record) : createLayerTypeIcon(record.type, record)));
+  content.className = "tree-node-content";
+  labelWrapper.className = "tree-node-label-wrap";
+  label.className = "tree-node-label";
+  label.textContent = record.type === "text" ? getTextTreeLabel(element?.textContent ?? record.textContent, record.id)
+    : record.name ?? `${record.type} ${record.id}`;
+  if (status && status.status !== "ready") label.textContent += status.status === "missing-variant" ? " · Missing variant" : " · Missing component";
+  visibility.className = `icon-button icon-button--size-24 icon-button--rounded${isVisible ? "" : " is-layer-hidden"}`;
+  visibility.dataset.iconButton = "layer-visibility";
+  visibility.type = "button";
+  visibility.disabled = context.mode === "multiple";
+  visibility.setAttribute("aria-label", `${isVisible ? "Hide" : "Show"} ${label.textContent} in this instance`);
+  visibility.append(createLayerVisibilityGraphic(isVisible, hasHiddenAncestor ? "child" : null));
+  visibility.addEventListener("click", event => {
+    event.stopPropagation();
+    if (currentComponent?.id !== component.id && !activateComponent(component.id, { render: false })) return;
+    const variantId = getTreeVariantSelectionContext(component).mode === "variant" ? selectedVariantId : null;
+    setNestedInstanceLayerOverride({ instanceId: instancePath[0], nestedPath: instancePath.slice(1),
+      parentVariantId: variantId, target: source }, "visibility", isVisible ? "hidden" : "visible");
+    renderTree();
+  });
+  labelWrapper.append(label);
+  content.append(iconGroup, labelWrapper, visibility);
+  node.append(content);
+  item.append(node);
+  if (branch && expanded) {
+    if (record.type === "frame") children.forEach(child => item.append(renderInstanceOccurrenceLayer(
+      child.record, depth + 1, component, instancePath, definition, hidden, ancestors)));
+    else if (circular) item.append(renderInstanceReferenceMessage("Invalid component reference", depth + 1));
+    else if (status.status !== "ready") item.append(renderInstanceReferenceMessage(
+      status.status === "missing-variant" ? "Missing variant" : "Missing component", depth + 1));
+    else getComponentDefinitionChildren(status.definition, null).forEach(child => item.append(renderInstanceOccurrenceLayer(
+      child.record, depth + 1, component, [...instancePath, record.id], status.definition,
+      hidden, [...ancestors, record.sourceComponentId])));
+  }
+  return item;
+}
+
 function renderLayerTreeNode(layer, depth, component, hasHiddenAncestor = false) {
+  if (layer.type === "component-instance") {
+    const item = document.createElement("div");
+    item.className = "dynamic-tree-item";
+    const node = document.createElement("div");
+    const iconGroup = document.createElement("span");
+    const status = getComponentInstanceStatus(layer.record);
+    const branchKey = getInstanceTreeBranchKey(component.id, [], "component-instance", layer.record.id);
+    const branch = status.status !== "ready" || status.definition.layers.length > 0;
+    const expanded = expandedInstanceTreeKeys.has(branchKey);
+    node.className = "tree-node tree-node--dynamic";
+    node.setAttribute("role", "treeitem");
+    node.setAttribute("aria-level", String(depth));
+    if (branch) node.setAttribute("aria-expanded", String(expanded));
+    node.style.setProperty("--tree-indent", `${getTreeIndent(depth)}px`);
+    node.title = "Component instance";
+    node.tabIndex = 0;
+    node.dataset.selectionComponentId = String(component.id);
+    node.dataset.selectionLayerKey = `component-instance:${layer.record.id}`;
+    const selected = isComponentTreeLayerSelected(component, layer.type, layer.record.id);
+    node.classList.toggle("is-selected", selected);
+    node.setAttribute("aria-selected", String(selected));
+    attachLayerSelectionHandlers(node, layer.type, component, layer.record);
+    if (component.id === currentComponent?.id) {
+      node.draggable = true;
+      attachLayerDragHandlers(node, layer.type, layer.record, false);
+    }
+    iconGroup.className = "branch-icon-group";
+    if (branch) {
+      const toggle = document.createElement("button");
+      const chevron = document.createElement("span");
+      toggle.className = "icon-cell branch-toggle";
+      toggle.type = "button";
+      toggle.setAttribute("aria-label", `${expanded ? "Collapse" : "Expand"} ${layer.record.name}`);
+      toggle.setAttribute("aria-expanded", String(expanded));
+      chevron.className = `chevron ${expanded ? "chevron--down" : "chevron--right"}`;
+      chevron.setAttribute("aria-hidden", "true");
+      toggle.append(chevron);
+      toggle.addEventListener("click", event => {
+        event.stopPropagation();
+        setInstanceTreeBranchExpanded(component, branchKey, !expanded);
+      });
+      iconGroup.append(toggle);
+    }
+    iconGroup.append(createIconCell(createLayerTypeIcon("component-instance")));
+    node.append(createTreeNodeContent(node, iconGroup, layer.type, layer.record, depth, component, hasHiddenAncestor));
+    item.append(node);
+    if (branch && expanded) {
+      if (status.status !== "ready") item.append(renderInstanceReferenceMessage(
+        status.status === "missing-variant" ? "Missing variant" : "Missing component", depth + 1));
+      else getComponentDefinitionChildren(status.definition, null).forEach(child => item.append(renderInstanceOccurrenceLayer(
+        child.record, depth + 1, component, [layer.record.id], status.definition,
+        hasHiddenAncestor || !getTreeLayerVisibility("component-instance", layer.record, component),
+        [component.id, layer.record.sourceComponentId])));
+    }
+    return item;
+  }
   if (layer.type === "frame") return renderFrameTreeNode(layer.record, depth, component, hasHiddenAncestor);
   if (layer.type === "text") return renderTextTreeNode(layer.record, depth, component, hasHiddenAncestor);
   return renderVectorTreeNode(layer.record, depth, component, hasHiddenAncestor);
@@ -436,9 +624,15 @@ function renderComponentTreeNode(component) {
   return item;
 }
 
-function renderTree() {
+function renderLayerTree() {
   if (!treeView) return;
   treeView.replaceChildren(...components.map(renderComponentTreeNode));
+}
+
+function renderTree() {
+  if (!treeView) return;
+  commitCanvasComponentData();
+  renderLayerTree();
   renderVariantSystem();
   updateInspector();
   renderComponentProps();

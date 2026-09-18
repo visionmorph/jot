@@ -92,13 +92,30 @@ function getExportPaddingStyle(element) {
   };
 }
 
+function expandExportPaddingStyle(style) {
+  if (style.padding === undefined) return style;
+  const values = String(style.padding).trim().split(/\s+/);
+  const [top, right = top, bottom = top, left = right] = values.length === 3
+    ? [values[0], values[1], values[2], values[1]]
+    : values;
+  const expanded = {
+    ...style,
+    paddingTop: style.paddingTop ?? top,
+    paddingRight: style.paddingRight ?? right,
+    paddingBottom: style.paddingBottom ?? bottom,
+    paddingLeft: style.paddingLeft ?? left,
+  };
+  delete expanded.padding;
+  return expanded;
+}
+
 function getExportTextAlignmentStyle(record) {
   const element = record.element;
   const alignment = normalizeFrameAlignment(element.dataset.alignment || "top-left");
   const [vertical, horizontal] = alignment === "center" ? ["center", "center"] : alignment.split("-");
   const heightMode = getLayerDimensionMode(element, "height", "hug");
   return {
-    display: record.parentFrameId === null ? "inline-block" : undefined,
+    display: record.parentId === null ? "inline-block" : undefined,
     alignContent: heightMode !== "hug" && vertical !== "top"
       ? (vertical === "center" ? "center" : "end")
       : undefined,
@@ -113,7 +130,9 @@ function getExportFrameStyle(record) {
   const direction = element.dataset.direction || "horizontal";
   const widthMode = getLayerDimensionMode(element, "width", "fixed");
   const heightMode = getLayerDimensionMode(element, "height", "fixed");
-  const isButton = normalizeFrameHtmlTag(element.dataset.htmlTag || "div") === "button";
+  const htmlTag = normalizeFrameHtmlTag(element.dataset.htmlTag || "div");
+  const isButton = htmlTag === "button";
+  const isLink = htmlTag === "a";
   const hasExplicitDimensions = widthMode !== "hug" || heightMode !== "hug";
   const gap = getFiniteExportNumber(element.dataset.gap, 10, { min: 0 });
   const radius = getFiniteExportNumber(element.dataset.radius, 0, { min: 0 });
@@ -123,7 +142,7 @@ function getExportFrameStyle(record) {
     opacity: getExportOpacity(element),
     visibility: getExportLayerVisibility(element),
     display: isRoot && widthMode === "hug" ? "inline-flex" : "flex",
-    flexDirection: direction === "vertical" ? "column" : undefined,
+    flexDirection: direction === "vertical" ? "column" : "row",
     alignItems: alignment.alignItems,
     ...getExportSizingStyle("frame", record),
     ...getExportPaddingStyle(element),
@@ -136,6 +155,7 @@ function getExportFrameStyle(record) {
     backgroundColor: element.dataset.frameColor
       ? getColorWithOpacity(element.dataset.frameColor, element.dataset.frameColorOpacity || "100")
       : (isButton ? "transparent" : undefined),
+    textDecoration: isLink ? element.style.textDecoration || "none" : undefined,
     boxShadow: outlineBoxShadow || undefined,
     boxSizing: hasExplicitDimensions ? "border-box" : undefined,
   };
@@ -171,11 +191,36 @@ function getExportTextStyle(record) {
   };
 }
 
+function getExportVectorPaintProperties(record) {
+  const svg = record.element.querySelector("svg");
+  if (!(svg instanceof SVGElement)) return [];
+  const properties = new Set();
+  getVectorPaintElements(svg).forEach((paintElement) => {
+    ["fill", "stroke"].forEach((property) => {
+      const authoredValue = paintElement.style.getPropertyValue(property)
+        || paintElement.getAttribute(property);
+      if (isSolidSvgPaint(authoredValue)) properties.add(property);
+    });
+  });
+  if (properties.size > 0) return [...properties];
+  return getVectorPaintProperties(record);
+}
+
 function getExportVectorStyle(record) {
+  const element = record.element;
+  const color = Object.prototype.hasOwnProperty.call(element.dataset, "vectorColor")
+    ? element.dataset.vectorColor
+      ? getColorWithOpacity(element.dataset.vectorColor, element.dataset.vectorColorOpacity || "100")
+      : "none"
+    : getVectorRenderedColor(record);
+  const paint = Object.fromEntries(
+    getExportVectorPaintProperties(record).map((property) => [property, color]),
+  );
   return {
-    opacity: getExportOpacity(record.element),
-    visibility: getExportLayerVisibility(record.element),
+    opacity: getExportOpacity(element),
+    visibility: getExportLayerVisibility(element),
     ...getExportSizingStyle("vector", record),
+    ...paint,
   };
 }
 
@@ -188,15 +233,18 @@ function toCssPropertyName(property) {
 }
 
 function normalizeStateCssDeclaration(property, rawValue) {
-  if (["textContent", "disabled", "outlineColorOpacity", "outlinePosition"].includes(property)) return null;
+  if ([
+    "textContent",
+    "disabled",
+    "outlineColor",
+    "outlineColorOpacity",
+    "outlineWeight",
+    "outlinePosition",
+  ].includes(property)) return null;
   if (property === "visibility") {
     return { property: "visibility", value: variantBoolean(rawValue) ? "visible" : "hidden" };
   }
-  if (property === "outlineWeight") {
-    const value = String(rawValue ?? "").trim();
-    return { property: "outline-width", value: /^-?\d+(?:\.\d+)?$/.test(value) ? `${value}px` : value };
-  }
-  const cssProperty = property === "outlineColor" ? "outline-color" : toCssPropertyName(property);
+  const cssProperty = toCssPropertyName(property);
   const value = String(rawValue ?? "").trim();
   if (cssProperty === "background-color" && value === "") return { property: cssProperty, value: "transparent" };
   if (!value) return null;

@@ -1,9 +1,21 @@
 /* Variant resolution, combinations, class names, and state CSS for exports. */
 
-function getVariantExportStyle(exportContext, target) {
-  const operations = exportContext?.operationsByTarget.get(target) ?? [];
+function getVariantExportStyle(exportContext, layerKey) {
+  const operations = exportContext?.operationsByTarget.get(layerKey) ?? [];
   return Object.fromEntries(operations.flatMap((operation) => {
-    if (["textContent", "richTextHtml", "disabled", "fill", "stroke"].includes(operation.property)) return [];
+    if ([
+      "textContent",
+      "richTextHtml",
+      "disabled",
+      "checked",
+      "selected",
+      "fill",
+      "stroke",
+      "outlineColor",
+      "outlineColorOpacity",
+      "outlineWeight",
+      "outlinePosition",
+    ].includes(operation.property)) return [];
     if (operation.property === "visibility") {
       return [["visibility", variantBoolean(operation.value) ? "visible" : "hidden"]];
     }
@@ -19,10 +31,10 @@ function getVariantExportStyle(exportContext, target) {
   }));
 }
 
-function createVariantExportContext(instance) {
-  if (!instance || !(canvasRootStack instanceof HTMLElement)) return null;
+function createVariantExportContext(variant) {
+  if (!variant || !(canvasRootStack instanceof HTMLElement)) return null;
   const root = canvasRootStack.cloneNode(true);
-  const operations = resolveVariantOperations(instance);
+  const operations = resolveVariantOperations(variant);
   operations.forEach((operation) => applyVariantOperation(root, operation));
   const operationsByTarget = new Map();
   operations.forEach((operation) => {
@@ -32,15 +44,15 @@ function createVariantExportContext(instance) {
     targetOperations.push(operation);
     operationsByTarget.set(operation.target, targetOperations);
   });
-  return { instance, root, operationsByTarget };
+  return { variant, root, operations, operationsByTarget };
 }
 
 function getVariantExportRecord(type, record, exportContext) {
   if (!exportContext) return record;
-  const target = record.isComponent ? "component:0" : `${type}:${record.id}`;
-  const element = findVariantTarget(exportContext.root, target);
+  const layerKey = record.isComponent ? "component:0" : `${type}:${record.id}`;
+  const element = findVariantTarget(exportContext.root, layerKey);
   if (!(element instanceof HTMLElement)) return record;
-  const parentId = type === "frame" ? record.parentId : record.parentFrameId;
+  const parentId = record.parentId;
   const parentTarget = parentId === null ? "component:0" : `frame:${parentId}`;
   const parentElement = record.isComponent ? null : findVariantTarget(exportContext.root, parentTarget);
   return {
@@ -52,15 +64,60 @@ function getVariantExportRecord(type, record, exportContext) {
   };
 }
 
-function getExportVariants() {
+function toVariantNameToken(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "default";
+}
+
+function getSemanticVariantAxisToken(variant, axis) {
+  const value = getExportVariantAxisValue(variant, axis);
+  const componentProp = getVariantAxisComponentProp(axis);
+  const property = componentProp?.property ?? String(axis.name ?? "").trim().toLowerCase();
+  if (axis.type !== "boolean") return toVariantNameToken(value);
+  if (property === "checked") return value ? "on" : "off";
+  if (property === "disabled") return value ? "disabled" : "enabled";
+  if (property === "invalid") return value ? "invalid" : "valid";
+  if (property === "visibility") return value ? "visible" : "hidden";
+  const name = toVariantNameToken(axis.name || "option");
+  return value ? name : `not-${name}`;
+}
+
+function getVariantAxisNamePriority(axis) {
+  const componentProp = getVariantAxisComponentProp(axis);
+  const property = componentProp?.property ?? String(axis.name ?? "").trim().toLowerCase();
+  if (property === "size") return 10;
+  if (property === "kind") return 20;
+  if (axis.type === "enum" && !["state", "focus"].includes(axis.variantSubtype)) return 30;
+  if (property === "disabled") return 40;
+  if (property === "checked") return 50;
+  if (["state", "focus"].includes(axis.variantSubtype)) return 60;
+  return 45;
+}
+
+function getSemanticVariantKey(variant, axes) {
+  return [...axes]
+    .sort((first, second) => getVariantAxisNamePriority(first) - getVariantAxisNamePriority(second))
+    .map((axis) => getSemanticVariantAxisToken(variant, axis))
+    .join("-") || "default";
+}
+
+function getExportVariants(axes = []) {
   const usedKeys = new Set();
-  return variantModel.getInstances().map((instance, index) => {
-    const baseKey = instance.name.trim() || `Variant ${index + 1}`;
+  const keysByCombination = new Map();
+  return variantModel.getVariants().map((variant) => {
+    const combinationKey = getExportVariantCombinationKey(variant, axes);
+    const existingKey = keysByCombination.get(combinationKey);
+    if (existingKey) return { variant, key: existingKey };
+    const baseKey = getSemanticVariantKey(variant, axes);
     let key = baseKey;
     let suffix = 2;
-    while (usedKeys.has(key)) key = `${baseKey} ${suffix++}`;
+    while (usedKeys.has(key)) key = `${baseKey}-${suffix++}`;
     usedKeys.add(key);
-    return { instance, key };
+    keysByCombination.set(combinationKey, key);
+    return { variant, key };
   });
 }
 
@@ -84,41 +141,44 @@ function isDirectVisibilityPropAxis(variantProp) {
 function getExportVariantAxes(
   allocateIdentifier = createExportIdentifierAllocator(REACT_EXPORT_INTERNAL_NAMES),
 ) {
-  return variantModel.getProps()
+  const axes = variantModel.getProps()
     .filter((prop) => prop.type === "enum" || prop.type === "boolean")
     .filter((prop) => !isDirectVisibilityPropAxis(prop))
-    .filter((prop) => prop.variantSubtype !== "state")
+    .filter((prop) => !["state", "focus"].includes(prop.variantSubtype));
+  return getOrderedVariantAxes(axes)
     .map((prop, index) => {
       return { ...prop, exportName: allocateIdentifier(prop.name, `variantProp${index + 1}`) };
     });
 }
 
 function getStateVariantAxes() {
-  return variantModel.getProps().filter((prop) => prop.type === "enum" && prop.variantSubtype === "state");
+  return variantModel.getProps().filter((prop) => (
+    prop.type === "enum" && ["state", "focus"].includes(prop.variantSubtype)
+  ));
 }
 
-function getExportVariantAxisValue(instance, axis) {
-  return normalizeVariantPropValue(axis, instance?.propValues?.[axis.id]);
+function getExportVariantAxisValue(variant, axis) {
+  return normalizeVariantPropValue(axis, variant?.propValues?.[axis.id]);
 }
 
 function getExportVariantAxisDefaultValue(axis) {
   return getVariantPropDefaultValue(axis);
 }
 
-function getExportVariantCombinationKey(instance, axes) {
-  return JSON.stringify(axes.map((axis) => getExportVariantAxisValue(instance, axis)));
+function getExportVariantCombinationKey(variant, axes) {
+  return JSON.stringify(axes.map((axis) => getExportVariantAxisValue(variant, axis)));
 }
 
 function getExportVariantEntries(axes) {
-  return getExportVariants().map((entry) => ({
+  return getExportVariants(axes).map((entry) => ({
     ...entry,
-    combinationKey: getExportVariantCombinationKey(entry.instance, axes),
+    combinationKey: getExportVariantCombinationKey(entry.variant, axes),
   }));
 }
 
-function isDefaultStateInstance(instance, stateAxes) {
+function isDefaultStateVariant(variant, stateAxes) {
   return stateAxes.every((axis) => (
-    getExportVariantAxisValue(instance, axis) === getExportVariantAxisDefaultValue(axis)
+    getExportVariantAxisValue(variant, axis) === getExportVariantAxisDefaultValue(axis)
   ));
 }
 
@@ -126,26 +186,26 @@ function getBaseExportVariantEntries(axes, stateAxes = getStateVariantAxes()) {
   const grouped = new Map();
   getExportVariantEntries(axes).forEach((entry) => {
     const current = grouped.get(entry.combinationKey);
-    if (!current || (!isDefaultStateInstance(current.instance, stateAxes)
-      && isDefaultStateInstance(entry.instance, stateAxes))) {
+    if (!current || (!isDefaultStateVariant(current.variant, stateAxes)
+      && isDefaultStateVariant(entry.variant, stateAxes))) {
       grouped.set(entry.combinationKey, entry);
     }
   });
   return [...grouped.values()];
 }
 
-function getExportScopeClass(cssClassName, index) {
-  return `${cssClassName}--variant-${index + 1}`;
+function getExportScopeClass(cssClassName, variantKey) {
+  return `${cssClassName}--${toVariantNameToken(variantKey)}`;
 }
 
-function getExportTargetClassName(cssClassName, target) {
-  if (target === "component:0") return cssClassName;
-  const [type, id] = target.split(":");
+function getExportTargetClassName(cssClassName, layerKey) {
+  if (layerKey === "component:0") return cssClassName;
+  const [type, id] = layerKey.split(":");
   return `${cssClassName}__${type}-${id}`;
 }
 
-function getExportLayerClassName(cssClassName, target, rootScopeClass = "") {
-  return [getExportTargetClassName(cssClassName, target), target === "component:0" ? rootScopeClass : ""]
+function getExportLayerClassName(cssClassName, layerKey, rootScopeClass = "") {
+  return [getExportTargetClassName(cssClassName, layerKey), layerKey === "component:0" ? rootScopeClass : ""]
     .filter(Boolean)
     .join(" ");
 }
@@ -154,7 +214,9 @@ function getInteractionPseudoClass(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
   if (normalized === "hover") return ":hover";
   if (normalized === "active") return ":active";
-  if (["focus", "focus-visible", "focus visible"].includes(normalized)) return ":focus-visible";
+  if (normalized === "focus") return ":focus";
+  if (["focus-visible", "focus visible"].includes(normalized)) return ":focus-visible";
+  if (normalized === "disabled") return ":disabled";
   return "";
 }
 
@@ -169,12 +231,19 @@ function getInteractionTargetForStateAxis(axis) {
   return record.isComponent ? "component:0" : `frame:${record.id}`;
 }
 
-function getInteractionStateSelector(cssClassName, scopeClass, stateAxes, instance) {
+function getInteractionStateSelector(cssClassName, scopeClass, stateAxes, variant) {
   let selector = `.${cssClassName}.${scopeClass}`;
   stateAxes.forEach((axis) => {
-    const pseudoClass = getInteractionPseudoClass(getExportVariantAxisValue(instance, axis));
+    let pseudoClass = getInteractionPseudoClass(getExportVariantAxisValue(variant, axis));
     if (!pseudoClass) return;
     const interactionTarget = getInteractionTargetForStateAxis(axis);
+    const componentProp = componentProps.find((prop) => (
+      prop.id === axis.sourceComponentPropId || prop.variantPropId === axis.id
+    ));
+    const targetRecord = getFrameRecord(componentProp?.targetFrameId);
+    if (pseudoClass === ":disabled" && targetRecord?.element.getAttribute("role") === "tablist") {
+      pseudoClass = '[aria-disabled="true"]';
+    }
     if (interactionTarget === "component:0") {
       selector += pseudoClass;
       return;
@@ -186,10 +255,10 @@ function getInteractionStateSelector(cssClassName, scopeClass, stateAxes, instan
 
 function getContextOperationMap(context) {
   const result = new Map();
-  context?.operationsByTarget.forEach((operations, target) => {
+  context?.operationsByTarget.forEach((operations, layerKey) => {
     const properties = new Map();
     operations.forEach((operation) => properties.set(operation.property, operation.value));
-    result.set(target, properties);
+    result.set(layerKey, properties);
   });
   return result;
 }
@@ -202,45 +271,85 @@ function createStateStylesheetSource(
   if (stateAxes.length === 0) return "";
   const variantAxes = getExportVariantAxes();
   const baseEntries = getBaseExportVariantEntries(variantAxes, stateAxes)
-    .map((entry, index) => ({ ...entry, scopeClass: getExportScopeClass(cssClassName, index) }));
+    .map((entry) => ({ ...entry, scopeClass: getExportScopeClass(cssClassName, entry.key) }));
   const baseByCombination = new Map(baseEntries.map((entry) => [entry.combinationKey, entry]));
-  const rules = [];
+  const ruleGroups = new Map();
 
   getExportVariantEntries(variantAxes).forEach((stateEntry) => {
     const hasInteractiveState = stateAxes.some((axis) => (
-      Boolean(getInteractionPseudoClass(getExportVariantAxisValue(stateEntry.instance, axis)))
+      Boolean(getInteractionPseudoClass(getExportVariantAxisValue(stateEntry.variant, axis)))
+    ));
+    const hasFocusRingState = stateAxes.some((axis) => (
+      [":focus", ":focus-visible"].includes(
+        getInteractionPseudoClass(getExportVariantAxisValue(stateEntry.variant, axis)),
+      )
     ));
     if (!hasInteractiveState) return;
     const baseEntry = baseByCombination.get(stateEntry.combinationKey);
     if (!baseEntry) return;
-    const baseOperations = getContextOperationMap(createVariantExportContext(baseEntry.instance));
-    const stateOperations = getContextOperationMap(createVariantExportContext(stateEntry.instance));
+    const baseContext = createVariantExportContext(baseEntry.variant);
+    const stateContext = createVariantExportContext(stateEntry.variant);
+    const baseOperations = getContextOperationMap(baseContext);
+    const stateOperations = getContextOperationMap(stateContext);
 
-    stateOperations.forEach((properties, target) => {
+    stateOperations.forEach((properties, layerKey) => {
       const declarations = [];
+      const outlineProperties = [
+        "outlineColor",
+        "outlineColorOpacity",
+        "outlineWeight",
+        "outlinePosition",
+      ];
+      const hasOutlineDelta = outlineProperties.some((property) => (
+        properties.has(property)
+        && baseOperations.get(layerKey)?.get(property) !== properties.get(property)
+      ));
       properties.forEach((value, property) => {
-        if (baseOperations.get(target)?.get(property) === value) return;
+        if (baseOperations.get(layerKey)?.get(property) === value) return;
+        if (outlineProperties.includes(property)) return;
         const declaration = normalizeStateCssDeclaration(property, value);
         if (declaration) declarations.push(declaration);
       });
+      if (hasOutlineDelta) {
+        const baseTarget = findVariantTarget(baseContext.root, layerKey);
+        const stateTarget = findVariantTarget(stateContext.root, layerKey);
+        if (baseTarget instanceof HTMLElement && stateTarget instanceof HTMLElement) {
+          const baseBoxShadow = getFrameOutlineBoxShadow(baseTarget) || "none";
+          const stateBoxShadow = getFrameOutlineBoxShadow(stateTarget) || "none";
+          if (baseBoxShadow !== stateBoxShadow) {
+            declarations.push({ property: "box-shadow", value: stateBoxShadow });
+            if (hasFocusRingState && stateBoxShadow !== "none") {
+              declarations.push({ property: "outline", value: "none" });
+            }
+          }
+        }
+      }
       if (declarations.length === 0) return;
       const rootSelector = getInteractionStateSelector(
         cssClassName,
         baseEntry.scopeClass,
         stateAxes,
-        stateEntry.instance,
+        stateEntry.variant,
       );
-      const targetClass = getExportTargetClassName(cssClassName, target);
-      let selector = target === "component:0" ? rootSelector : `${rootSelector} .${targetClass}`;
+      const targetClass = getExportTargetClassName(cssClassName, layerKey);
+      const selector = layerKey === "component:0" ? rootSelector : `${rootSelector} .${targetClass}`;
+      const selectors = [selector];
       if (declarations.some(({ property }) => property === "fill" || property === "stroke")) {
-        selector = `${selector},\n${selector} *`;
+        selectors.push(`${selector} *`);
       }
       const declarationRows = declarations
         .map(({ property, value }) => `  ${property}: ${value} !important;`)
         .join("\n");
-      rules.push(`${selector} {\n${declarationRows}\n}`);
+      const group = ruleGroups.get(declarationRows) ?? { declarations: declarationRows, selectors: [] };
+      selectors.forEach((candidate) => {
+        if (!group.selectors.includes(candidate)) group.selectors.push(candidate);
+      });
+      ruleGroups.set(declarationRows, group);
     });
   });
 
+  const rules = [...ruleGroups.values()].map(({ declarations, selectors }) => (
+    `${selectors.join(",\n")} {\n${declarations}\n}`
+  ));
   return `/* Interaction states authored in ${componentName}. */\n${rules.join("\n\n")}\n`;
 }

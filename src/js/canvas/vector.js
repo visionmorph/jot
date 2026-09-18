@@ -147,8 +147,9 @@ function createCanvasVectorRecord(svgDefinition, x, y, parentRecord = null, opti
   const width = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Number(svgDefinition.width) || 24);
   const height = Math.max(MIN_INTERACTIVE_LAYER_SIZE, Number(svgDefinition.height) || 24);
   const record = {
+    type: "vector",
     id: vectorId,
-    parentFrameId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
+    parentId: parentRecord?.isComponent ? null : parentRecord?.id ?? null,
     element: vector,
     order: nextLayerOrder,
     name: svgDefinition.name || `Vector ${vectorId}`,
@@ -177,20 +178,9 @@ function createCanvasVectorRecord(svgDefinition, x, y, parentRecord = null, opti
     canvasRootStack?.append(vector);
   }
 
-  vector.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const hit = resolveCanvasHit(event.target);
-    if (hit.kind !== "layer" || hit.element !== vector) return;
-    if (consumeSuppressedCanvasClick(event)) return;
-    selectCanvasVector(vector, event.shiftKey || event.ctrlKey || event.metaKey);
-  });
-  vector.addEventListener("dragstart", (event) => {
-    event.stopPropagation();
-    setLayerDragData(event, "vector", vectorId);
-    startCanvasDragSession({ type: "vector", id: vectorId }, true);
-  });
+  bindCanvasVectorInteractions(record);
 
-  vectorRecords.push(record);
+  layerRecords.push(record);
   vector.dataset.vectorColor = getVectorRenderedColor(record);
   vector.dataset.vectorColorOpacity = "100";
   queueCanvasMutationEffects({ sizing: true, tree: true });
@@ -244,3 +234,21 @@ canvas?.addEventListener("drop", (event) => {
   event.stopPropagation();
   importSvgFile(file, event.clientX, event.clientY);
 }, true);
+
+function bindCanvasVectorInteractions(record) {
+  const vector = record.element;
+  const vectorId = record.id;
+  vector.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const hit = resolveCanvasHit(event.target);
+    if (hit.kind !== "layer" || hit.element !== vector) return;
+    if (consumeSuppressedCanvasClick(event)) return;
+    selectCanvasVector(vector, event.shiftKey || event.ctrlKey || event.metaKey);
+  });
+  vector.addEventListener("dragstart", (event) => {
+    event.stopPropagation();
+    setLayerDragData(event, "vector", vectorId);
+    startCanvasDragSession({ type: "vector", id: vectorId }, true);
+  });
+
+}

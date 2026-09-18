@@ -89,12 +89,12 @@ function removeVectorColor(record) {
 
 function getVectorInspectorValues(record) {
   const bounds = record.element.getBoundingClientRect();
-  const instance = record.isVariantInstance
-    ? getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId)
+  const variant = record.isVariant
+    ? getVariant(record.variantId ?? selectedVariantId)
     : null;
   const target = `vector:${record.id}`;
   const getDimension = (dimension) => {
-    const override = instance ? getEffectiveVariantOverride(instance, target, dimension) : null;
+    const override = variant ? getEffectiveVariantOverride(variant, target, dimension) : null;
     const value = override?.value ?? record.element.dataset[dimension] ?? bounds[dimension];
     const number = Number.parseFloat(value);
     return String(Number.isFinite(number) ? number : Math.round(bounds[dimension]));
@@ -148,19 +148,19 @@ vectorSizeInputs.forEach((input) => {
     const value = Number(input.value);
     if (records.length === 0 || (dimension !== "width" && dimension !== "height") || !Number.isFinite(value)) return;
     const fixedValue = Math.max(MIN_INTERACTIVE_LAYER_SIZE, value);
-    if (records[0].isVariantInstance) {
+    if (records[0].isVariant) {
       const edits = records.map((record) => {
-        const instance = getVariantInstance(record.variantInstanceId ?? selectedVariantInstanceId);
+        const variant = getVariant(record.variantId ?? selectedVariantId);
         const target = `vector:${record.id}`;
-        const current = instance ? getEffectiveVariantOverride(instance, target, dimension) : null;
-        return { record, instance, target, changed: String(current?.value ?? "") !== `${fixedValue}px` };
+        const current = variant ? getEffectiveVariantOverride(variant, target, dimension) : null;
+        return { record, variant, target, changed: String(current?.value ?? "") !== `${fixedValue}px` };
       });
       if (edits.some(({ changed }) => changed)) recordHistoryForGesture(input);
-      edits.forEach(({ record, instance, target }) => {
+      edits.forEach(({ record, variant, target }) => {
         record.element.dataset[`${dimension}Mode`] = "fixed";
         record.element.dataset[dimension] = String(fixedValue);
         record.element.style[dimension] = `${fixedValue}px`;
-        if (instance) upsertLocalVariantOverride(instance, target, dimension, `${fixedValue}px`);
+        if (variant) upsertLocalVariantOverride(variant, target, dimension, `${fixedValue}px`);
         syncVariantLayerStylePreviews(target, dimension, record.element);
       });
       requestAnimationFrame(syncResizeOverlay);
@@ -174,7 +174,7 @@ vectorSizeInputs.forEach((input) => {
       record.element.dataset[dimension] = String(fixedValue);
       applyLayerSizing("vector", record);
     });
-    if (variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    if (variantModel.getVariants().length > 0) scheduleVariantRender();
     requestAnimationFrame(syncResizeOverlay);
   });
   input.addEventListener("blur", syncInspectorToSelectedVector);

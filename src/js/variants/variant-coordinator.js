@@ -1,4 +1,4 @@
-/* Component variant properties, delta resolution, canvas previews, and instance overrides. */
+/* Component variant properties, delta resolution, canvas previews, and variant overrides. */
 
 function unlinkComponentPropVariantDefinition(componentProp) {
   if (componentProp.variantPropId == null) return;
@@ -46,16 +46,16 @@ function syncComponentPropVariantDefinition(componentProp, { render = true } = {
     }
   }
   componentProp.defaultValue = getVariantPropDefaultValue(variantProp);
-  variantModel.getInstances().forEach((instance) => {
-    const propValues = getVariantInstancePropValues(instance);
+  variantModel.getVariants().forEach((variant) => {
+    const propValues = getVariantAssignedPropValues(variant);
     const booleanValue = propValues[variantProp.id];
     const hasValidBooleanValue = booleanValue === true || booleanValue === false
       || booleanValue === "true" || booleanValue === "false";
     if (isBoolean && !hasValidBooleanValue) {
-      setVariantInstancePropValue(instance, variantProp.id, getVariantPropDefaultValue(variantProp));
+      setVariantPropValue(variant, variantProp.id, getVariantPropDefaultValue(variantProp));
     }
     if (!isBoolean && !options.includes(propValues[variantProp.id])) {
-      setVariantInstancePropValue(instance, variantProp.id, getVariantPropDefaultValue(variantProp));
+      setVariantPropValue(variant, variantProp.id, getVariantPropDefaultValue(variantProp));
     }
   });
   if (!isBoolean) removeInvalidVariantRuleConditions(variantProp.id, options);
@@ -63,51 +63,59 @@ function syncComponentPropVariantDefinition(componentProp, { render = true } = {
 }
 
 function getSelectedVariantStyleOverride(property, fallback = "") {
-  const instance = getVariantInstance();
-  const override = instance ? getEffectiveVariantOverride(instance, "component:0", property) : null;
+  const variant = getVariant();
+  const override = variant ? getEffectiveVariantOverride(variant, "component:0", property) : null;
   return override ? String(override.value ?? "") : fallback;
 }
 
 function getSelectedVariantTargetStyleOverride(property, fallback = "") {
-  const instance = getVariantInstance();
+  const variant = getVariant();
   const target = selectedVariantLayerTarget || "component:0";
-  const override = instance ? getEffectiveVariantOverride(instance, target, property) : null;
+  const override = variant ? getEffectiveVariantOverride(variant, target, property) : null;
   return override ? String(override.value ?? "") : fallback;
 }
 
 function setSelectedVariantStyleOverride(property, value, { render = true, record = true } = {}) {
-  const instance = getVariantInstance();
-  if (!instance) return false;
+  const variant = getVariant();
+  if (!variant) return false;
   const nextValue = String(value ?? "");
-  const existingOverride = (instance.overrides ?? [])
+  const existingOverride = (variant.overrides ?? [])
     .find((entry) => entry.target === "component:0" && entry.property === property);
   if (existingOverride?.value === nextValue) return true;
   if (record) recordHistory();
-  upsertLocalVariantOverride(instance, "component:0", property, nextValue);
-  if (render) renderVariantInstances();
+  upsertLocalVariantOverride(variant, "component:0", property, nextValue);
+  if (render) renderVariants();
   else syncVariantLayerStylePreviews("component:0", property);
   return true;
 }
 
-function setVariantTextOverride(instance, textId, value, { render = true } = {}) {
+function setVariantTextOverride(variant, textId, value, { render = true, format = "text" } = {}) {
   const target = `text:${textId}`;
-  const { changed } = upsertLocalVariantOverride(instance, target, "textContent", value);
-  if (!changed) return;
-  if (render) renderVariantInstances();
+  const property = format === "html" ? "richTextHtml" : "textContent";
+  const competingProperty = property === "richTextHtml" ? "textContent" : "richTextHtml";
+  const overrides = getLocalVariantOverrides(variant);
+  const filteredOverrides = overrides.filter((override) => !(
+    override.target === target && override.property === competingProperty
+  ));
+  const removedCompetingOverride = filteredOverrides.length !== overrides.length;
+  if (removedCompetingOverride) variant.overrides = filteredOverrides;
+  const { changed } = upsertLocalVariantOverride(variant, target, property, value);
+  if (!changed && !removedCompetingOverride) return;
+  if (render) renderVariants();
 }
 
 function setSelectedVariantLayerOverride(property, value, { render = false } = {}) {
-  const instance = getVariantInstance();
-  if (!instance || !selectedVariantLayerTarget) return false;
+  const variant = getVariant();
+  if (!variant || !selectedVariantLayerTarget) return false;
   const nextValue = String(value ?? "");
   const { changed } = upsertLocalVariantOverride(
-    instance,
+    variant,
     selectedVariantLayerTarget,
     property,
     nextValue,
   );
   if (!changed) return true;
-  if (render) renderVariantInstances();
+  if (render) renderVariants();
   else syncVariantLayerStylePreviews(selectedVariantLayerTarget, property);
   return true;
 }
@@ -126,13 +134,13 @@ function setSelectedVariantFrameStyleOverride(property, value, options = {}) {
 function resolveVariantCanvasSelectionTarget(eventTarget) {
   const hit = resolveCanvasHit(eventTarget);
   if (hit.kind !== "variant-root" && hit.kind !== "variant-layer") return null;
-  const instanceId = hit.instanceId;
-  if (!Number.isFinite(instanceId) || !getVariantInstance(instanceId)) return null;
+  const variantId = hit.variantId;
+  if (!Number.isFinite(variantId) || !getVariant(variantId)) return null;
 
   if (hit.kind === "variant-layer") {
     return {
       kind: "variant-layer",
-      instanceId,
+      variantId,
       target: `${hit.layer.type}:${hit.layer.id}`,
       element: hit.element,
     };
@@ -140,7 +148,7 @@ function resolveVariantCanvasSelectionTarget(eventTarget) {
 
   return {
     kind: "variant-root",
-    instanceId,
+    variantId,
     target: null,
     element: hit.element,
   };
@@ -155,44 +163,44 @@ canvas?.addEventListener("pointerdown", (event) => {
   if (target.kind === "variant-layer") return;
   const additive = event.shiftKey || event.ctrlKey || event.metaKey;
   if (additive) {
-    const selectedIds = getSelectedVariantInstanceIds();
-    const nextIds = selectedIds.includes(target.instanceId)
-      ? selectedIds.filter((instanceId) => instanceId !== target.instanceId)
-      : [...selectedIds, target.instanceId];
-    const primaryInstanceId = nextIds.includes(target.instanceId)
-      ? target.instanceId
+    const selectedIds = getSelectedVariantIds();
+    const nextIds = selectedIds.includes(target.variantId)
+      ? selectedIds.filter((variantId) => variantId !== target.variantId)
+      : [...selectedIds, target.variantId];
+    const primaryVariantId = nextIds.includes(target.variantId)
+      ? target.variantId
       : nextIds[nextIds.length - 1] ?? null;
-    selectVariantInstances(nextIds, primaryInstanceId, { render: false });
+    selectVariants(nextIds, primaryVariantId, { render: false });
     return;
   }
-  if (isVariantInstanceSelected(target.instanceId)
-    && getSelectedVariantInstanceIds().length > 1) {
+  if (isVariantSelected(target.variantId)
+    && getSelectedVariantIds().length > 1) {
     clearMasterSelectionForVariant();
     return;
   }
-  selectVariantInstance(target.instanceId, {
+  selectVariant(target.variantId, {
     render: false,
     layerTarget: target.target,
   });
   if (target.kind === "variant-root") renderComponentProps();
 });
 
-function selectNewSharedLayerInVariant(instanceId, target, { editText = false } = {}) {
-  selectVariantState(instanceId, target);
+function selectNewSharedLayerInVariant(variantId, target, { editText = false } = {}) {
+  selectVariantState(variantId, target);
   clearMasterSelectionForVariant();
   selectTool("select");
   renderTree();
   if (!editText) return;
   setTimeout(() => {
     requestAnimationFrame(() => {
-      const preview = componentSet?.querySelector(`.variant-preview[data-variant-instance-id="${CSS.escape(String(instanceId))}"]`);
+      const preview = componentSet?.querySelector(`.variant-preview[data-variant-id="${CSS.escape(String(variantId))}"]`);
       const text = preview ? findVariantTarget(preview.querySelector(".canvas-root-stack"), target) : null;
       if (text instanceof HTMLElement) text.dispatchEvent(new Event("canvas-text-create"));
     });
   }, 0);
 }
 
-function handleVariantStructureToolClick(instance, parentTarget, event) {
+function handleVariantStructureToolClick(variant, parentTarget, event) {
   if (activeTool !== "text" && activeTool !== "frame") return false;
   const parentRecord = parentTarget === "component:0"
     ? currentComponent?.frameRecord
@@ -204,15 +212,14 @@ function handleVariantStructureToolClick(instance, parentTarget, event) {
   event.stopPropagation();
   if (activeTool === "frame") {
     const record = createCanvasFrame(0, 0, parentRecord, { select: false });
-    if (record) selectNewSharedLayerInVariant(instance.id, `frame:${record.id}`);
+    if (record) selectNewSharedLayerInVariant(variant.id, `frame:${record.id}`);
     return true;
   }
   const record = createCanvasText(parentRecord, 0, 0, {
     beginEditing: false,
-    useDefaultName: true,
   });
   if (!record) return true;
-  selectNewSharedLayerInVariant(instance.id, `text:${record.id}`, { editText: true });
+  selectNewSharedLayerInVariant(variant.id, `text:${record.id}`, { editText: true });
   return true;
 }
 
@@ -220,16 +227,16 @@ function clearMasterSelectionForVariant() {
   clearElementSelection();
 }
 
-function syncVariantInstanceSelectionUI() {
-  const selectedIds = new Set(getSelectedVariantInstanceIds());
+function syncVariantSelectionUI() {
+  const selectedIds = new Set(getSelectedVariantIds());
   document.querySelectorAll(".variant-preview").forEach((preview) => {
-    const instanceId = Number(preview.dataset.variantInstanceId);
-    const isSelectedInstance = selectedIds.has(instanceId);
-    preview.classList.toggle("is-selected", isSelectedInstance);
-    preview.setAttribute("aria-selected", String(isSelectedInstance));
+    const variantId = Number(preview.dataset.variantId);
+    const isSelectedVariant = selectedIds.has(variantId);
+    preview.classList.toggle("is-selected", isSelectedVariant);
+    preview.setAttribute("aria-selected", String(isSelectedVariant));
     const root = preview.querySelector(".canvas-root-stack");
     if (root instanceof HTMLElement) {
-      const isSelectedRoot = isVariantRootSelected(instanceId);
+      const isSelectedRoot = isVariantRootSelected(variantId);
       root.classList.toggle("is-selected", isSelectedRoot);
       root.setAttribute("aria-selected", String(isSelectedRoot));
     }
@@ -239,52 +246,55 @@ function syncVariantInstanceSelectionUI() {
         : layerElement.classList.contains("canvas-text") ? "text" : "vector";
       const id = Number(layerElement.dataset[`${type}Id`]);
       const isSelectedLayer = Number.isFinite(id)
-        && isVariantLayerTargetSelected(instanceId, `${type}:${id}`);
+        && isVariantLayerTargetSelected(variantId, `${type}:${id}`);
       layerElement.classList.toggle("is-selected", isSelectedLayer);
       layerElement.setAttribute("aria-selected", String(isSelectedLayer));
     });
   });
-  syncLayerTreeSelectionStyles();
+  // Variant selection changes the visibility context represented by the tree.
+  // Rebuild only the tree so effective visibility and descendant indicators
+  // stay current without replacing the canvas previews during pointer gestures.
+  renderLayerTree();
   updateInspector();
   syncResizeOverlay();
 }
 
-function selectVariantInstances(instanceIds, primaryInstanceId = null, options = {}) {
-  selectVariantInstancesState(instanceIds, primaryInstanceId);
+function selectVariants(variantIds, primaryVariantId = null, options = {}) {
+  selectVariantsState(variantIds, primaryVariantId);
   clearMasterSelectionForVariant();
   if (options.render !== false) renderTree();
-  else syncVariantInstanceSelectionUI();
+  else syncVariantSelectionUI();
   if (options.updateProps !== false) renderComponentProps();
   requestAnimationFrame(syncResizeOverlay);
-  return getSelectedVariantInstanceIds().length > 0;
+  return getSelectedVariantIds().length > 0;
 }
 
-function selectVariantInstance(instanceId, options = {}) {
-  if (!getVariantInstance(instanceId)) return false;
+function selectVariant(variantId, options = {}) {
+  if (!getVariant(variantId)) return false;
   const hasLayerTargets = Object.prototype.hasOwnProperty.call(options, "layerTargets");
   const hasLayerTarget = Object.prototype.hasOwnProperty.call(options, "layerTarget");
   const nextTargets = hasLayerTargets
     ? options.layerTargets
     : hasLayerTarget
       ? options.layerTarget === null ? [] : [options.layerTarget]
-      : selectedVariantInstanceId === instanceId && options.preserveLayerSelection === true
+      : selectedVariantId === variantId && options.preserveLayerSelection === true
         ? getSelectedVariantLayerTargets()
         : [];
   const nextTarget = hasLayerTargets
     ? options.anchorTarget ?? nextTargets[nextTargets.length - 1] ?? null
     : hasLayerTarget
     ? options.layerTarget
-    : selectedVariantInstanceId === instanceId && options.preserveLayerSelection === true
+    : selectedVariantId === variantId && options.preserveLayerSelection === true
       ? selectedVariantLayerTarget
       : null;
   if (nextTargets.length > 0) {
-    selectVariantLayerTargetsState(instanceId, nextTargets, nextTarget);
+    selectVariantLayerTargetsState(variantId, nextTargets, nextTarget);
   } else {
-    selectVariantState(instanceId, null);
+    selectVariantState(variantId, null);
   }
   clearMasterSelectionForVariant();
   if (options.render !== false) renderTree();
-  else syncVariantInstanceSelectionUI();
+  else syncVariantSelectionUI();
   requestAnimationFrame(syncResizeOverlay);
   return true;
 }
@@ -301,95 +311,95 @@ function getInitialVariantData() {
   };
 }
 
-function ensureInitialVariantInstance() {
-  if (variantModel.getInstances().length === 0) {
-    variantModel.addInstance(getInitialVariantData());
+function ensureInitialVariant() {
+  if (variantModel.getVariants().length === 0) {
+    variantModel.addVariant(getInitialVariantData());
   }
 }
 
 function captureSelectedVariantCopies() {
   if (!currentComponent || getSelectedVariantLayerTargets().length > 0) return [];
-  const ids = new Set(getSelectedVariantInstanceIds());
-  const instances = variantModel.getInstances().filter((instance) => ids.has(instance.id));
-  if (selectedComponentId === currentComponent.id && variantModel.getInstances().length === 0) {
-    instances.push(getInitialVariantData());
+  const ids = new Set(getSelectedVariantIds());
+  const variants = variantModel.getVariants().filter((variant) => ids.has(variant.id));
+  if (selectedComponentId === currentComponent.id && variantModel.getVariants().length === 0) {
+    variants.push(getInitialVariantData());
   }
-  return instances.map((instance) => ({
-    sourceId: instance.id ?? null,
-    name: instance.name,
-    parentVariantId: instance.parentVariantId ?? null,
-    propValues: structuredClone(instance.propValues ?? {}),
+  return variants.map((variant) => ({
+    sourceId: variant.id ?? null,
+    name: variant.name,
+    parentVariantId: variant.parentVariantId ?? null,
+    propValues: structuredClone(variant.propValues ?? {}),
     // Preserve the inheritance boundary. Flattening cascaded values here turns
     // inherited styles into local overrides and disconnects future base edits.
-    overrides: structuredClone(instance.overrides ?? []),
+    overrides: structuredClone(variant.overrides ?? []),
   }));
 }
 
-function insertVariantCopies(instances) {
-  if (!currentComponent || instances.length === 0) return false;
+function insertVariantCopies(variants) {
+  if (!currentComponent || variants.length === 0) return false;
   recordHistory();
-  ensureInitialVariantInstance();
-  const initialVariantId = getDefaultVariantInstance()?.id ?? null;
+  ensureInitialVariant();
+  const initialVariantId = getDefaultVariant()?.id ?? null;
   const sourceToCopy = new Map();
-  const copies = instances.map((instance) => {
-    const { sourceId, ...copyData } = structuredClone(instance);
-    const copy = variantModel.addInstance({
+  const copies = variants.map((variant) => {
+    const { sourceId, ...copyData } = structuredClone(variant);
+    const copy = variantModel.addVariant({
       ...copyData,
-      name: `${instance.name} copy`,
+      name: `${variant.name} copy`,
       componentId: currentComponent.id,
-      parentVariantId: instance.parentVariantId ?? null,
+      parentVariantId: variant.parentVariantId ?? null,
     });
     if (sourceId != null) sourceToCopy.set(sourceId, copy.id);
     return copy;
   });
   copies.forEach((copy, index) => {
-    if (instances[index].sourceId == null) {
+    if (variants[index].sourceId == null) {
       copy.parentVariantId = initialVariantId;
       return;
     }
-    const sourceParentId = instances[index].parentVariantId ?? null;
+    const sourceParentId = variants[index].parentVariantId ?? null;
     copy.parentVariantId = sourceToCopy.get(sourceParentId) ?? sourceParentId;
   });
-  selectVariantInstancesState(copies.map((instance) => instance.id));
+  selectVariantsState(copies.map((variant) => variant.id));
   clearMasterSelectionForVariant();
   renderTree();
   return true;
 }
 
-function addVariantInstance({ render = true } = {}) {
+function addVariant({ render = true } = {}) {
   if (!currentComponent) return null;
   recordHistory();
-  ensureInitialVariantInstance();
-  const sourceInstance = getVariantInstance() ?? getDefaultVariantInstance();
-  const index = variantModel.getInstances().length;
-  const instance = variantModel.addInstance({
+  ensureInitialVariant();
+  const sourceVariant = getVariant() ?? getDefaultVariant();
+  const index = variantModel.getVariants().length;
+  const variant = variantModel.addVariant({
     name: `Variant ${index + 1}`,
     componentId: currentComponent.id,
-    parentVariantId: sourceInstance?.id ?? null,
-    propValues: sourceInstance
-      ? structuredClone(sourceInstance.propValues ?? {})
+    parentVariantId: sourceVariant?.id ?? null,
+    propValues: sourceVariant
+      ? structuredClone(sourceVariant.propValues ?? {})
       : Object.fromEntries(variantModel.getProps()
         .filter((prop) => prop.type !== "action")
         .map((prop) => [prop.id, getVariantPropDefaultValue(prop)])),
     overrides: [],
   });
-  selectVariantState(instance.id, null);
+  selectVariantState(variant.id, null);
   clearMasterSelectionForVariant();
   if (render) renderTree();
-  return instance;
+  return variant;
 }
 
 function requestAddVariant(event = null) {
   event?.preventDefault();
   event?.stopPropagation();
-  const instance = addVariantInstance({ render: false });
-  if (!instance) return false;
+  const variant = addVariant({ render: false });
+  if (!variant) return false;
 
   // Render the document and all dependent panels once from the completed state.
   renderTree();
-  selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
+  selectVariant(variant.id, { render: false, preserveLayerSelection: true });
   let preview = componentSet?.querySelector(
-    `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
+    `.variant-preview[data-variant-id="${CSS.escape(String(variant.id))}"]`,
   );
   if (preview instanceof HTMLElement) void preview.getBoundingClientRect();
   syncResizeOverlay();
@@ -398,11 +408,11 @@ function requestAddVariant(event = null) {
   // Commit again on the next paint even when the preview node already exists.
   // A DOM-count check cannot detect a preview that was created but not laid out.
   requestAnimationFrame(() => {
-    if (!getVariantInstance(instance.id)) return;
-    renderVariantInstances();
-    selectVariantInstance(instance.id, { render: false, preserveLayerSelection: true });
+    if (!getVariant(variant.id)) return;
+    renderVariants();
+    selectVariant(variant.id, { render: false, preserveLayerSelection: true });
     preview = componentSet?.querySelector(
-      `.variant-preview[data-variant-instance-id="${CSS.escape(String(instance.id))}"]`,
+      `.variant-preview[data-variant-id="${CSS.escape(String(variant.id))}"]`,
     );
     if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
     syncResizeOverlay();
@@ -410,91 +420,91 @@ function requestAddVariant(event = null) {
   return true;
 }
 
-function removeVariantInstance(instanceId) {
-  const index = variantModel.getInstances().findIndex((instance) => instance.id === instanceId);
+function removeVariant(variantId) {
+  const index = variantModel.getVariants().findIndex((variant) => variant.id === variantId);
   if (index < 0) return false;
-  const instance = variantModel.getInstances()[index];
-  if (!canRemoveVariantInstance(instance)) return false;
+  const variant = variantModel.getVariants()[index];
+  if (!canRemoveVariant(variant)) return false;
   recordHistory();
-  const removedInstance = instance;
-  variantModel.getInstances().forEach((instance) => {
-    if (instance.parentVariantId !== removedInstance.id) return;
-    const localKeys = new Set((instance.overrides ?? []).map((override) => `${override.target}\u0000${override.property}`));
-    const inheritedFromRemoved = (removedInstance.overrides ?? [])
+  const removedVariant = variant;
+  variantModel.getVariants().forEach((variant) => {
+    if (variant.parentVariantId !== removedVariant.id) return;
+    const localKeys = new Set((variant.overrides ?? []).map((override) => `${override.target}\u0000${override.property}`));
+    const inheritedFromRemoved = (removedVariant.overrides ?? [])
       .filter((override) => !localKeys.has(`${override.target}\u0000${override.property}`))
       .map((override) => structuredClone(override));
-    instance.overrides = [...inheritedFromRemoved, ...(instance.overrides ?? [])];
-    instance.parentVariantId = removedInstance.parentVariantId ?? null;
+    variant.overrides = [...inheritedFromRemoved, ...(variant.overrides ?? [])];
+    variant.parentVariantId = removedVariant.parentVariantId ?? null;
   });
-  variantModel.replaceInstances(
-    variantModel.getInstances().filter((candidate) => candidate.id !== instanceId),
+  variantModel.replaceVariants(
+    variantModel.getVariants().filter((candidate) => candidate.id !== variantId),
   );
-  normalizeDefaultVariantInstance();
-  const nextInstanceId = variantModel.getInstances()[Math.min(index, variantModel.getInstances().length - 1)]?.id ?? null;
-  if (nextInstanceId == null) selectComponentState(currentComponent?.id);
-  else selectVariantState(nextInstanceId, null);
+  normalizeDefaultVariant();
+  const nextVariantId = variantModel.getVariants()[Math.min(index, variantModel.getVariants().length - 1)]?.id ?? null;
+  if (nextVariantId == null) selectComponentState(currentComponent?.id);
+  else selectVariantState(nextVariantId, null);
   renderTree();
   return true;
 }
 
-function removeSelectedVariantInstances() {
-  const selectedIds = new Set(getSelectedVariantInstanceIds());
+function removeSelectedVariants() {
+  const selectedIds = new Set(getSelectedVariantIds());
   if (selectedIds.size === 0) return false;
-  const instances = variantModel.getInstances();
-  const removableIds = new Set(instances
-    .filter((instance) => selectedIds.has(instance.id) && canRemoveVariantInstance(instance))
-    .map((instance) => instance.id));
+  const variants = variantModel.getVariants();
+  const removableIds = new Set(variants
+    .filter((variant) => selectedIds.has(variant.id) && canRemoveVariant(variant))
+    .map((variant) => variant.id));
   if (removableIds.size === 0) return false;
 
-  const originalById = new Map(instances.map((instance) => [instance.id, instance]));
+  const originalById = new Map(variants.map((variant) => [variant.id, variant]));
   recordHistory();
-  instances.forEach((instance) => {
-    if (removableIds.has(instance.id) || !removableIds.has(instance.parentVariantId)) return;
+  variants.forEach((variant) => {
+    if (removableIds.has(variant.id) || !removableIds.has(variant.parentVariantId)) return;
     const removedChain = [];
-    const visited = new Set([instance.id]);
-    let parent = originalById.get(instance.parentVariantId);
+    const visited = new Set([variant.id]);
+    let parent = originalById.get(variant.parentVariantId);
     while (parent && removableIds.has(parent.id) && !visited.has(parent.id)) {
       visited.add(parent.id);
       removedChain.unshift(parent);
       parent = parent.parentVariantId == null ? null : originalById.get(parent.parentVariantId);
     }
-    const localKeys = new Set((instance.overrides ?? [])
+    const localKeys = new Set((variant.overrides ?? [])
       .map((override) => `${override.target}\u0000${override.property}`));
     const inherited = new Map();
     removedChain.flatMap((entry) => entry.overrides ?? []).forEach((override) => {
       const key = `${override.target}\u0000${override.property}`;
       if (!localKeys.has(key)) inherited.set(key, structuredClone(override));
     });
-    instance.overrides = [...inherited.values(), ...(instance.overrides ?? [])];
-    instance.parentVariantId = parent?.id ?? null;
+    variant.overrides = [...inherited.values(), ...(variant.overrides ?? [])];
+    variant.parentVariantId = parent?.id ?? null;
   });
 
-  const firstRemovedIndex = instances.findIndex((instance) => removableIds.has(instance.id));
-  variantModel.replaceInstances(instances.filter((instance) => !removableIds.has(instance.id)));
-  normalizeDefaultVariantInstance();
-  const remaining = variantModel.getInstances();
-  const nextInstance = remaining[Math.min(Math.max(firstRemovedIndex, 0), remaining.length - 1)] ?? null;
-  if (nextInstance) selectVariantState(nextInstance.id, null);
+  const firstRemovedIndex = variants.findIndex((variant) => removableIds.has(variant.id));
+  variantModel.replaceVariants(variants.filter((variant) => !removableIds.has(variant.id)));
+  normalizeDefaultVariant();
+  const remaining = variantModel.getVariants();
+  const nextVariant = remaining[Math.min(Math.max(firstRemovedIndex, 0), remaining.length - 1)] ?? null;
+  if (nextVariant) selectVariantState(nextVariant.id, null);
   else selectComponentState(currentComponent?.id);
   renderTree();
   return true;
 }
 
 function cycleSelectedVariant(direction) {
-  const instances = variantModel.getInstances();
-  if (instances.length === 0 || getSelectedVariantInstanceIds().length === 0) return false;
-  const currentIndex = instances.findIndex((instance) => instance.id === selectedVariantInstanceId);
-  const nextIndex = (Math.max(currentIndex, 0) + direction + instances.length) % instances.length;
-  selectVariantInstance(instances[nextIndex].id);
+  const variants = variantModel.getVariants();
+  if (variants.length === 0 || getSelectedVariantIds().length === 0) return false;
+  const currentIndex = variants.findIndex((variant) => variant.id === selectedVariantId);
+  const nextIndex = (Math.max(currentIndex, 0) + direction + variants.length) % variants.length;
+  selectVariant(variants[nextIndex].id);
   const preview = componentSet?.querySelector(
-    `.variant-preview[data-variant-instance-id="${CSS.escape(String(instances[nextIndex].id))}"]`,
+    `.variant-preview[data-variant-id="${CSS.escape(String(variants[nextIndex].id))}"]`,
   );
   if (preview instanceof HTMLElement) preview.focus({ preventScroll: true });
   return true;
 }
 
 function renderVariantSystem() {
-  renderVariantInstances();
+  renderVariants();
 }
 
 addVariantButton?.addEventListener("click", requestAddVariant);

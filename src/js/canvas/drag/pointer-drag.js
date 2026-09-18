@@ -4,14 +4,14 @@ let canvasPointerDrag = null;
 
 const CANVAS_DRAG_THRESHOLD = 4;
 
-function getOrderedVariantDragLayers(anchorLayer, instanceId) {
+function getOrderedVariantDragLayers(anchorLayer, variantId) {
   const selectedTargets = new Set(
-    selectedVariantInstanceId === instanceId ? getSelectedVariantLayerTargets() : [],
+    selectedVariantId === variantId ? getSelectedVariantLayerTargets() : [],
   );
   const anchorKey = getLayerDescriptorKey(anchorLayer);
   if (selectedTargets.size < 2 || !selectedTargets.has(anchorKey)) return [anchorLayer];
-  const parentFrameId = getLayerParentId(anchorLayer);
-  return getLayerChildren(parentFrameId)
+  const parentId = getLayerParentId(anchorLayer);
+  return getLayerChildren(parentId)
     .map((sibling) => ({ type: sibling.type, id: sibling.record.id }))
     .filter((layer) => selectedTargets.has(getLayerDescriptorKey(layer)));
 }
@@ -19,7 +19,8 @@ function getOrderedVariantDragLayers(anchorLayer, instanceId) {
 function selectDraggedCanvasLayer(layer) {
   const record = getLayerRecord(layer);
   if (!record) return;
-  if (layer.type === "frame") selectCanvasFrame(record.element);
+  if (layer.type === "component-instance") selectComponentInstance(record.id);
+  else if (layer.type === "frame") selectCanvasFrame(record.element);
   else if (layer.type === "text") selectCanvasText(record.element);
   else selectCanvasVector(record.element);
 }
@@ -46,7 +47,7 @@ function getPointerCanvasDropIntent(event, draggedLayers) {
     target,
     clientX: event.clientX,
     clientY: event.clientY,
-  }, draggedLayers, canvasDragSession?.variantInstanceId ?? null);
+  }, draggedLayers, canvasDragSession?.variantId ?? null);
 }
 
 function createCanvasPointerDragPreview(pointerDrag, event) {
@@ -59,7 +60,7 @@ function createCanvasPointerDragPreview(pointerDrag, event) {
   preview.style.height = "max-content";
   const parentElement = getCanvasParentElement(
     canvasDragSession.originalParentId,
-    canvasDragSession.variantInstanceId,
+    canvasDragSession.variantId,
   );
   if (parentElement instanceof HTMLElement) syncCanvasDragGroupLayout(preview, parentElement);
   pointerDrag.items.forEach(({ layer, element, width, height }) => {
@@ -105,7 +106,7 @@ function positionCanvasPointerDragPreview(pointerDrag, event) {
 function syncCanvasPointerDragSourceElements(pointerDrag = canvasPointerDrag) {
   if (!pointerDrag?.hasStarted) return;
   const sourceElements = pointerDrag.draggedLayers
-    .map((layer) => getCanvasLayerElement(layer, pointerDrag.variantInstanceId))
+    .map((layer) => getCanvasLayerElement(layer, pointerDrag.variantId))
     .filter((element) => element instanceof HTMLElement);
   if (sourceElements.length === 0) return;
   pointerDrag.sourceElements = sourceElements;
@@ -135,7 +136,7 @@ function updateCanvasPointerDrag(event) {
       canvasPointerDrag.draggedLayer,
       false,
       canvasPointerDrag.draggedLayers,
-      canvasPointerDrag.variantInstanceId,
+      canvasPointerDrag.variantId,
     );
     syncCanvasPointerDragSourceElements();
     canvasPointerDrag.sourceObserver = new MutationObserver(() => {
@@ -168,8 +169,8 @@ function finishCanvasPointerDrag(event, shouldCommit) {
     pointerDrag.element.releasePointerCapture(event.pointerId);
   }
   if (!pointerDrag.hasStarted) {
-    if (pointerDrag.collapseVariantSelectionOnClick && pointerDrag.variantInstanceId !== null) {
-      selectVariantInstance(pointerDrag.variantInstanceId, {
+    if (pointerDrag.collapseVariantSelectionOnClick && pointerDrag.variantId !== null) {
+      selectVariant(pointerDrag.variantId, {
         render: false,
         layerTargets: [getLayerDescriptorKey(pointerDrag.draggedLayer)],
         anchorTarget: getLayerDescriptorKey(pointerDrag.draggedLayer),
@@ -202,18 +203,18 @@ canvas?.addEventListener("pointerdown", (event) => {
   const element = hit.kind === "layer" || isVariantLayer ? hit.element : null;
   const draggedLayer = hit.kind === "layer" || isVariantLayer ? hit.layer : null;
   if (!(element instanceof HTMLElement) || !draggedLayer || element.isContentEditable) return;
-  const variantInstanceId = isVariantLayer ? hit.instanceId : null;
+  const variantId = isVariantLayer ? hit.variantId : null;
   const additive = event.shiftKey || event.ctrlKey || event.metaKey;
   let collapseVariantSelectionOnClick = false;
-  if (variantInstanceId !== null) {
+  if (variantId !== null) {
     const target = getLayerDescriptorKey(draggedLayer);
-    const wasSelected = isVariantLayerTargetSelected(variantInstanceId, target);
-    const wasGroupSelection = selectedVariantInstanceId === variantInstanceId
+    const wasSelected = isVariantLayerTargetSelected(variantId, target);
+    const wasGroupSelection = selectedVariantId === variantId
       && selectedVariantLayerTargets.size > 1;
     if (additive) {
-      const didSelect = selectVariantLayerTarget(variantInstanceId, target, true);
+      const didSelect = selectVariantLayerTarget(variantId, target, true);
       if (didSelect) {
-        selectVariantInstance(variantInstanceId, {
+        selectVariant(variantId, {
           render: false,
           layerTargets: getSelectedVariantLayerTargets(),
           anchorTarget: selectedVariantLayerTarget,
@@ -226,18 +227,18 @@ canvas?.addEventListener("pointerdown", (event) => {
     } else if (wasSelected && wasGroupSelection) {
       collapseVariantSelectionOnClick = true;
     } else {
-      selectVariantInstance(variantInstanceId, {
+      selectVariant(variantId, {
         render: false,
         layerTargets: [target],
         anchorTarget: target,
       });
     }
   }
-  const draggedLayers = variantInstanceId === null
+  const draggedLayers = variantId === null
     ? getOrderedCanvasDragLayers(draggedLayer)
-    : getOrderedVariantDragLayers(draggedLayer, variantInstanceId);
+    : getOrderedVariantDragLayers(draggedLayer, variantId);
   const isDraggingSelection = draggedLayers.length > 1;
-  if (variantInstanceId === null
+  if (variantId === null
     && !event.shiftKey
     && !event.ctrlKey
     && !event.metaKey
@@ -246,7 +247,7 @@ canvas?.addEventListener("pointerdown", (event) => {
   }
   element.focus({ preventScroll: true });
   const items = draggedLayers.map((layer) => {
-    const itemElement = getCanvasLayerElement(layer, variantInstanceId);
+    const itemElement = getCanvasLayerElement(layer, variantId);
     if (!(itemElement instanceof HTMLElement)) return null;
     const bounds = itemElement.getBoundingClientRect();
     return {
@@ -275,7 +276,7 @@ canvas?.addEventListener("pointerdown", (event) => {
     grabOffsetY: event.clientY - groupBounds.top,
     draggedLayer,
     draggedLayers,
-    variantInstanceId,
+    variantId,
     collapseVariantSelectionOnClick,
     element,
     items,

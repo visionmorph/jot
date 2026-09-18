@@ -86,7 +86,20 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
     : null;
   if (numberMatch && Number(numberMatch[0]) < MIN_INTERACTIVE_LAYER_SIZE) input.value = String(fixedNumber);
 
-  if (selectedVariantInstanceId !== null && type === "frame" && record.isVariantInstance) {
+  if (type === "text" && record.isInstance) {
+    const preserved = fixedNumber ?? (Number(element.dataset[dimension])
+      || Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(element.getBoundingClientRect()[dimension])));
+    const value = numberMatch ? `${fixedNumber}px`
+      : requestedMode === "fill" ? "100%" : requestedMode === "fixed" ? `${preserved}px` : "auto";
+    setNestedInstanceLayerOverride(record.instanceSelection, dimension, value, false, input);
+    if (normalize) input.value = numberMatch || requestedMode === "fixed" ? String(preserved)
+      : getRenderedSizeValue(element, dimension);
+    const wrapper = input.closest("[data-size-combobox]");
+    if (wrapper instanceof HTMLElement) updateSizeOptionSelection(wrapper, numberMatch ? "fixed" : requestedMode);
+    return true;
+  }
+
+  if (selectedVariantId !== null && type === "frame" && record.isVariant) {
     const primaryFixedValue = fixedNumber ?? (
       Number(element.dataset[dimension])
       || Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(element.getBoundingClientRect()[dimension]))
@@ -101,20 +114,21 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
         ? `${fixedNumber}px`
         : requestedMode === "fill" ? "100%" : requestedMode === "fixed" ? `${preservedFixedValue}px` : "auto";
       const target = getFrameRecordTarget(candidate);
-      const instance = getVariantInstance(candidate.variantInstanceId ?? selectedVariantInstanceId);
-      const current = instance ? getEffectiveVariantOverride(instance, target, dimension) : null;
-      return { candidate, instance, preservedFixedValue, value, target, changed: String(current?.value ?? "") !== value };
+      const variant = getVariant(candidate.variantId ?? selectedVariantId);
+      const current = variant ? getEffectiveVariantOverride(variant, target, dimension) : null;
+      return { candidate, variant, preservedFixedValue, value, target, changed: String(current?.value ?? "") !== value };
     });
-    const editedInstanceIds = new Set(edits.map(({ instance }) => instance?.id).filter(Number.isFinite));
+    const editedVariantIds = new Set(edits.map(({ variant }) => variant?.id).filter(Number.isFinite));
     if (edits.some((edit) => edit.changed)) recordHistoryForGesture(input);
-    edits.forEach(({ candidate, instance, preservedFixedValue, value, target }) => {
+    edits.forEach(({ candidate, variant, preservedFixedValue, value, target }) => {
       const candidateElement = candidate.element;
       candidateElement.style[dimension] = value;
       candidateElement.dataset[`${dimension}Mode`] = numberMatch ? "fixed" : requestedMode;
       if (numberMatch || requestedMode === "fixed") candidateElement.dataset[dimension] = String(preservedFixedValue);
-      if (instance) upsertVariantOverrideForEditedInstances(
-        instance, target, dimension, value, editedInstanceIds,
+      if (variant) upsertVariantOverrideForEditedVariants(
+        variant, target, dimension, value, editedVariantIds,
       );
+      syncVariantFlexbox(candidateElement.closest(".canvas-root-stack"));
       syncVariantLayerStylePreviews(target, dimension, candidateElement);
     });
     if (normalize) input.value = numberMatch || requestedMode === "fixed"
@@ -126,12 +140,12 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
     requestAnimationFrame(syncResizeOverlay);
     return true;
   }
-  if (selectedVariantInstanceId !== null && type === "text" && record.isVariantInstance) {
+  if (selectedVariantId !== null && type === "text" && record.isVariant) {
     const primaryFixedValue = fixedNumber ?? (
       Number(element.dataset[dimension])
       || Math.max(MIN_INTERACTIVE_LAYER_SIZE, Math.round(element.getBoundingClientRect()[dimension]))
     );
-    const instance = getVariantInstance();
+    const variant = getVariant();
     const edits = records.map((candidate) => {
       const candidateElement = candidate.element;
       const preservedFixedValue = fixedNumber ?? (
@@ -142,7 +156,7 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
         ? `${fixedNumber}px`
         : requestedMode === "fill" ? "100%" : requestedMode === "fixed" ? `${preservedFixedValue}px` : "auto";
       const target = `text:${candidate.id}`;
-      const current = instance ? getEffectiveVariantOverride(instance, target, dimension) : null;
+      const current = variant ? getEffectiveVariantOverride(variant, target, dimension) : null;
       return { candidate, preservedFixedValue, value, target, changed: String(current?.value ?? "") !== value };
     });
     if (edits.some((edit) => edit.changed)) recordHistoryForGesture(input);
@@ -151,7 +165,8 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
       candidateElement.style[dimension] = value;
       candidateElement.dataset[`${dimension}Mode`] = numberMatch ? "fixed" : requestedMode;
       if (numberMatch || requestedMode === "fixed") candidateElement.dataset[dimension] = String(preservedFixedValue);
-      if (instance) upsertLocalVariantOverride(instance, target, dimension, value);
+      if (variant) upsertLocalVariantOverride(variant, target, dimension, value);
+      syncVariantFlexbox(candidateElement.closest(".canvas-root-stack"));
       syncVariantLayerStylePreviews(target, dimension, candidateElement);
     });
     if (normalize) input.value = numberMatch || requestedMode === "fixed"
@@ -184,7 +199,7 @@ function applySizeInputValue(input, rawValue = input.value, normalize = true) {
       if (mode === "fixed") candidate.element.dataset[dimension] = String(candidateFixedValue);
       applyLayerSizing("text", candidate);
     });
-    if (hasChange && variantModel.getInstances().length > 0) scheduleVariantInstanceRender();
+    if (hasChange && variantModel.getVariants().length > 0) scheduleVariantRender();
     if (normalize) input.value = mode === "fixed"
       ? String(fixedNumber ?? Number(element.dataset[dimension]))
       : getRenderedSizeValue(element, dimension);
